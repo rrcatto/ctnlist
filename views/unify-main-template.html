@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <title>{{@ListName}} | {{@title}}</title>
+
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="robots" content="all">
+  <meta name="description" content="Accounting, Business and Computer courses">
+  <meta name="author" content="Richard Catto">
+  <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+
+  <!-- Latest compiled and minified CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-+0n0xVW2eSR5OomGNYDnhzAbDsOXxcvSN1TPprVMTNDbiYZCxYbOOl7+AMvyTG2x" crossorigin="anonymous">
+
+  <!-- Google Fonts -->
+  <link rel="stylesheet" href="//fonts.googleapis.com/css?family=Open+Sans%3A400%2C300%2C500%2C600%2C700%7CPlayfair+Display%7CRoboto%7CRaleway%7CSpectral%7CRubik">
+
+  <!-- CSS Global Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.5.0/font/bootstrap-icons.css">
+
+  <!-- CSS Unify -->
+  <link rel="stylesheet" type="text/css" href="https://financial-courses.co.za/css/unify-core.css">
+  <link rel="stylesheet" type="text/css" href="https://financial-courses.co.za/css/unify-components.css">
+  <link rel="stylesheet" type="text/css" href="https://financial-courses.co.za/css/unify-globals.css">
+
+  <!-- CSS Customization -->
+  <link rel="stylesheet" href="https://financial-courses.co.za/css/unify-custom-a.css">
+
+  <script src="https://kit.fontawesome.com/5385ffda53.js" crossorigin="anonymous"></script>
+  <script src="//cdn.ckeditor.com/4.15.1/full/ckeditor.js"></script>
+
+  <script type="text/javascript">
+  (function() {
+      if (typeof window.janrain !== 'object') window.janrain = {};
+      if (typeof window.janrain.settings !== 'object') window.janrain.settings = {};
+
+      janrain.settings.tokenUrl = '{{@token_url}}';
+
+      function isReady() { janrain.ready = true; };
+      if (document.addEventListener) {
+        document.addEventListener("DOMContentLoaded", isReady, false);
+      } else {
+        window.attachEvent('onload', isReady);
+      }
+
+      var e = document.createElement('script');
+      e.type = 'text/javascript';
+      e.id = 'janrainAuthWidget';
+
+      if (document.location.protocol === 'https:') {
+        e.src = 'https://rpxnow.com/js/lib/ctnlist/engage.js';
+      } else {
+        e.src = 'http://widget-cdn.rpxnow.com/js/lib/ctnlist/engage.js';
+      }
+
+      var s = document.getElementsByTagName('script')[0];
+      s.parentNode.insertBefore(e, s);
+  })();
+  </script>
+</head>
+
+<body>
+  <main>
+    <header>
+      <div class="container">
+        <nav class="navbar navbar-expand-lg navbar-light bg-white">
+          <div class="container-fluid">
+
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar-one" aria-controls="navbar-one" aria-expanded="false" aria-label="Toggle navigation">
+              <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbar-one">
+              <div class="navbar-nav mx-auto text-uppercase g-font-weight-600 u-main-nav-v3">
+                <div class="nav-item">
+                  <a class="nav-link" active aria-current="page" href="/"><i class="fa fa-home" aria-hidden="true"></i> Home</a>
+                </div>
+
+                <check if="{{@uadmin == 1}}">
+                  <div class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownAdminMenu" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fa fa-key" aria-hidden="true"></i> Admin</a>
+                    <div class="dropdown-menu" aria-labelledby="navbarDropdownAdminMenu">
+                      <a class="dropdown-item" href="/messages"><i class="fa fa-pencil" aria-hidden="true"></i> Msgs</a>
+                      <a class="dropdown-item" href="/message"><i class="fa fa-file-text-o" aria-hidden="true"></i> New Msg</a>
+                      <a class="dropdown-item" href="/templates"><i class="fa fa-pencil-square" aria-hidden="true"></i> Templates</a>
+                      <a class="dropdown-item" href="/template"><i class="fa fa-file-text" aria-hidden="true"></i> New Template</a>
+                      <div class="dropdown-divider"></div>
+                      <a class="dropdown-item" href="/queue"><i class="fa fa-th-list" aria-hidden="true"></i> Queue - {{@qcount}}</a>
+                      <a class="dropdown-item" href="/advanced-queue"><i class="fa fa-arrows-alt" aria-hidden="true"></i> Queue 4 Msgs</a>
+                      <a class="dropdown-item" href="/processqueue"><i class="fa fa-cogs" aria-hidden="true"></i> Start Sending</a>
+                      <a class="dropdown-item" href="/stop-send"><i class="fa fa-hand-paper-o" aria-hidden="true"></i> Stop Sending</a>
+                      <a class="dropdown-item" href="/dropqueue"><i class="far fa-trash-alt"></i> Drop Queue</a>
+                      <div class="dropdown-divider"></div>
+                      <a class="dropdown-item" href="/sendlog"><i class="fa fa-clipboard" aria-hidden="true"></i> Send Log - {{@slcount}}</a>
+                      <div class="dropdown-divider"></div>
+                      <a class="dropdown-item" href="/subscribers"><i class="fa fa-users" aria-hidden="true"></i> Subscribers - {{@numsubscribers}}</a>
+                      <a class="dropdown-item" href="/activesubscribers"><i class="fas fa-running"></i> Active - {{@activereaders}}</a>
+                      <a class="dropdown-item" href="/bulk-subscribe"><i class="fa fa-user-plus" aria-hidden="true"></i> Bulk Subscribe</a>
+                      <a class="dropdown-item" href="/bulk-unsubscribe"><i class="fa fa-user-times" aria-hidden="true"></i> Bulk Unsubscribe</a>
+                    </div>
+                  </div>
+                </check>
+
+                <div class="nav-item">
+                  <a class="nav-link" href="/subscribe"><i class="fas fa-clipboard"></i> Subscribe</a>
+                </div>
+                <check if="{{@archive == 1}}">
+                  <div class="nav-item">
+                    <a class="nav-link" href="/archives"><i class="fa fa-archive" aria-hidden="true"></i> Archives</a>
+                  </div>
+                </check>
+                <div class="nav-item">
+                  <a class="nav-link" href="/contact-form"><i class="fa fa-phone" aria-hidden="true"></i> Contact</a>
+                </div>
+                <div class="nav-item">
+                  <a class="nav-link" href="/store"><i class="fas fa-shopping-cart"></i> Store</a>
+                </div>
+                <check if="{{@uloggedin}}">
+                  <true>
+                    <div class="nav-item dropdown">
+                      <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="fa fa-user-circle-o" aria-hidden="true"></i> {{@ufname}} {{@$ulname}}</a>
+                      <div class="dropdown-menu" aria-labelledby="navbarDropdown">
+                        <a class="dropdown-item" href="/profile"><i class="fa fa-user-o" aria-hidden="true"></i> My Profile</a>
+                        <a class="dropdown-item" href="/edit-profile"><i class="fa fa-pencil" aria-hidden="true"></i> Edit Profile</a>
+                        <a class="dropdown-item" href="/logout"><i class="fa fa-sign-out" aria-hidden="true"></i> Logout</a>
+                      </div>
+                    </div>
+                  </true>
+                  <false>
+                    <div class="nav-item">
+                      <a class="nav-link" href="/login"><i class="fa fa-sign-in" aria-hidden="true"></i> login</a>
+                    </div>
+                  </false>
+                </check>
+              </div>
+            </div>
+          </div>
+        </nav>
+      </div>
+  </header>
+
+    <!-- Button toolbar -->
+    <section class="g-bg-gray-light-v4 g-py-10">
+      <div class="container">
+        <div class="d-sm-flex align-self-center text-center">
+            <check if="{{@uadmin > 0 }}">
+              <true>
+                <div class="btn-toolbar" role="toolbar" aria-label="button bar">
+                  <div class="btn-group my-2 g-mr-10" role="group" aria-label="message buttons">
+                    <a href="{{@BaseURL}}messages" class="btn u-btn-cyan">Msgs <span class="badge badge-secondary">{{@msgcount}}</span></a>
+                    <a href="{{@BaseURL}}message" class="btn u-btn-blue">New Msg</a>
+                    <a href="{{@BaseURL}}templates" class="btn u-btn-teal">Templates <span class="badge badge-secondary">{{@templatecount}}</span></a>
+                    <a href="{{@BaseURL}}template" class="btn u-btn-blue">New Temp</a>
+                  </div>
+
+                  <div class="btn-group my-2 g-mr-10" role="group" aria-label="queue buttons">
+                    <a href="{{@BaseURL}}queue" class="btn u-btn-deeporange">Queue <span class="badge badge-secondary">{{@qcount}}</span></a>
+                    <a href="{{@BaseURL}}advanced-queue" class="btn u-btn-blue">Q4Msgs</a>
+                    <a href="{{@BaseURL}}processqueue" class="btn u-btn-yellow" target="_blank">Start</a>
+                    <a href="{{@BaseURL}}stop-send" class="btn u-btn-brown">Stop</a>
+                    <a href="{{@BaseURL}}dropqueue" class="btn u-btn-red">Drop</a>
+                  </div>
+
+                  <div class="btn-group my-2 g-mr-10" role="group" aria-label="stats buttons">
+                    <a href="{{@BaseURL}}sendlog" class="btn u-btn-aqua">Sendlog <span class="badge badge-secondary">{{@slcount}}</span></a>
+                  </div>
+
+                  <div class="btn-group my-2 g-mr-10" role="group" aria-label="subscriber buttons">
+                    <a href="{{@BaseURL}}subscribers" class="btn u-btn-orange text-white">Subs <span class="badge badge-secondary">{{@numsubscribers}}</span></a>
+                    <a href="{{@BaseURL}}activesubscribers" class="btn u-btn-lightred">Active <span class="badge badge-secondary">{{@activereaders}}</span></a>
+                    <a href="{{@BaseURL}}bulk-subscribe" class="btn u-btn-purple text-white">B-Sub</a>
+                    <a href="{{@BaseURL}}bulk-unsubscribe" class="btn u-btn-indigo">B-Unsub</a>
+                  </div>
+                </div>
+              </true>
+              <false>
+                <div class="col-md-1"></div>
+                <div class="col-md-2">
+                  <a href="/" class="btn btn-primary" role="button"><i class="bi bi-house"></i> Home</a>
+                </div>
+                <div class="col-md-2">
+                  <a href="/subscribe" class="btn u-btn-teal" role="button"><i class="bi bi-person-plus"></i> Subscribe</a>
+                </div>
+                <div class="col-md-2">
+                  <a href="/contact-form" class="btn u-btn-blue" role="button"><i class="bi bi-telephone"></i> Contact</a>
+                </div>
+                <div class="col-md-2">
+                  <a href="/store" class="btn u-btn-indigo" role="button"><i class="bi bi-cart3"></i> Store</a>
+                </div>
+                <div class="col-md-2">
+                  <a href="/login" class="btn u-btn-lightred" role="button"><i class="bi bi-key"></i> Login</a>
+                </div>
+              </false>
+            </check>
+        </div>
+      </div>
+    </section>
+
+    <!-- End Button toolbar -->
+
+	  <section class="container u-ns-bg-v1-bottom g-bg-white g-pt-70 g-pb-70">
+		  <div class="container">
+        <div class="row">
+          <div class="col">
+          {{@content}}
+          </div>
+        </div>
+      </div>
+	  </section>
+
+    <section class="g-bg-primary">
+      <div class="container g-py-50">
+        <div class="d-flex justify-content-between">
+          <h3 class="h3 align-left g-color-white mb-0 mr-4">{{@today}}<br />Time: <span id="datetime">&nbsp;</span> </h3>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <div id="contacts-section" class="g-bg-black-opacity-0_9 g-color-white-opacity-0_8 g-py-60">
+      <div class="container">
+        <div class="row">
+          <!-- Footer Content -->
+          <div class="col-lg-3 col-md-6 g-mb-40 g-mb-0--lg">
+            <div class="u-heading-v2-3--bottom g-brd-white-opacity-0_8 g-mb-20">
+              <h2 class="u-heading-v2__title h6 text-uppercase mb-0">About Us</h2>
+            </div>
+
+            <p>We sell Accounting, Business, Financial and Computer self study courses</p>
+          </div>
+          <!-- End Footer Content -->
+
+          <!-- Footer Content -->
+          <div class="col-lg-3 col-md-6 g-mb-40 g-mb-0--lg">
+            <div class="u-heading-v2-3--bottom g-brd-white-opacity-0_8 g-mb-20">
+              <h2 class="u-heading-v2__title h6 text-uppercase mb-0">Useful Links</h2>
+            </div>
+
+            <nav class="text-uppercase1">
+              <ul class="list-unstyled g-mt-minus-10 mb-0">
+                <li class="g-pos-rel g-brd-bottom g-brd-white-opacity-0_1 g-py-10">
+                  <h4 class="h6 g-pr-20 mb-0">
+                <a class="g-color-white-opacity-0_8 g-color-white--hover" href="http://open.ecwid.com/VQqRN">EcWid - get your own store</a>
+                <i class="fa fa-angle-right g-absolute-centered--y g-right-0"></i>
+              </h4>
+                </li>
+                <li class="g-pos-rel g-brd-bottom g-brd-white-opacity-0_1 g-py-10">
+                  <h4 class="h6 g-pr-20 mb-0">
+                <a class="g-color-white-opacity-0_8 g-color-white--hover" href="/subscribe">Subscribe to our mailing list</a>
+                <i class="fa fa-angle-right g-absolute-centered--y g-right-0"></i>
+              </h4>
+                </li>
+              </ul>
+            </nav>
+          </div>
+          <!-- End Footer Content -->
+
+          <!-- Footer Content -->
+          <div class="col-lg-3 col-md-6">
+            <div class="u-heading-v2-3--bottom g-brd-white-opacity-0_8 g-mb-20">
+              <h2 class="u-heading-v2__title h6 text-uppercase mb-0">Our Contact Info</h2>
+            </div>
+
+            <address class="g-bg-no-repeat g-font-size-12 mb-0" style="background-image: url(https://financial-courses.co.za/img/map2.png);">
+          <!-- Location -->
+          <div class="d-flex g-mb-20">
+            <div class="g-mr-10">
+              <span class="u-icon-v3 u-icon-size--xs g-bg-white-opacity-0_1 g-color-white-opacity-0_6">
+                <i class="fas fa-map-marker-alt"></i>
+              </span>
+            </div>
+            <p class="mb-0">Bergridge Park, Firgrove Way<br />Meadowridge,Cape Town</p>
+          </div>
+          <!-- End Location -->
+
+          <!-- WhatsApp -->
+          <div class="d-flex g-mb-20">
+            <div class="g-mr-10">
+              <span class="u-icon-v3 u-icon-size--xs g-bg-white-opacity-0_1 g-color-white-opacity-0_6">
+                <i class="fab fa-whatsapp"></i>
+              </span>
+            </div>
+            <p class="mb-0"><a href="https://wa.me/27814204799" target="_blank">+27 81 420 4799</a></p>
+          </div>
+          <!-- End Phone -->
+
+          <!-- Email -->
+          <div class="d-flex g-mb-20">
+            <div class="g-mr-10">
+              <span class="u-icon-v3 u-icon-size--xs g-bg-white-opacity-0_1 g-color-white-opacity-0_6">
+                <i class="fas fa-at"></i>
+              </span>
+            </div>
+            <p class="mb-0">
+              <a class="g-color-white-opacity-0_8 g-color-white--hover" href="mailto:edumapza@gmail.com">edumapza@gmail.com</a>
+            </p>
+          </div>
+          <!-- End Email -->
+        </address>
+          </div>
+          <!-- End Footer Content -->
+        </div>
+      </div>
+    </div>
+    <!-- End Footer -->
+
+    <!-- Copyright Footer -->
+    <footer class="g-bg-gray-dark-v1 g-color-white-opacity-0_8 g-py-20">
+      <div class="container">
+        <div class="row">
+          <div class="col-md-8 text-center text-md-left g-mb-10 g-mb-0--md">
+            <div class="d-lg-flex">
+              <small class="d-block g-font-size-default g-mr-10 g-mb-10 g-mb-0--md">2020 &copy; All Rights Reserved.</small>
+              <ul class="u-list-inline">
+                <li class="list-inline-item">
+                  <a class="g-color-white-opacity-0_8 g-color-white--hover" href="/">Home</a>
+                </li>
+                <li class="list-inline-item">
+                  <span>|</span>
+                </li>
+                <li class="list-inline-item">
+                  <a class="g-color-white-opacity-0_8 g-color-white--hover" href="/privacy">Privacy</a>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="col-md-4 align-self-center">
+            <ul class="list-inline text-center text-md-right mb-0">
+              <li class="list-inline-item g-mx-10" data-toggle="tooltip" data-placement="top" title="Facebook">
+                <a href="https://facebook.com/edumap.org.za" class="g-color-white-opacity-0_5 g-color-white--hover">
+                  <i class="fa fa-facebook"></i>
+                </a>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </footer>
+    <!-- End Copyright Footer -->
+  </main>
+
+  <div class="u-outer-spaces-helper"></div>
+
+  <div id="copyModal" class="text-left modal-demo g-bg-white g-color-black g-pa-20" style="display: none;"></div>
+
+<!-- Bootstrap core JavaScript
+================================================== -->
+<!-- Placed at the end of the document so the pages load faster -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/js/bootstrap.bundle.min.js" integrity="sha384-gtEjrD/SeCtmISkJkNUaaKMoLD0//ElJ19smozuHV6z3Iehds+3Ulb9Bn9Plx0x4" crossorigin="anonymous"></script>
+
+<script>
+(function() {
+  setTimeout(function(){ $(".alert").alert('close'); }, 5000);
+  setInterval(function() {
+    var d = new Date();
+    $("#datetime").text(d.toLocaleTimeString('en-ZA'));
+  }, 1000);
+})();
+</script>
+
+</body>
+</html>

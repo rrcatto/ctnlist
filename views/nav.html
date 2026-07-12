@@ -1,0 +1,51 @@
+
+
+<header id="js-header" class="u-header u-header--static">
+  <div class="u-header__section u-header__section--light g-bg-white g-transition-0_3 g-py-10">
+
+    <nav class="js-mega-menu navbar navbar-expand-lg hs-menu-initialized hs-menu-horizontal">
+
+      <div class="container">
+        <!-- Responsive Toggle Button -->
+        <button class="navbar-toggler navbar-toggler-right btn g-line-height-1 g-brd-none g-pa-0 g-pos-abs g-top-minus-3 g-right-0" type="button" aria-label="Toggle navigation" aria-expanded="false" aria-controls="navBar" data-bs-toggle="collapse" data-bs-target="#navBar">
+          <span class="hamburger hamburger--slider">
+            <span class="hamburger-box">
+              <span class="hamburger-inner"></span>
+            </span>
+          </span>
+        </button>
+        <!-- End Responsive Toggle Button -->
+
+        <!-- Navigation -->
+        <div class="collapse navbar-collapse align-items-center flex-sm-row g-pt-10 g-pt-5--md g-mr-40--md" id="navBar">
+          <ul class="navbar-nav mx-auto text-uppercase g-font-weight-600 u-main-nav-v3 u-sub-menu-v3">
+            <li class="nav-item g-mx-10--sm g-mx-15--sm"><a href="/" class="nav-link g-py-7 g-px-0">Home</a></li>
+            <li class="nav-item g-mx-10--sm g-mx-15--sm"><a href="{{@BaseURL}}subscribe" class="nav-link g-py-7 g-px-0"><i class="fas fa-clipboard"></i> Subscribe</a></li>
+            <check if="{{@$archive == 1}}">
+              <li class="nav-item g-mx-10--sm g-mx-15--sm"><a href="{{@BaseURL}}archives" class="nav-link g-py-7 g-px-0"><i class="fa fa-archive" aria-hidden="true"></i> Archives</a></li>
+            </check>
+            <li class="nav-item g-mx-10--sm g-mx-15--sm"><a href="{{@BaseURL}}contact-form" class="nav-link g-py-7 g-px-0"><i class="fa fa-phone" aria-hidden="true"></i> Contact Form</a></li>
+            <li class="nav-item g-mx-10--sm g-mx-15--sm"><a href="{{@BaseURL}}store" class="nav-link g-py-7 g-px-0"><i class="fas fa-shopping-cart"></i> Buy our Courses</a></li>
+
+            <check if="{{@uloggedin}}">
+              <true>
+                <li class="nav-item g-mx-10--sm g-mx-15--sm"><a href="{{@BaseURL}}profile" class="nav-link g-py-7 g-px-0"><i class="fa fa-user-o" aria-hidden="true"></i> {{@ufname}} {{@ulname}}</a></li>
+                <li class="nav-item g-mx-10--sm g-mx-15--sm"><a href="{{@BaseURL}}edit-profile" class="nav-link g-py-7 g-px-0"><i class="fa fa-pencil" aria-hidden="true"></i> Edit Profile</a></li>
+                <li class="nav-item g-mx-10--sm g-mx-15--sm"><a href="{{@BaseURL}}logout" class="nav-link g-py-7 g-px-0"><i class="fa fa-sign-out" aria-hidden="true"></i> Logout</a></li>
+              </true>
+              <false>
+                <li class="nav-item g-mx-10--sm g-mx-15--sm"><a href="{{@BaseURL}}login" class="nav-link g-py-7 g-px-0"><i class="fa fa-sign-in" aria-hidden="true"></i> login</a></li>
+              </false>
+            </check>
+          </ul>
+        </div>
+      </div>
+
+    </nav>
+
+  </div>
+</header>
+
+<a class="navbar-brand" href="#">{{@ListName}}</a>
+
+<div class="d-flex justify-content-between">...</div>

@@ -1,2 +1,0 @@
-# ctnlist
-ctnlist mailing list
