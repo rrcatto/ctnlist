@@ -76,7 +76,7 @@ class SubscribersController extends Controller {
 
   public function export($offset,$amount) {
     set_time_limit(86400);
-    $this->subscriber->load(null,array('order' => 's_last_interacted DESC, s_priority DESC, s_email ASC', 'limit' => $amount, 'offset' => $offset));
+    $this->subscriber->load(null,array('order' => '(s_last_interacted IS NULL) ASC, s_last_interacted DESC, s_priority DESC, s_email ASC', 'limit' => $amount, 'offset' => $offset));
     $fp = fopen("export.txt", "a");
     while ($this->subscriber->valid()) {
       $semail = $this->subscriber->s_email;
@@ -101,14 +101,13 @@ class SubscribersController extends Controller {
     return $html;
   }
 
-  // $sql = "select `s_email` from `subscribers` order by `s_last_interacted` DESC, `s_priority` DESC, `s_email` ASC LIMIT :offset,:limit";
   // $args = array(':offset' => (int) $offset, ':limit' => (int) $limit);
   public function exportPDO($offset = 0,$limit = 10000000) {
     $html = "";
-    $sql = "select `s_email` from `subscribers` where `s_unsubscribe` = '0' order by `s_last_interacted` DESC, `s_priority` DESC, `s_email` ASC";
+    $sql = "select s_email from subscribers where s_unsubscribe = 0 order by (s_last_interacted IS NULL) ASC, s_last_interacted DESC, s_priority DESC, s_email ASC";
     $filename = "export-subscribers.txt";
     $html .= $this->exportToFile($sql,$filename);
-    $sql = "select `s_email` from `subscribers` where `s_unsubscribe` = '1' order by `s_email`";
+    $sql = "select s_email from subscribers where s_unsubscribe = 1 order by s_email";
     $filename = "export-remove.txt";
     $html .= $this->exportToFile($sql,$filename);
     return $html;
@@ -506,12 +505,24 @@ class SubscribersController extends Controller {
         $dbuser = $db_server['user'];
         $dbpass = $db_server['pass'];
         $dbname = $db_server['name'];
-        $dsn = "mysql:host={$dbhost};dbname={$dbname}";
+        $driver = strtolower((string) ($db_server['driver'] ?? 'mysql'));
+        $defaultPort = $driver === 'pgsql' ? 5432 : 3306;
+        $port = (int) ($db_server['port'] ?? $defaultPort);
+
+        if ($driver === 'pgsql') {
+          $sslmode = (string) ($db_server['sslmode'] ?? 'prefer');
+          $dsn = "pgsql:host={$dbhost};port={$port};dbname={$dbname};sslmode={$sslmode}";
+        } elseif ($driver === 'mysql') {
+          $charset = (string) ($db_server['charset'] ?? 'utf8mb4');
+          $dsn = "mysql:host={$dbhost};port={$port};dbname={$dbname};charset={$charset}";
+        } else {
+          throw new RuntimeException("Unsupported sync database driver: {$driver}");
+        }
+
         $extPDO = new \DB\SQL($dsn,$dbuser,$dbpass);
 
         $limit = 5000000;
-        // $sql = "select `s_email`, `s_priority`, `s_last_interacted`, `s_subscribedby` from `subscribers` WHERE (`s_unsubscribe` = '0') and ((`s_last_interacted` is not null) or (`s_priority` > '0')) ORDER BY `s_last_interacted` DESC, `s_priority` DESC, `s_email` ASC LIMIT {$limit}";
-        $sql = "select `s_email`, `s_priority`, `s_last_interacted`, `s_subscribedby` from `subscribers` WHERE (`s_unsubscribe` = '0') and (`s_last_interacted` is not null) ORDER BY `s_last_interacted` DESC, `s_priority` DESC, `s_email` ASC LIMIT {$limit}";
+        $sql = "select s_email, s_priority, s_last_interacted, s_subscribedby from subscribers WHERE (s_unsubscribe = 0) and (s_last_interacted is not null) ORDER BY s_last_interacted DESC, s_priority DESC, s_email ASC LIMIT {$limit}";
 
         $result = $extPDO->exec($sql);
 
@@ -559,7 +570,6 @@ class SubscribersController extends Controller {
     return $html;
   }
 
-  // $sql = "SELECT `s_subscribedby`, count(*) AS s_total FROM `subscribers` GROUP BY `s_subscribedby` ORDER BY s_total DESC";
   // new parameter: $includeunsubs for activesubscribers is always 0
   public function CreateSubscribersHTMLList($ssemail = '',$pageno = 1,$numrows = 25,$activesubs = false, $includeunsubs = 0) {
     $html = "";
@@ -605,16 +615,16 @@ class SubscribersController extends Controller {
     if ($activesubs) {
       $action = "activesubscribers";
       if ($ssemail == '') {
-        $filter = array("(`s_unsubscribe` = :zero) and (`s_last_interacted` is not null)", ':zero' => 0);
+        $filter = array("(s_unsubscribe = :zero) and (s_last_interacted is not null)", ':zero' => 0);
       } else {
-        $filter = array("(`s_unsubscribe` = :zero) and (`s_last_interacted` is not null) and (`s_email` like :email)", ':zero' => 0, ':email' => "%{$ssemail}%");
+        $filter = array("(s_unsubscribe = :zero) and (s_last_interacted is not null) and (LOWER(s_email) like LOWER(:email))", ':zero' => 0, ':email' => "%{$ssemail}%");
       }
     } else {
       $action = "subscribers";
       if ($ssemail == '') {
-        $filter = array("`s_unsubscribe` = :zero", ':zero' => 0);
+        $filter = array("s_unsubscribe = :zero", ':zero' => 0);
       } else {
-        $filter = array("(`s_unsubscribe` = :zero) and (`s_email` like :email)", ':zero' => 0, ':email' => "%{$ssemail}%");
+        $filter = array("(s_unsubscribe = :zero) and (LOWER(s_email) like LOWER(:email))", ':zero' => 0, ':email' => "%{$ssemail}%");
       }
     }
 
@@ -648,7 +658,7 @@ class SubscribersController extends Controller {
     $html .= $ff->FF_TheadClose();
     $html .= $ff->FF_TbodyOpen("{{@tbodyclass}}");
 
-    $page = $this->subscriber->paginate($pageno - 1,$numrows,$filter,array('order' => 's_unsubscribe ASC, s_last_interacted DESC, s_priority DESC, s_email ASC'));
+    $page = $this->subscriber->paginate($pageno - 1,$numrows,$filter,array('order' => 's_unsubscribe ASC, (s_last_interacted IS NULL) ASC, s_last_interacted DESC, s_priority DESC, s_email ASC'));
     // $html .= "<p class=\"{{@pclass}}\">page.subset:<br/><pre>". print_r($page['subset'],true) . "</pre></p>";
     // $html .= "<p class=\"{{@pclass}}\">page.subset:<br/><pre> {$numrows} ". count($page['subset'],true) . "</pre></p>";
 

@@ -575,10 +575,10 @@ class MessagesController extends Controller {
 
     do {
       if ($mlistname == "ALL") {
-         $sql = "select `s_uniqid`, `s_email`, `s_last_interacted`, `s_priority`, `s_subscribedby`, `s_emailsleft`, `sml_muid` from `subscribers` left join `smlog` on (`s_uniqid` = `sml_suid`) and (`sml_muid` = :muid) where (`s_unsubscribe` = '0') and (`sml_muid` is null) ORDER BY `s_last_interacted` DESC, `s_priority` DESC, `s_email` ASC LIMIT {$batchsize}";
+         $sql = "select s_uniqid, s_email, s_last_interacted, s_priority, s_subscribedby, s_emailsleft, sml_muid from subscribers left join smlog on (s_uniqid = sml_suid) and (sml_muid = :muid) where (s_unsubscribe = 0) and (sml_muid is null) ORDER BY (s_last_interacted IS NULL) ASC, s_last_interacted DESC, s_priority DESC, s_email ASC LIMIT {$batchsize}";
          $args = array(':muid' => $muid);
   	  } else {
-        $sql = "select `s_uniqid`, `s_email`, `s_last_interacted`, `s_priority`, `s_subscribedby`, `s_emailsleft`, `sml_muid` from `subscribers` left join `smlog` on (`s_uniqid` = `sml_suid`) and (`sml_muid` = :muid) where (`s_unsubscribe` = '0') and (`s_subscribedby` = :listname) and (`sml_muid` is null) ORDER BY `s_last_interacted` DESC, `s_priority` DESC, `s_email` ASC LIMIT {$batchsize}";
+        $sql = "select s_uniqid, s_email, s_last_interacted, s_priority, s_subscribedby, s_emailsleft, sml_muid from subscribers left join smlog on (s_uniqid = sml_suid) and (sml_muid = :muid) where (s_unsubscribe = 0) and (s_subscribedby = :listname) and (sml_muid is null) ORDER BY (s_last_interacted IS NULL) ASC, s_last_interacted DESC, s_priority DESC, s_email ASC LIMIT {$batchsize}";
         $args = array(':muid' => $muid, ':listname' => $mlistname);
       }
       $result = $this->dbPDO->exec($sql,$args);
@@ -717,7 +717,7 @@ class MessagesController extends Controller {
       $i++;
     }
 
-    $this->subscriber->subscriber->load("`s_unsubscribe` = '0'",array('order' => '`s_last_interacted` DESC, `s_priority` DESC, `s_email`', 'limit' => $mvolume));
+    $this->subscriber->subscriber->load('s_unsubscribe = 0',array('order' => '(s_last_interacted IS NULL) ASC, s_last_interacted DESC, s_priority DESC, s_email', 'limit' => $mvolume));
     $nummsgs = count($muids);
     $i = 0;
     while ($this->subscriber->subscriber->valid()) {

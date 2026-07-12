@@ -104,15 +104,15 @@ class SubscribersM extends \DB\SQL\Mapper {
   }
 
   public function numsubscribers() {
-    return $this->count(array("`s_unsubscribe` = :zero", ':zero' => 0));
+    return $this->count(array("s_unsubscribe = :zero", ':zero' => 0));
   }
 
   public function activeReaders() {
-    return $this->count(array("`s_unsubscribe` = :zero and `s_last_interacted` is not null", ':zero' => 0));
+    return $this->count(array("s_unsubscribe = :zero and s_last_interacted is not null", ':zero' => 0));
   }
 
   public function confirmed() {
-    return $this->count(array('`s_confirm` = :one and `s_unsubscribe` = :zero', ':one' => 1, ':zero' => 0));
+    return $this->count(array('s_confirm = :one and s_unsubscribe = :zero', ':one' => 1, ':zero' => 0));
   }
 
   public function unsubscribed() {

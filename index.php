@@ -89,20 +89,45 @@ $fat->set('today',$today);
 // $API = $fat->get('API');
 // $DOMAIN = $fat->get('Domain');
 
-// establishes a connection to the ctnlist MySQL database
-$dbhost = $fat->get('dbhost');
-$dbuser = $fat->get('dbuser');
-$dbpass = $fat->get('dbpass');
-$dbname = $fat->get('dbname');
+// Establish the main application database connection. Environment variables are
+// preferred, with the legacy F3 configuration retained as a transitional fallback.
+$envOr = static function (string $name, $fallback = null) {
+  $value = $_ENV[$name] ?? $_SERVER[$name] ?? getenv($name);
+  // return ($value !== false && $value !== null && $value !== '') ? $value : $fallback;
+  return ($value !== false && $value !== '') ? $value : $fallback;
+};
+
+$dbdriver = strtolower((string) $envOr('DB_DRIVER', $fat->get('dbdriver') ?: 'mysql'));
+$dbhost = (string) $envOr('DB_HOST', $fat->get('dbhost') ?: '127.0.0.1');
+$dbuser = (string) $envOr('DB_USER', $fat->get('dbuser'));
+$dbpass = (string) $envOr('DB_PASS', $fat->get('dbpass'));
+$dbname = (string) $envOr('DB_NAME', $fat->get('dbname'));
+$defaultPort = $dbdriver === 'pgsql' ? 5432 : 3306;
+$dbport = (int) $envOr('DB_PORT', $fat->get('dbport') ?: $defaultPort);
 
 $args = array(
-    \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION, // generic attribute
-    \PDO::ATTR_PERSISTENT => TRUE,  // we want to use persistent connections
-    \PDO::MYSQL_ATTR_COMPRESS => TRUE, // MySQL-specific attribute
+    \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
+    \PDO::ATTR_PERSISTENT => TRUE,
 );
 
-$dbPDO = new \DB\SQL("mysql:host={$dbhost};dbname={$dbname}",$dbuser,$dbpass,$args);
+switch ($dbdriver) {
+  case 'pgsql':
+    $sslmode = (string) $envOr('DB_SSLMODE', 'prefer');
+    $dsn = "pgsql:host={$dbhost};port={$dbport};dbname={$dbname};sslmode={$sslmode}";
+    break;
 
+  case 'mysql':
+    $charset = (string) $envOr('DB_CHARSET', 'utf8mb4');
+    $dsn = "mysql:host={$dbhost};port={$dbport};dbname={$dbname};charset={$charset}";
+    break;
+
+  default:
+    throw new RuntimeException("Unsupported database driver: {$dbdriver}");
+}
+
+$dbPDO = new \DB\SQL($dsn,$dbuser,$dbpass,$args);
+
+$fat->set('dbdriver',$dbdriver);
 $fat->set('dbPDO',$dbPDO);
 
 $version = '5.0.0-dev';

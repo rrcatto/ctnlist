@@ -17,7 +17,7 @@ class SendlogController extends Controller
 
   public $sendlog;
 
-	// $dbconn is a mysqli connection object to an open MySQL database
+	// Uses the application database connection provided by F3.
   function __construct(Base $fat) {
     $this->fat = $fat;
     $this->dbPDO = $fat->get('dbPDO');
@@ -45,7 +45,7 @@ class SendlogController extends Controller
   public function ShowGroupedStats() {
     $html = "";
 
-    $sql = "SELECT `sl_type`, count(*) AS sl_total FROM `sendlog` GROUP BY `sl_type`";
+    $sql = "SELECT sl_type, count(*) AS sl_total FROM sendlog GROUP BY sl_type";
     $result = $this->dbPDO->exec($sql);
     $html .= "<div class=\"row p-1\"><div class=\"col\">";
     $html .= "<button class=\"btn btn-primary btn-sm\">0000/00</button>";
@@ -58,7 +58,7 @@ class SendlogController extends Controller
     }
     $html .= "</div></div>";
 
-    $sql = "SELECT YEAR(`sl_datesent`) as sl_year, MONTH(`sl_datesent`) as sl_month, `sl_type`, count(*) AS sl_total FROM `sendlog` GROUP BY sl_year, sl_month, `sl_type` ORDER BY sl_year, sl_month, `sl_type`";
+    $sql = "SELECT EXTRACT(YEAR FROM sl_datesent) AS sl_year, EXTRACT(MONTH FROM sl_datesent) AS sl_month, sl_type, count(*) AS sl_total FROM sendlog GROUP BY EXTRACT(YEAR FROM sl_datesent), EXTRACT(MONTH FROM sl_datesent), sl_type ORDER BY sl_year, sl_month, sl_type";
     $result = $this->dbPDO->exec($sql);
     $month = '';
     $rw = 0;
@@ -89,8 +89,7 @@ class SendlogController extends Controller
 
   public function ShowStats() {
     $html = "";
-    // $sql = "SELECT YEAR(`sl_datesent`) as sl_year, MONTH(`sl_datesent`) as sl_month, `sl_type`, count(*) AS sl_total FROM `sendlog` GROUP BY sl_year, sl_month, `sl_type`";
-    $sql = "SELECT `sl_type`, count(*) AS sl_total FROM `sendlog` GROUP BY `sl_type`";
+    $sql = "SELECT sl_type, count(*) AS sl_total FROM sendlog GROUP BY sl_type";
     $result = $this->dbPDO->exec($sql);
     $html .= "<div class=\"row\"><div class=\"col\">";
     $html .= "<button class=\"btn btn-secondary btn-sm\">A</button>";
@@ -103,7 +102,7 @@ class SendlogController extends Controller
     $html .= "</div></div>";
     $curr_year = date("Y");
     $curr_month = date("m");
-    $sql = "SELECT YEAR(`sl_datesent`) as sl_year, MONTH(`sl_datesent`) as sl_month, `sl_type`, count(*) AS sl_total FROM `sendlog` GROUP BY `sl_type` HAVING sl_year = :cyear AND sl_month = :cmonth";
+    $sql = "SELECT sl_type, count(*) AS sl_total FROM sendlog WHERE EXTRACT(YEAR FROM sl_datesent) = :cyear AND EXTRACT(MONTH FROM sl_datesent) = :cmonth GROUP BY sl_type ORDER BY sl_type";
     $args = array(':cyear' => $curr_year,':cmonth' => $curr_month);
     $result = $this->dbPDO->exec($sql,$args);
     $html .= "<div class=\"row\"><div class=\"col\">";
@@ -164,7 +163,7 @@ class SendlogController extends Controller
       $html .= "<p class=\"{{@pclass}}\">Access denied</p>";
       return $html;
     }
-    $filter = array('`sl_type` like :sltype and `sl_email` like :email', ':sltype' => "{$stype}%", ':email' => "%{$ssemail}%");
+    $filter = array('sl_type like :sltype and LOWER(sl_email) like LOWER(:email)', ':sltype' => "{$stype}%", ':email' => "%{$ssemail}%");
     $totalmatches = $this->sendlog->count($filter);
     if ($totalmatches == 0) {
       $html .= "<p class=\"{{@pclass}}\">No emails match that search.</p>";
@@ -194,7 +193,7 @@ class SendlogController extends Controller
     $html .= $ff->FF_TheadClose();
     $html .= $ff->FF_TbodyOpen("{{@tbodyclass}}");
 
-    $filter = array('`sl_type` like :sltype and `sl_email` like :email', ':sltype' => "{$stype}%", ':email' => "%{$ssemail}%");
+    $filter = array('sl_type like :sltype and LOWER(sl_email) like LOWER(:email)', ':sltype' => "{$stype}%", ':email' => "%{$ssemail}%");
     $page = $this->sendlog->paginate($pageno - 1,$numrows,$filter,array('order' => 'sl_datesent DESC'));
     foreach ($page['subset'] as $row) {
       $sldatesent = $row["sl_datesent"];

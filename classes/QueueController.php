@@ -80,7 +80,7 @@ class QueueController extends Controller {
     $html .= $ff->FF_TheadClose();
     $html .= $ff->FF_TbodyOpen("{{@tbodyclass}}");
 
-    $page = $this->queue->paginate($pageno - 1,$numrows,null,array('order' => 'q_mpriority DESC, q_last_interacted DESC, q_spriority DESC, q_id ASC'));
+    $page = $this->queue->paginate($pageno - 1,$numrows,null,array('order' => 'q_mpriority DESC, (q_last_interacted IS NULL) ASC, q_last_interacted DESC, q_spriority DESC, q_id ASC'));
     foreach ($page['subset'] as $row) {
       $qmuid = $row['q_muid'];
       $qsubject = stripslashes($row['q_subject']);
@@ -177,12 +177,11 @@ class QueueController extends Controller {
     // main loop: iteratively sends batches of $q_batch_size emails until queue is empty or totaltosend is reached
     do {
       // set_time_limit(86400);
-      $this->queue->load($qfilter,array('order' => 'q_mpriority DESC, q_last_interacted DESC, q_spriority DESC, q_id ASC','limit' => (int) $q_batch_size));
+      $this->queue->load($qfilter,array('order' => 'q_mpriority DESC, (q_last_interacted IS NULL) ASC, q_last_interacted DESC, q_spriority DESC, q_id ASC','limit' => (int) $q_batch_size));
       if ($this->queue->dry()) { // empty queue condition
         $this->options->SetOption("CurrentlySending","N");  // signals that this process has stopped
         return $numsent; // queue is empty
       }
-      // while (!$this->queue->dry()) {
       while ($this->queue->valid()) {
         $val = $this->options->GetOption("SendQueue"); // check to see if the queue processing should stop
         if ($val == 'N') {

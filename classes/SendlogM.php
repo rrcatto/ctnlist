@@ -29,10 +29,8 @@ class SendlogM extends \DB\SQL\Mapper
         // get current month
         $month = date('m');
         $year = date('Y');
-        // WHERE sl_type = MESSAGE AND MONTH(sl_datesent) = current month
-        // $this->sl_year = "YEAR(sl_datesent)";
-        // $this->sl_month = "MONTH(sl_datesent)";
-        $count = $this->count(array("sl_type = :type and YEAR(sl_datesent) = :year and MONTH(sl_datesent) = :month", ':type' => "MESSAGE", ':year' => $year, ':month' => $month));
+        // WHERE sl_type = MESSAGE in the current year and month
+        $count = $this->count(array("sl_type = :type and EXTRACT(YEAR FROM sl_datesent) = :year and EXTRACT(MONTH FROM sl_datesent) = :month", ':type' => "MESSAGE", ':year' => $year, ':month' => $month));
         return $count;
     }
 }

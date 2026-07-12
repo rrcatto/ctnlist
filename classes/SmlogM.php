@@ -35,7 +35,7 @@ class SmlogM extends \DB\SQL\Mapper {
   }
 
   public function deletemsg($muid) {
-    $filter = array("`sml_muid` = :muid", ':muid' => $muid);
+    $filter = array("sml_muid = :muid", ':muid' => $muid);
     $this->erase($filter);
   }
 
@@ -44,7 +44,7 @@ class SmlogM extends \DB\SQL\Mapper {
     $sexists = $sub->read($suid);
     $msg = new MessagesM($this->fat);
     $mexists = $msg->read($muid);
-    $filter = array("`sml_suid` = :suid and `sml_muid` = :muid", ':suid' => $suid, ':muid' => $muid);
+    $filter = array("sml_suid = :suid and sml_muid = :muid", ':suid' => $suid, ':muid' => $muid);
     $this->load($filter);
     if ($this->dry()) {
       if ($mexists) {

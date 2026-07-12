@@ -60,9 +60,9 @@ class SmlogController extends Controller {
       return $html;
     }
     if ($ssemail == '') {
-      $filter = array("`sml_muid` = :muid and `sml_reads` > '0'", ':muid' => $muid);
+      $filter = array("sml_muid = :muid and sml_reads > 0", ':muid' => $muid);
     } else {
-      $filter = array("`sml_muid` = :muid and `sml_reads` > '0' and `sml_email` like :email", ':muid' => $muid, ':email' => "%{$ssemail}%");
+      $filter = array("sml_muid = :muid and sml_reads > 0 and LOWER(sml_email) like LOWER(:email)", ':muid' => $muid, ':email' => "%{$ssemail}%");
     }
     $totalmatches = $this->smlog->count($filter);
     if ($totalmatches == 0) {
@@ -101,9 +101,9 @@ class SmlogController extends Controller {
     $html .= $ff->FF_TbodyOpen("{{@tbodyclass}}");
 
     if ($ssemail == '') {
-      $filter = array("`sml_muid` = :muid and `sml_reads` > '0'", ':muid' => $muid);
+      $filter = array("sml_muid = :muid and sml_reads > 0", ':muid' => $muid);
     } else {
-      $filter = array("`sml_muid` = :muid and `sml_reads` > '0' and `sml_email` like :email", ':muid' => $muid, ':email' => "%{$ssemail}%");
+      $filter = array("sml_muid = :muid and sml_reads > 0 and LOWER(sml_email) like LOWER(:email)", ':muid' => $muid, ':email' => "%{$ssemail}%");
     }
     $page = $this->smlog->paginate($pageno - 1,$numrows,$filter,array('order' => 'sml_last_read DESC'));
     foreach ($page['subset'] as $row) {
@@ -275,7 +275,7 @@ class SmlogController extends Controller {
   // stats functions
   // ucount = unique count, total = total number
   public function numberOfReads($muid) {
-    $sql = "select count(*) as ucount, sum(`sml_reads`) as total from `smlog` where `sml_muid` = :muid and `sml_reads` > '0'";
+    $sql = "select count(*) as ucount, sum(sml_reads) as total from smlog where sml_muid = :muid and sml_reads > 0";
     $opt = array(':muid' => $muid);
     $rows = $this->dbPDO->exec($sql,$opt);
     $row = $rows[0];
@@ -284,7 +284,7 @@ class SmlogController extends Controller {
   }
 
   public function numberOfUpdates($muid) {
-    $sql = "select count(*) as ucount, sum(`sml_updates`) as total from `smlog` where `sml_muid` = :muid and `sml_updates` > '0'";
+    $sql = "select count(*) as ucount, sum(sml_updates) as total from smlog where sml_muid = :muid and sml_updates > 0";
     $opt = array(':muid' => $muid);
     $rows = $this->dbPDO->exec($sql,$opt);
     $row = $rows[0];
@@ -293,7 +293,7 @@ class SmlogController extends Controller {
   }
 
   public function numberOfConfirms($muid) {
-    $sql = "select count(*) as ucount, sum(`sml_confirms`) as total from `smlog` where `sml_muid` = :muid and `sml_confirms` > '0'";
+    $sql = "select count(*) as ucount, sum(sml_confirms) as total from smlog where sml_muid = :muid and sml_confirms > 0";
     $opt = array(':muid' => $muid);
     $rows = $this->dbPDO->exec($sql,$opt);
     $row = $rows[0];
@@ -302,7 +302,7 @@ class SmlogController extends Controller {
   }
 
   public function numberOfForwards($muid) {
-    $sql = "select count(*) as ucount, sum(`sml_forwards`) as total from `smlog` where `sml_muid` = :muid and `sml_forwards` > '0'";
+    $sql = "select count(*) as ucount, sum(sml_forwards) as total from smlog where sml_muid = :muid and sml_forwards > 0";
     $opt = array(':muid' => $muid);
     $rows = $this->dbPDO->exec($sql,$opt);
     $row = $rows[0];
@@ -311,7 +311,7 @@ class SmlogController extends Controller {
   }
 
   public function numberOfBookings($muid) {
-    $sql = "select count(*) as ucount, sum(`sml_bookings`) as total from `smlog` where `sml_muid` = :muid and `sml_bookings` > '0'";
+    $sql = "select count(*) as ucount, sum(sml_bookings) as total from smlog where sml_muid = :muid and sml_bookings > 0";
     $opt = array(':muid' => $muid);
     $rows = $this->dbPDO->exec($sql,$opt);
     $row = $rows[0];
@@ -320,18 +320,18 @@ class SmlogController extends Controller {
   }
 
   public function numberOfQueued($muid) {
-    return $this->smlog->count(array("`sml_muid` = :muid", ':muid' => $muid));
+    return $this->smlog->count(array("sml_muid = :muid", ':muid' => $muid));
   }
 
   public function numberOfSent($muid) {
-    return $this->smlog->count(array("`sml_muid` = :muid and `sml_date_sent` is not null", ':muid' => $muid));
+    return $this->smlog->count(array("sml_muid = :muid and sml_date_sent is not null", ':muid' => $muid));
   }
 
   public function numberOfSubscribes($muid) {
-    return $this->smlog->count(array("`sml_muid` = :muid and `sml_subscribe` = '1'", ':muid' => $muid));
+    return $this->smlog->count(array("sml_muid = :muid and sml_subscribe = 1", ':muid' => $muid));
   }
 
   public function numberOfUnsubscribes($muid) {
-    return $this->smlog->count(array("`sml_muid` = :muid and `sml_unsubscribe` = '1'", ':muid' => $muid));
+    return $this->smlog->count(array("sml_muid = :muid and sml_unsubscribe = 1", ':muid' => $muid));
   }
 }
