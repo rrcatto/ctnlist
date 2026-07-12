@@ -4,7 +4,7 @@
   "type": "project",
   "license": "MIT",
   "require": {
-    "php": ">=8.3 <9.0",
+    "php": ">=8.4 <9.0",
     "ext-json": "*",
     "ext-pdo": "*",
     "bcosca/fatfree-core": "^3.9.2",
@@ -21,7 +21,10 @@
   },
   "config": {
     "optimize-autoloader": true,
-    "sort-packages": true
+    "sort-packages": true,
+    "platform": {
+    "php": "8.4.0"
+}
   },
   "scripts": {
     "analyse": "php -d memory_limit=-1 vendor/bin/phpstan analyse",
