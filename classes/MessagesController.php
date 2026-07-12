@@ -1,3 +1,4 @@
+
 <?php
 /*
 
@@ -262,7 +263,6 @@ class MessagesController extends Controller {
     $html .= $ff->FF_Th("Add2Q","{{@thclass}}");
     $html .= $ff->FF_Th("SendQ","{{@thclass}}");
     $html .= $ff->FF_Th("Proof","{{@thclass}}");
-    $html .= $ff->FF_Th("Clear","{{@thclass}}");
 
     $html .= $ff->FF_TrClose();
     $html .= $ff->FF_TheadClose();
@@ -288,7 +288,6 @@ class MessagesController extends Controller {
       $mq =  "<a href=\"{{@BaseURL}}queuelist/{$muid}\" class=\"btn btn-xs u-btn-deeporange\" target=\"_blank\">Queue</a>";
       $msq = "<a href=\"{{@BaseURL}}processqueue/{$muid}\" class=\"btn btn-xs u-btn-yellow\" target=\"_blank\">SendQ</a>";
       $mp =  "<a href=\"{{@BaseURL}}forward/{$muid}\" class=\"btn btn-xs u-btn-indigo\">Proof</a>";
-      $mc =  "<a href=\"{{@BaseURL}}clrsmlog/{$muid}\" class=\"btn btn-xs u-btn-red\">Clear</a>";
 
       $html .= $ff->FF_TrOpen("");
       $html .= $ff->FF_Td($msubject,"");
@@ -302,7 +301,6 @@ class MessagesController extends Controller {
       $html .= $ff->FF_Td($mq,"");
       $html .= $ff->FF_Td($msq,"");
       $html .= $ff->FF_Td($mp,"");
-      $html .= $ff->FF_Td($mc,"");
       $html .= $ff->FF_TrClose();
     }
     $html .= $ff->FF_TbodyClose();
@@ -695,11 +693,25 @@ class MessagesController extends Controller {
   public function AdvancedSendListToQueue($muids,$mvolume) {
     $html = "";
     set_time_limit(86400);
+
+    $muids = array_values(array_filter(
+      array_map(static fn($muid) => trim((string) $muid), (array) $muids),
+      static fn($muid) => $muid !== ''
+    ));
+
+    if ($muids === []) {
+      return "<p class=\"{{@pclass}}\">Select at least one message before queueing.</p>";
+    }
+
+    $mvolume = max(1, (int) $mvolume);
     $i = 0;
     $msgs = array();
+
     foreach($muids as $muid) {
       $msgs[$i] = new MessagesM($this->fat);
-      $msgs[$i]->read($muid);
+      if (!$msgs[$i]->read($muid)) {
+        return "<p class=\"{{@pclass}}\">Message {$muid} does not exist.</p>";
+      }
       $msgs[$i]->m_datesent = date("Y-m-d H:i:s");
       $msgs[$i]->save();
       $i++;
@@ -728,7 +740,7 @@ class MessagesController extends Controller {
       $msg->m_queued = (int) $queued;
       $msg->save();
 
-      $this->smlog->logMsgQueued($suid,$muid,$email);
+      $this->smlog->logMsgQueued($suid,$muid);
 
       $sbounces = 0;
       $spriority = 0;

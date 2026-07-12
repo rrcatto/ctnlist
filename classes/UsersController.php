@@ -1,3 +1,4 @@
+
 <?php
 /*
 
@@ -271,6 +272,7 @@ class UsersController extends Controller {
     $html .= $ff->FF_TbodyOpen("{{@tbodyclass}}");
 
     $html .= $ff->FF_TrOpen("");
+    $photo = "";
     if ($this->user->u_photo <> '') {
       $photo .= "<a href=\"{$this->user->u_url}\"><img width='200' height='200' src=\"{$this->user->u_photo}\"></a>";
     } else {
@@ -421,11 +423,4 @@ class UsersController extends Controller {
     return $return_value;
   }
 
-  public function setadmin() {
-    $this->user->u_admin = (int) 1;
-    $this->user->save();
-    $html = "<p class=\"{{@pclass}\">Administrator rights granted</p>";
-    $this->fat->set('uadmin',1);
-    return $html;
-  }
 }

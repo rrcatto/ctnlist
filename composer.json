@@ -1,0 +1,32 @@
+{
+  "name": "rrcatto/ctnlist",
+  "description": "Modernised ctnlist mailing-list application",
+  "type": "project",
+  "license": "proprietary",
+  "require": {
+    "php": ">=8.3 <9.0",
+    "ext-json": "*",
+    "ext-pdo": "*",
+    "bcosca/fatfree-core": "^3.9.2",
+    "robmorgan/phinx": "^0.16.12",
+    "symfony/mailer": "^7.4",
+    "vlucas/phpdotenv": "^5.6"
+  },
+  "require-dev": {
+    "phpstan/phpstan": "^2.1",
+    "phpunit/phpunit": "^12.0"
+  },
+  "autoload": {
+    "classmap": ["classes/"]
+  },
+  "config": {
+    "optimize-autoloader": true,
+    "sort-packages": true
+  },
+  "scripts": {
+    "analyse": "php -d memory_limit=-1 vendor/bin/phpstan analyse",
+    "migrate": "vendor/bin/phinx migrate -e production",
+    "migrate:dev": "vendor/bin/phinx migrate -e development",
+    "test": "vendor/bin/phpunit"
+  }
+}

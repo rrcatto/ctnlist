@@ -1,3 +1,4 @@
+
 <?php
 /*
 
@@ -381,16 +382,6 @@ $fat->route('POST /bulk-unsubscribe', function($fat,$params) use (&$subscriber) 
   echo \Template::instance()->render(CTNLIST_DESIGN_MAIN);
 });
 
-$fat->route('GET /clrsmlog/@muid', function($fat,$params) use (&$message,$smlog) {
-  $muid = $params['muid'];
-  $fat->set('title','Clear Message Stats & Smlog');
-  $smlog->delMsg($muid);
-  $message->ClearMsgStats($muid);
-  $content = "<p class=\"{{@pclass}}\">message stats cleared</p>";
-  $content = \Template::instance()->resolve($content);
-  $fat->set('content',$content);
-  echo \Template::instance()->render(CTNLIST_DESIGN_MAIN);
-});
 
 $fat->route('GET /import', function($fat,$params) use (&$subscriber) {
   $fat->set('title','Import Subscribers from File');
@@ -541,9 +532,6 @@ $fat->route('POST /forward-archive', function($fat,$params) use (&$message) {
   echo \Template::instance()->render(CTNLIST_DESIGN_MAIN);
 });
 
-$fat->route('GET /phpinfo', function($fat,$params) {
-  echo phpinfo();
-});
 
 $fat->route('GET /profile', function($fat,$params) use (&$user)  {
   $fat->set('title','Profile');
@@ -684,14 +672,6 @@ $fat->route('GET /message-views/@m/@p', function($fat,$params) use (&$smlog) {
   echo \Template::instance()->render(CTNLIST_DESIGN_MAIN);
 });
 
-$fat->route('GET /dropqueue', function($fat,$params) use (&$queue) {
-  $fat->set('title','Drop Queue');
-  $queue->DropTable();
-  $content = "<p class=\"{{@pclass}}\">queue table dropped</p>";
-  $content = \Template::instance()->resolve($content);
-  $fat->set('content',$content);
-  echo \Template::instance()->render(CTNLIST_DESIGN_MAIN);
-});
 
 $fat->route('GET /queue', function($fat,$params) use (&$queue) {
   $p = 1; // page 1
@@ -800,23 +780,6 @@ $fat->route('GET /processqueue/@muid/@totaltosend', function($fat,$params) use (
   }
 });
 
-$fat->route('GET /setadmin/@api', function($fat,$params) use (&$user) {
-  $api = $params['api'];
-  $API = $fat->get('API');
-  $fat->set('title','Grant Admin rights');
-  if (!$fat->get('uloggedin')) {
-    $content = "<p class=\"{{@pclass}}\">You must be logged in</p>";
-  } elseif ($fat->get('uadmin') == '1') {
-    $content = "<p class=\"{{@pclass}}\">You already have admin rights</p>";
-  } elseif ($api <> $API) {
-    $content = "<p class=\"{{@pclass}}\">wrong authenticator</p>";
-  } else {
-    $content = $user->setadmin();
-  }
-  $content = \Template::instance()->resolve($content);
-  $fat->set('content',$content);
-  echo \Template::instance()->render(CTNLIST_DESIGN_MAIN);
-});
 
 $fat->route('GET /queuelist/@muid', function($fat,$params) use (&$message) {
   $muid = $params['muid'];
@@ -956,7 +919,7 @@ $fat->route('GET /subscribe/@suid/@muid', function($fat,$params) use (&$subscrib
 });
 
 $fat->route('POST /subscribe', function($fat,$params) use (&$subscriber) {
-  $suid = $params['suid'];
+  $suid = trim((string) $fat->get('POST.suid'));
   $fat->set('title','Save Subscriber');
   if (!$fat->get('uloggedin')) {
     $captcha1 = $fat->get('POST.captcha');

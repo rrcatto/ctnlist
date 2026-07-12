@@ -1,3 +1,4 @@
+
 <?php
 /*
 
@@ -55,10 +56,10 @@ class GlobalUnsubscribeController extends Controller
     $this->gu->gu_reason = $reason;
     try {
       $this->gu->save();
-    } catch (PDOException $e) {
-      // $this->gu->erase();
-      // $this->gu->skip();
+      return true;
+    } catch (\Throwable $e) {
+      error_log('Global unsubscribe save failed: ' . $e->getMessage());
+      return false;
     }
-    return true;
   }
 }

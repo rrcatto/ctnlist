@@ -1,3 +1,4 @@
+
 <?php
 /*
 
@@ -152,10 +153,17 @@ class QueueController extends Controller {
     // open a connection to an smtp server
     $smtp_servers = $this->fat->get('smtp_servers');
 
+    if (!is_array($smtp_servers) || $smtp_servers === []) {
+      $this->options->SetOption("CurrentlySending","N");
+      return $numsent;
+    }
+
     $num_smtp_servers = count($smtp_servers);
     $i = 0;
+    $success = false;
+    $q_batch_size = 600;
     while ($i < $num_smtp_servers) {
-      $q_batch_size = (int) $smtp_servers[$i]['batchsize'] ?? 600; // number of queue rows to process in a batch
+      $q_batch_size = max(1, (int) ($smtp_servers[$i]['batchsize'] ?? 600)); // number of queue rows to process in a batch
       $success = $this->mailer->OpenSMTP($smtp_servers[$i]);
       if ($success) break;
       $i++;
@@ -219,7 +227,7 @@ class QueueController extends Controller {
           // open a connection to an smtp server
           $i = 0;
           while ($i < $num_smtp_servers) {
-            $q_batch_size = (int) $smtp_servers[$i]['batchsize'] ?? 600; // number of queue rows to process in a batch
+            $q_batch_size = max(1, (int) ($smtp_servers[$i]['batchsize'] ?? 600)); // number of queue rows to process in a batch
             $success = $this->mailer->OpenSMTP($smtp_servers[$i]);
             if ($success) break;
             $i++;

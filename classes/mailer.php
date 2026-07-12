@@ -1,3 +1,4 @@
+
 <?php
 /*
 Module: mailer class
@@ -35,8 +36,8 @@ class mailer {
   protected $default_smtp_server;
 
   // Swiftmailer object variable
-  private $cm_smtp;
-  private $cm_swift;
+  private $cm_smtp = null;
+  private $cm_swift = null;
 
   public $errormsg;
   public $errorcode;
@@ -74,9 +75,7 @@ class mailer {
   public function OpenSMTP($smtp_server = "") {
     if ($smtp_server == "") $smtp_server = $this->default_smtp_server;
 
-    // echo '<pre>' . print_r($smtp_server, true) . '</pre>';
-
-    if ($smtp_server['active'] <> 1) return false;
+    if (!is_array($smtp_server) || (($smtp_server['active'] ?? 0) != 1)) return false;
 
     try {
       $this->cm_smtp = (new Swift_SmtpTransport($smtp_server['host'], $smtp_server['port'], $smtp_server['enc']))
@@ -101,23 +100,29 @@ class mailer {
       $this->EmailsPerMinute = $smtp_server['sendrate'] ?? $this->fat->get('EmailsPerMinute');
       $this->cm_swift->registerPlugin(new Swift_Plugins_ThrottlerPlugin($this->EmailsPerMinute, Swift_Plugins_ThrottlerPlugin::MESSAGES_PER_MINUTE));
       return true;
-    } catch (Exception $e) {
-      $emsg = $e->getMessage();
+    } catch (\Throwable $e) {
       $this->errormsg = $e->getMessage();
-      $this->errorcode = $e->getCode();
+      $this->errorcode = (int) $e->getCode();
+      $this->cm_smtp = null;
+      $this->cm_swift = null;
       return false;
     }
   }
 
   //Disconnect from SMTP
   public function CloseSMTP() {
+    if ($this->cm_smtp === null) return true;
+
     try {
       $this->cm_smtp->stop();
+      $this->cm_smtp = null;
+      $this->cm_swift = null;
       return true;
-    } catch (Exception $e) {
-      $emsg = $e->getMessage();
+    } catch (\Throwable $e) {
       $this->errormsg = $e->getMessage();
-      $this->errorcode = $e->getCode();
+      $this->errorcode = (int) $e->getCode();
+      $this->cm_smtp = null;
+      $this->cm_swift = null;
       return false;
     }
   }
@@ -261,8 +266,16 @@ class mailer {
       $this->errorcode = $e->getCode();
       return -1;
     }
-    $msg->setBcc(array($this->AdminEmail => $this->AdminName));
-    $msg->setBcc(array($this->OrderEmail => $this->OrderFormName));
+    $bcc = array();
+    if ($this->AdminEmail <> '') {
+      $bcc[$this->AdminEmail] = $this->AdminName;
+    }
+    if ($this->OrderEmail <> '') {
+      $bcc[$this->OrderEmail] = $this->OrderFormName;
+    }
+    if ($bcc <> array()) {
+      $msg->setBcc($bcc);
+    }
 
     //The number of successful recipients is returned here
     try {

@@ -1,3 +1,4 @@
+
 <?php
 /*
 
@@ -39,8 +40,4 @@ class QueueM extends \DB\SQL\Mapper {
     return $this->count();
   }
 
-  public function droptable() {
-    $sql = "DROP TABLE `queue`";
-    return $this->dbPDO->exec($sql);
-  }
 }
