@@ -132,9 +132,9 @@ class htmlhelper
         $html .= "<option " . ($venue == "Johannesburg" ? "selected " : "") . "value=\"Johannesburg\">Johannesburg</option>";
         $html .= "<option " . ($venue == "Cape Town" ? "selected " : "") . "value=\"Cape Town\">Cape Town</option>";
         $html .= "<option " . ($venue == "Durban" ? "selected " : "") . "value=\"Durban\">Durban</option>";
-        $html .= "<option " . ($gender == "Port Elizabeth" ? "selected " : "") . "value=\"Port Elizabeth\">Port Elizabeth</option>";
-        $html .= "<option " . ($gender == "Other City" ? "selected " : "") . "value=\"Other City\">Other City</option>";
-        $html .= "<option " . ($gender == "On Site" ? "selected " : "") . "value=\"On Site\">On Site</option>";
+        $html .= "<option " . ($venue == "Port Elizabeth" ? "selected " : "") . "value=\"Port Elizabeth\">Port Elizabeth</option>";
+        $html .= "<option " . ($venue == "Other City" ? "selected " : "") . "value=\"Other City\">Other City</option>";
+        $html .= "<option " . ($venue == "On Site" ? "selected " : "") . "value=\"On Site\">On Site</option>";
         return $html;
     }
 }

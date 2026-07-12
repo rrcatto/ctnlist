@@ -647,7 +647,7 @@ class MessagesController extends Controller {
 
     $html .= $ff->FF_FormOpen("advancedqueueform","{{@BaseURL}}advanced-queue","POST","form-horizontal");
     $html .= $ff->FF_FieldsetOpen("{{@fieldsetclass}}");
-    $html .= $ff->FF_Legend("Send Multiple Messages","");
+    $html .= $ff->FF_Legend("Send Multiple Messages");
 
     $html .= $ff->FF_DivOpen("{{@rowclass}}");
 

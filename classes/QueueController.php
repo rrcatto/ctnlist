@@ -182,7 +182,8 @@ class QueueController extends Controller {
         $this->options->SetOption("CurrentlySending","N");  // signals that this process has stopped
         return $numsent; // queue is empty
       }
-      while (!$this->queue->dry()) {
+      // while (!$this->queue->dry()) {
+      while ($this->queue->valid()) {
         $val = $this->options->GetOption("SendQueue"); // check to see if the queue processing should stop
         if ($val == 'N') {
           $this->options->SetOption("CurrentlySending","N");  // signals that this process has stopped
@@ -192,8 +193,9 @@ class QueueController extends Controller {
         $qsuid = $this->queue->q_suid;
         // set_time_limit(86400);
         // Retrieve the subscriber to whom we wish to send this message
-        $subexist = $this->subscriber->RetrieveSubscriber($qsuid);
-        $unsub = (bool) ($this->subscriber->subscriber->s_unsubscribe == 1);
+        $this->subscriber->RetrieveSubscriber($qsuid);
+        $subexist = !$this->subscriber->subscriber->dry();
+        $unsub = $subexist && ((int) $this->subscriber->subscriber->s_unsubscribe === 1);
         if (!$subexist || ($unsub)) {
           $this->queue->erase();
           $this->queue->skip();

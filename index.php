@@ -468,6 +468,7 @@ $fat->route('GET /confirm/@suid', function($fat,$params) use (&$subscriber) {
 
 $fat->route('GET /edit-profile', function($fat,$params) use (&$user) {
   $fat->set('title','Edit Profile');
+  $content = '';
   if ($fat->get('uloggedin')) {
     $content = $user->CreateEditProfileHTMLform();
   } else {

@@ -6,3 +6,5 @@ parameters:
   excludePaths:
     analyse:
       - vendor
+  universalObjectCratesClasses:
+    - DB\SQL\Mapper
