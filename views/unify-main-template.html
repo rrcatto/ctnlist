@@ -8,7 +8,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
   <meta name="robots" content="all">
   <meta name="description" content="Accounting, Business and Computer courses">
-  <meta name="author" content="Richard Catto">
+  <meta name="author" content="rc-webs">
   <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
   <link rel="icon" href="/favicon.ico" type="image/x-icon">
 
@@ -32,34 +32,6 @@
   <script src="https://kit.fontawesome.com/5385ffda53.js" crossorigin="anonymous"></script>
   <script src="//cdn.ckeditor.com/4.15.1/full/ckeditor.js"></script>
 
-  <script type="text/javascript">
-  (function() {
-      if (typeof window.janrain !== 'object') window.janrain = {};
-      if (typeof window.janrain.settings !== 'object') window.janrain.settings = {};
-
-      janrain.settings.tokenUrl = '{{@token_url}}';
-
-      function isReady() { janrain.ready = true; };
-      if (document.addEventListener) {
-        document.addEventListener("DOMContentLoaded", isReady, false);
-      } else {
-        window.attachEvent('onload', isReady);
-      }
-
-      var e = document.createElement('script');
-      e.type = 'text/javascript';
-      e.id = 'janrainAuthWidget';
-
-      if (document.location.protocol === 'https:') {
-        e.src = 'https://rpxnow.com/js/lib/ctnlist/engage.js';
-      } else {
-        e.src = 'http://widget-cdn.rpxnow.com/js/lib/ctnlist/engage.js';
-      }
-
-      var s = document.getElementsByTagName('script')[0];
-      s.parentNode.insertBefore(e, s);
-  })();
-  </script>
 </head>
 
 <body>
@@ -91,7 +63,6 @@
                       <a class="dropdown-item" href="/advanced-queue"><i class="fa fa-arrows-alt" aria-hidden="true"></i> Queue 4 Msgs</a>
                       <a class="dropdown-item" href="/processqueue"><i class="fa fa-cogs" aria-hidden="true"></i> Start Sending</a>
                       <a class="dropdown-item" href="/stop-send"><i class="fa fa-hand-paper-o" aria-hidden="true"></i> Stop Sending</a>
-                      <a class="dropdown-item" href="/dropqueue"><i class="far fa-trash-alt"></i> Drop Queue</a>
                       <div class="dropdown-divider"></div>
                       <a class="dropdown-item" href="/sendlog"><i class="fa fa-clipboard" aria-hidden="true"></i> Send Log - {{@slcount}}</a>
                       <div class="dropdown-divider"></div>
@@ -160,7 +131,6 @@
                     <a href="{{@BaseURL}}advanced-queue" class="btn u-btn-blue">Q4Msgs</a>
                     <a href="{{@BaseURL}}processqueue" class="btn u-btn-yellow" target="_blank">Start</a>
                     <a href="{{@BaseURL}}stop-send" class="btn u-btn-brown">Stop</a>
-                    <a href="{{@BaseURL}}dropqueue" class="btn u-btn-red">Drop</a>
                   </div>
 
                   <div class="btn-group my-2 g-mr-10" role="group" aria-label="stats buttons">

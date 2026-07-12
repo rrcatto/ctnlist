@@ -2,7 +2,7 @@
   "name": "rrcatto/ctnlist",
   "description": "Modernised ctnlist mailing-list application",
   "type": "project",
-  "license": "proprietary",
+  "license": "MIT",
   "require": {
     "php": ">=8.3 <9.0",
     "ext-json": "*",

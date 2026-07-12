@@ -42,9 +42,17 @@ define('CTNLIST_DESIGN_MAIN', 'unify-main-template.html');
 define('CTNLIST_DESIGN_NEW_ORDERFORM', 'unify-contact-form.html');
 define('CTNLIST_DESIGN_STORE', 'unify-custom-store.html');
 
-// load fat free framework
-$fat = require_once('/usr/local/lib/php/f3/lib/base.php');
-// $fat = \Base::instance();
+// Load Composer dependencies and environment configuration.
+$composerAutoload = __DIR__ . '/vendor/autoload.php';
+if (!is_file($composerAutoload)) {
+  throw new RuntimeException('Composer dependencies are missing. Run: composer install');
+}
+require_once $composerAutoload;
+
+\Dotenv\Dotenv::createImmutable(__DIR__)->safeLoad();
+
+// Fat-Free Framework is now loaded through Composer.
+$fat = \Base::instance();
 
 $fat->set('CACHE',FALSE);
 
@@ -53,9 +61,6 @@ $fat->set('DEBUG',0);
 $fat->set('UI',CTNLIST_VIEW_DIRECTORY);
 $fat->set('LOGS','/');
 $fat->set('AUTOLOAD',CLASS_FOLDERS);
-
-// uses swiftmailer 6.x
-require_once "/usr/local/lib/php/swiftmailer/lib/swift_required.php";
 
 $fat->set('TZ',"Africa/Johannesburg");
 $fat->set('ESCAPE',false);
@@ -100,7 +105,7 @@ $dbPDO = new \DB\SQL("mysql:host={$dbhost};dbname={$dbname}",$dbuser,$dbpass,$ar
 
 $fat->set('dbPDO',$dbPDO);
 
-$version = '4.7';
+$version = '5.0.0-dev';
 $fat->set('version',$version);
 
 $options = new OptionsController($fat);
@@ -109,12 +114,6 @@ $oldversion = $options->GetOption('version');
 $options->SetOption('version',$version);
 
 $sess = new \DB\SQL\Session($dbPDO);
-
-// rpx response is POSTed to POST /login
-$BaseURL = $fat->get('BaseURL');
-$token_url = "{$BaseURL}login";
-
-$fat->set('token_url',$token_url);
 
 // checks if a person is logged in
 $user = new UsersController($fat);
@@ -541,44 +540,45 @@ $fat->route('GET /profile', function($fat,$params) use (&$user)  {
   echo \Template::instance()->render(CTNLIST_DESIGN_MAIN);
 });
 
-$fat->route('GET /login', function($fat,$params) {
+$fat->route('GET /login', function($fat,$params) use (&$user) {
   $fat->set('title','Login');
-  $ff = new formfield;
-  $class = "d-flex justify-content-center";
-  $id = "janrainEngageEmbed";
-  $content = $ff->FF_DivOpen($class,$id);
-  $content .= $ff->FF_DivClose();
+  $content = $user->CreateLoginHTMLform();
+  $content = \Template::instance()->resolve($content);
   $fat->set('content',$content);
   echo \Template::instance()->render(CTNLIST_DESIGN_MAIN);
 });
 
 $fat->route('POST /login', function($fat,$params) use (&$user) {
-  $token = $fat->get('REQUEST.token');
-  $return_url = $fat->get('REQUEST.return_url');
-  $post_data = array (
-    'token' => $token,
-    'apiKey' => $fat->get('rpx_api_key'),
-    'format' => 'json'
-  );
-  $rpx_response = $user->rpx_http_post($fat->get('rpx_api_url'), $post_data);
-  // parse the json formatted response into an associative array
-  $auth_info = json_decode($rpx_response, true);
-  $login_status = $user->process_auth($auth_info);
-  // If logging in for the first time, redirect to profile.php with edit mode on
-  // otherwise return to page the user was at when logging on
-  if ($fat->get('uloggedin')) {
-    // redirect to user profile page
-    if ($login_status == '1') {
-      // new user
-      $fat->reroute("/edit-profile");
-    } elseif ($login_status == '2') {
-      // existing user
-      $fat->reroute("/profile");
-    } else {
-      // login failed
-      $fat->reroute("/login");
-    }
+  $email = trim((string) $fat->get('POST.email'));
+
+  // Deliberately ignore the result here. The same response is shown for valid,
+  // invalid, existing and new addresses to avoid account enumeration.
+  $user->requestMagicLink($email);
+
+  $fat->set('title','Check your email');
+  $content = '<p class="{{@pclass}}">If the address can receive mail, a one-time sign-in link has been sent. The link will expire shortly.</p>';
+  $content = \Template::instance()->resolve($content);
+  $fat->set('content',$content);
+  echo \Template::instance()->render(CTNLIST_DESIGN_MAIN);
+});
+
+$fat->route('GET /auth/verify', function($fat,$params) use (&$user) {
+  $token = trim((string) $fat->get('GET.token'));
+  $loginStatus = $user->verifyMagicLink($token);
+
+  if ($loginStatus === 1) {
+    $fat->reroute('/edit-profile');
   }
+
+  if ($loginStatus === 2) {
+    $fat->reroute('/profile');
+  }
+
+  $fat->set('title','Sign-in link invalid');
+  $content = '<p class="{{@pclass}}">This sign-in link is invalid, expired or has already been used. Please request a new link.</p>';
+  $content = \Template::instance()->resolve($content);
+  $fat->set('content',$content);
+  echo \Template::instance()->render(CTNLIST_DESIGN_MAIN);
 });
 
 $fat->route('GET /logout', function($fat,$params) use (&$user) {

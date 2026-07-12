@@ -1,121 +1,459 @@
-
 <?php
-/*
 
-Module: UsersContoller class
-Version: 4.3
-Author: Richard Catto
-Creation Date: 2017-06-30
+/**
+ * User profile and passwordless authentication controller.
+ *
+ * Janrain/RPX authentication has been removed. Login now uses a one-time
+ * email link and revocable server-side sessions.
+ */
+class UsersController extends Controller
+{
+    protected $fat;
+    protected $dbPDO;
+    protected $BaseURL;
+    protected $ListName;
+    protected $FromAddress;
+    protected $AdminEmail;
+    protected $AdminName;
 
-*/
+    protected ?AuthLoginTokenM $loginToken = null;
+    protected ?AuthSessionM $authSession = null;
+    protected int $magicLinkTtl;
+    protected int $sessionTtl;
+    protected string $sessionCookieName;
 
-class UsersController extends Controller {
-  protected $fat,
-            $dbPDO,
-            $BaseURL,
-            $ListName,
-            $FromAddress,
-            $AdminEmail,
-            $AdminName;
+    public $user;
+    public $uloggedin;
+    public $uadmin;
+    public $uid;
+    public $mailer = null;
 
-  public  $user,
-          $uloggedin,
-          $uadmin,
-          $uid;
+    public function __construct(Base $fat)
+    {
+        $this->fat = $fat;
+        $this->dbPDO = $fat->get('dbPDO');
+        $this->BaseURL = $fat->get('BaseURL');
+        $this->ListName = $fat->get('ListName');
+        $this->FromAddress = $fat->get('FromAddress');
+        $this->AdminEmail = $fat->get('AdminEmail');
+        $this->AdminName = $fat->get('AdminName');
 
-  public $mailer;
+        $this->magicLinkTtl = $this->envInt('AUTH_MAGIC_LINK_TTL', 900);
+        $this->sessionTtl = $this->envInt('AUTH_SESSION_TTL', 2419200);
+        $this->sessionCookieName = $this->envString('AUTH_SESSION_COOKIE', 'ctnlist_session');
 
-  public function __construct(Base $fat) {
-    $this->fat = $fat;
-    $this->dbPDO = $fat->get('dbPDO');
-    $this->BaseURL = $fat->get('BaseURL');
-    $this->ListName = $fat->get('ListName');
-    $this->FromAddress = $fat->get('FromAddress');
-    $this->AdminEmail = $fat->get('AdminEmail');
-    $this->AdminName = $fat->get('AdminName');
+        $this->user = new UsersM($fat);
+        $this->clearUserContext();
 
-    $this->user = new UsersM($fat);
-
-    $this->uloggedin = false;
-    $this->uadmin = 0;
-    $this->uid = 0;
-    $fat->set('uloggedin',false);
-    $fat->set('uadmin',0);
-    $fat->set('ufname','');
-    $fat->set('ulname','');
-    $fat->set('uname','');
-
-    $this->check_auth_cookies();
-  }
-
-  public function SetMailer(mailer $mailer) {
-    $this->mailer = $mailer;
-  }
-
-  public function logout() {
-    setcookie('identifier', '', time() - 2419200, '/');
-    setcookie('session_token', '', time() - 2419200, '/');
-    $this->uloggedin = false;
-    $this->uadmin = 0;
-    $this->uid = 0;
-    $this->fat->set('uloggedin',false);
-    $this->fat->set('uadmin',0);
-    $this->fat->set('ufname','');
-    $this->fat->set('ulname','');
-    $this->fat->set('uname','');
-    $this->fat->set('SESSION.email','');
-    $this->fat->set('SESSION.suid','');
-    $this->fat->set('Email','');
-    $this->user->reset();
-  }
-
-  // POSTs necessary data back to rpxnow
-  public function rpx_http_post($url, $post_data) {
-    $content = http_build_query($post_data);
-    $opts = array ('http' => array ('method' => "POST", 'header' => "Content-Type: application/json; charset=utf-8", 'content' => $content));
-    $context = stream_context_create($opts);
-    $raw_data = file_get_contents($url, 0, $context);
-    return $raw_data;
-  }
-
-  // checks if the person is logged in
-  // <i class="fa fa-user-secret" aria-hidden="true"></i>
-  public function check_auth_cookies() {
-    // identifier and session_token are used to determine if a user is logged in. if they match a record in the users table, that user is logged in
-    if ($this->fat->exists('COOKIE.identifier')) {
-      $ident = $this->fat->get('COOKIE.identifier');
-    } else {
-      $ident = '';
+        // The application must continue to render before the auth migration is
+        // run. Auth operations themselves remain unavailable until the tables
+        // exist, and the failure is logged rather than exposed to the visitor.
+        $this->initialiseAuthMappers();
+        $this->check_auth_cookies();
     }
 
-    if ($this->fat->exists('COOKIE.session_token')) {
-      $token = $this->fat->get('COOKIE.session_token');
-    } else {
-      $token = '';
+    public function SetMailer(mailer $mailer): void
+    {
+        $this->mailer = $mailer;
     }
 
-    $this->user->load(array('u_identifier = :ident and u_session_token = :token', ':ident' => $ident, ':token' => $token));
-    if (!$this->user->dry()) {
-      $this->uloggedin = true;
-      $this->uadmin = $this->user->u_admin;
-      $this->uid = $this->user->u_id;
-      $this->fat->set('uloggedin',true);
-      $this->fat->set('uadmin',$this->uadmin);
-      $ufname = trim($this->user->u_fname);
-      $this->fat->set('ufname',$ufname);
-      $ulname = trim($this->user->u_lname);
-      $this->fat->set('ulname',$ulname);
-      $uname = trim($ufname . ' ' . $ulname);
-      $this->fat->set('uname',$uname);
-      $this->fat->set('SESSION.email',$this->user->u_email);
-      $this->fat->set('SESSION.suid',$this->user->u_suid);
-      $this->fat->set('Email',$this->user->u_email);
-      return true;
-    } else {
-      $this->logout();
-      return false;
+    public function CreateLoginHTMLform(): string
+    {
+        return <<<HTML
+<form name="loginform" action="{{@BaseURL}}login" method="post" role="form" class="mx-auto" style="max-width: 520px;">
+  <fieldset class="border rounded p-4">
+    <legend>Sign in by email</legend>
+    <p>Enter your email address. We will send you a one-time sign-in link.</p>
+    <div class="mb-3">
+      <label class="form-label" for="login-email">Email address</label>
+      <input class="form-control" id="login-email" name="email" type="email" maxlength="254" autocomplete="email" required>
+    </div>
+    <button class="btn btn-primary" type="submit">Email me a sign-in link</button>
+  </fieldset>
+</form>
+HTML;
     }
-  }
+
+    /**
+     * Request a one-time magic link.
+     *
+     * The route must always show the same generic response, regardless of the
+     * return value, to avoid leaking whether an address already has an account.
+     */
+    public function requestMagicLink(string $email): bool
+    {
+        $email = strtolower(trim($email));
+        if (strlen($email) > 254 || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+            return false;
+        }
+
+        if (!$this->initialiseAuthMappers() || $this->mailer === null) {
+            return false;
+        }
+
+        if ($this->magicLinkRateLimited($email)) {
+            error_log('ctnlist auth: magic-link rate limit reached');
+            return false;
+        }
+
+        $rawToken = $this->randomToken();
+        $now = time();
+
+        try {
+            $this->loginToken->reset();
+            $this->loginToken->email = $email;
+            $this->loginToken->token_hash = hash('sha256', $rawToken);
+            $this->loginToken->created_at = date('Y-m-d H:i:s', $now);
+            $this->loginToken->expires_at = date('Y-m-d H:i:s', $now + $this->magicLinkTtl);
+            $this->loginToken->used_at = null;
+            $this->loginToken->requested_ip = $this->clientIp();
+            $this->loginToken->user_agent = $this->userAgent();
+            $this->loginToken->save();
+
+            $loginUrl = rtrim((string) $this->BaseURL, '/')
+                . '/auth/verify?token=' . rawurlencode($rawToken);
+
+            if (!$this->mailer->OpenSMTP()) {
+                $this->loginToken->erase();
+                return false;
+            }
+
+            try {
+                $sent = $this->mailer->SendMagicLink($email, $loginUrl, $this->magicLinkTtl);
+            } finally {
+                $this->mailer->CloseSMTP();
+            }
+
+            if ($sent < 1) {
+                $this->loginToken->erase();
+                return false;
+            }
+
+            return true;
+        } catch (\Throwable $e) {
+            error_log('ctnlist auth: failed to request magic link: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Verify a one-time token and create a secure revocable session.
+     *
+     * Returns 1 for a new user, 2 for an existing user and 0 for failure.
+     */
+    public function verifyMagicLink(string $rawToken): int
+    {
+        $rawToken = trim($rawToken);
+        if (!preg_match('/^[A-Za-z0-9_-]{43}$/', $rawToken)) {
+            return 0;
+        }
+
+        if (!$this->initialiseAuthMappers()) {
+            return 0;
+        }
+
+        try {
+            $now = date('Y-m-d H:i:s');
+            $tokenHash = hash('sha256', $rawToken);
+
+            $this->loginToken->load([
+                'token_hash = :hash AND used_at IS NULL AND expires_at > :now',
+                ':hash' => $tokenHash,
+                ':now' => $now,
+            ]);
+
+            if ($this->loginToken->dry()) {
+                return 0;
+            }
+
+            $email = strtolower(trim((string) $this->loginToken->email));
+            $this->user->load(['LOWER(u_email) = :email', ':email' => $email]);
+
+            if ($this->user->dry()) {
+                $loginStatus = 1;
+                $this->user->reset();
+                $this->user->u_uniqid = bin2hex(random_bytes(16));
+                $this->user->u_identifier = 'email:' . hash('sha256', $email);
+                $this->user->u_email = $email;
+                $this->user->u_provider = 'passwordless-email';
+                $this->user->u_admin = 0;
+            } else {
+                $loginStatus = 2;
+            }
+
+            $this->user->u_last_login = $now;
+            $this->user->u_ip = $this->clientIp();
+            $this->user->u_xfwdfor = '';
+            $this->user->save();
+
+            $userId = (int) ($this->user->u_id ?: $this->user->_id);
+            if ($userId < 1) {
+                throw new \RuntimeException('Authenticated user does not have a valid ID.');
+            }
+
+            // Mark the magic link as used before issuing a session so that a
+            // subsequent request cannot reuse it successfully.
+            $this->loginToken->used_at = $now;
+            $this->loginToken->save();
+
+            $sessionToken = $this->randomToken();
+            $this->authSession->reset();
+            $this->authSession->user_id = $userId;
+            $this->authSession->token_hash = hash('sha256', $sessionToken);
+            $this->authSession->created_at = $now;
+            $this->authSession->expires_at = date('Y-m-d H:i:s', time() + $this->sessionTtl);
+            $this->authSession->last_seen_at = $now;
+            $this->authSession->revoked_at = null;
+            $this->authSession->ip_address = $this->clientIp();
+            $this->authSession->user_agent = $this->userAgent();
+            $this->authSession->save();
+
+            $this->setAuthCookie($sessionToken);
+            $this->setUserContext();
+            return $loginStatus;
+        } catch (\Throwable $e) {
+            error_log('ctnlist auth: magic-link verification failed: ' . $e->getMessage());
+            return 0;
+        }
+    }
+
+    public function check_auth_cookies(): bool
+    {
+        $rawSessionToken = trim((string) $this->fat->get('COOKIE.' . $this->sessionCookieName));
+        if ($rawSessionToken === '') {
+            return false;
+        }
+
+        if (!preg_match('/^[A-Za-z0-9_-]{43}$/', $rawSessionToken) || !$this->initialiseAuthMappers()) {
+            $this->clearAuthCookie();
+            return false;
+        }
+
+        try {
+            $now = date('Y-m-d H:i:s');
+            $this->authSession->load([
+                'token_hash = :hash AND revoked_at IS NULL AND expires_at > :now',
+                ':hash' => hash('sha256', $rawSessionToken),
+                ':now' => $now,
+            ]);
+
+            if ($this->authSession->dry()) {
+                $this->clearAuthCookie();
+                return false;
+            }
+
+            $this->user->load(['u_id = :uid', ':uid' => (int) $this->authSession->user_id]);
+            if ($this->user->dry()) {
+                $this->authSession->revoked_at = $now;
+                $this->authSession->save();
+                $this->clearAuthCookie();
+                return false;
+            }
+
+            $lastSeen = strtotime((string) $this->authSession->last_seen_at) ?: 0;
+            if ($lastSeen < time() - 300) {
+                $this->authSession->last_seen_at = $now;
+                $this->authSession->save();
+            }
+
+            $this->setUserContext();
+            return true;
+        } catch (\Throwable $e) {
+            error_log('ctnlist auth: session lookup failed: ' . $e->getMessage());
+            $this->clearAuthCookie();
+            return false;
+        }
+    }
+
+    public function logout(): void
+    {
+        $rawSessionToken = trim((string) $this->fat->get('COOKIE.' . $this->sessionCookieName));
+
+        if ($rawSessionToken !== '' && $this->initialiseAuthMappers()) {
+            try {
+                $this->authSession->load([
+                    'token_hash = :hash AND revoked_at IS NULL',
+                    ':hash' => hash('sha256', $rawSessionToken),
+                ]);
+                if (!$this->authSession->dry()) {
+                    $this->authSession->revoked_at = date('Y-m-d H:i:s');
+                    $this->authSession->save();
+                }
+            } catch (\Throwable $e) {
+                error_log('ctnlist auth: session revocation failed: ' . $e->getMessage());
+            }
+        }
+
+        $this->clearAuthCookie();
+        $this->clearLegacyAuthCookies();
+        $this->clearUserContext();
+        $this->user->reset();
+    }
+
+    private function initialiseAuthMappers(): bool
+    {
+        if ($this->loginToken !== null && $this->authSession !== null) {
+            return true;
+        }
+
+        try {
+            $this->loginToken = new AuthLoginTokenM($this->fat);
+            $this->authSession = new AuthSessionM($this->fat);
+            return true;
+        } catch (\Throwable $e) {
+            $this->loginToken = null;
+            $this->authSession = null;
+            error_log('ctnlist auth tables unavailable: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    private function magicLinkRateLimited(string $email): bool
+    {
+        $emailLimit = max(1, $this->envInt('AUTH_MAGIC_LINK_MAX_PER_EMAIL', 5));
+        $ipLimit = max(1, $this->envInt('AUTH_MAGIC_LINK_MAX_PER_IP', 20));
+        $emailSince = date('Y-m-d H:i:s', time() - 900);
+        $ipSince = date('Y-m-d H:i:s', time() - 3600);
+        $ip = $this->clientIp();
+
+        $emailCount = $this->loginToken->count([
+            'email = :email AND created_at >= :since',
+            ':email' => $email,
+            ':since' => $emailSince,
+        ]);
+
+        if ((int) $emailCount >= $emailLimit) {
+            return true;
+        }
+
+        if ($ip === '') {
+            return false;
+        }
+
+        $ipCount = $this->loginToken->count([
+            'requested_ip = :ip AND created_at >= :since',
+            ':ip' => $ip,
+            ':since' => $ipSince,
+        ]);
+
+        return (int) $ipCount >= $ipLimit;
+    }
+
+    private function setUserContext(): void
+    {
+        $this->uloggedin = true;
+        $this->uadmin = (int) $this->user->u_admin;
+        $this->uid = (int) $this->user->u_id;
+
+        $firstName = trim((string) $this->user->u_fname);
+        $lastName = trim((string) $this->user->u_lname);
+        $displayName = trim($firstName . ' ' . $lastName);
+        $email = trim((string) $this->user->u_email);
+        $suid = trim((string) $this->user->u_suid);
+        if ($suid === '' && $email !== '') {
+            $suid = md5($email);
+        }
+
+        $this->fat->set('uloggedin', true);
+        $this->fat->set('uadmin', $this->uadmin);
+        $this->fat->set('ufname', $firstName);
+        $this->fat->set('ulname', $lastName);
+        $this->fat->set('uname', $displayName);
+        $this->fat->set('SESSION.email', $email);
+        $this->fat->set('SESSION.suid', $suid);
+        $this->fat->set('Email', $email);
+    }
+
+    private function clearUserContext(): void
+    {
+        $this->uloggedin = false;
+        $this->uadmin = 0;
+        $this->uid = 0;
+        $this->fat->set('uloggedin', false);
+        $this->fat->set('uadmin', 0);
+        $this->fat->set('ufname', '');
+        $this->fat->set('ulname', '');
+        $this->fat->set('uname', '');
+        $this->fat->set('SESSION.email', '');
+        $this->fat->set('SESSION.suid', '');
+        $this->fat->set('Email', '');
+    }
+
+    private function setAuthCookie(string $rawToken): void
+    {
+        setcookie($this->sessionCookieName, $rawToken, [
+            'expires' => time() + $this->sessionTtl,
+            'path' => '/',
+            'secure' => $this->isSecureRequest(),
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
+    }
+
+    private function clearAuthCookie(): void
+    {
+        setcookie($this->sessionCookieName, '', [
+            'expires' => time() - 3600,
+            'path' => '/',
+            'secure' => $this->isSecureRequest(),
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
+    }
+
+    private function clearLegacyAuthCookies(): void
+    {
+        foreach (['identifier', 'session_token'] as $name) {
+            setcookie($name, '', [
+                'expires' => time() - 3600,
+                'path' => '/',
+                'secure' => $this->isSecureRequest(),
+                'httponly' => true,
+                'samesite' => 'Lax',
+            ]);
+        }
+    }
+
+    private function randomToken(): string
+    {
+        return rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+    }
+
+    private function clientIp(): string
+    {
+        $ip = trim((string) $this->fat->get('IP'));
+        return substr($ip, 0, 45);
+    }
+
+    private function userAgent(): string
+    {
+        return substr(trim((string) $this->fat->get('AGENT')), 0, 500);
+    }
+
+    private function isSecureRequest(): bool
+    {
+        $https = strtolower((string) ($_SERVER['HTTPS'] ?? ''));
+        if ($https !== '' && $https !== 'off') {
+            return true;
+        }
+
+        return strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
+    }
+
+    private function envString(string $name, string $default): string
+    {
+        $value = $_ENV[$name] ?? $_SERVER[$name] ?? getenv($name);
+        if (!is_string($value) || trim($value) === '') {
+            return $default;
+        }
+        return trim($value);
+    }
+
+    private function envInt(string $name, int $default): int
+    {
+        $value = $this->envString($name, (string) $default);
+        return filter_var($value, FILTER_VALIDATE_INT) !== false ? (int) $value : $default;
+    }
 
   public function CreateEditProfileHTMLform() {
     $html = "";
@@ -321,106 +659,6 @@ class UsersController extends Controller {
     $html .= $ff->FF_DivClose();
 
     return $html;
-  }
-
-  public function process_auth($auth_info) {
-    // get the status of the login request
-    $status = $auth_info['stat'];
-    // if it's not 'ok' then you did not login
-    if ($status <> 'ok') {
-      $this->logout();
-      return 0;
-    }
-
-    // DEBUG: print the returned array to the screen
-    /*
-    echo "<pre>";
-    print_r($auth_info);
-    echo "</pre>";
-    */
-
-    $profile = $auth_info['profile'];
-
-    $ident = $profile['identifier'];
-
-    $this->user->load(array('u_identifier = :ident', ':ident' => $ident));
-
-    // The user has been successfully authenticated by rpxnow
-    // this will create a new user if necessary, populate the user record with data received from rpxnow, generate a session_token, store it and set the cookies to log the user in
-    $this->uloggedin = true;
-    $this->fat->set('uloggedin',true);
-
-    // generate fresh session token
-    $token = $this->user->CreateToken('u_session_token');
-    $this->user->u_session_token = $token;
-    $this->user->u_last_login = date("Y-m-d H:i:s");
-
-    // Set the auth cookies
-    // Cookies expire in 28 days time
-    setcookie('identifier', $ident, time() + 2419200, '/');
-    setcookie('session_token', $token, time() + 2419200, '/');
-
-    // IP address of the person logging in or the IP address of their proxy server
-    $this->user->u_ip = $this->fat->get('IP');
-    // Their real IP addresss if behind a proxy. Can be spoofed in some cases
-    $this->user->u_xfwdfor = getenv('HTTP_X_FORWARDED_FOR');
-
-    if (!$this->user->dry()) { // existing user
-      $this->uid = $this->user->u_id;
-      $this->uadmin = $this->user->u_admin;
-      $this->fat->set('uadmin',$this->uadmin);
-      $ufname = trim($this->user->u_fname);
-      $this->fat->set('ufname',$ufname);
-      $ulname = trim($this->user->u_lname);
-      $this->fat->set('ulname',$ulname);
-      $uname = trim($ufname . ' ' . $ulname);
-      $this->fat->set('uname',$uname);
-      $this->user->save();
-      $return_value = '2';
-    } else { // new user
-      $this->user->u_uniqid = $this->user->CreateToken('u_uniqid');
-      $this->user->u_identifier = $ident;
-
-      $this->uadmin = 0;
-      $this->fat->set('uadmin',$this->uadmin);
-
-      $this->user->u_provider = $profile['providerName'];
-      $this->user->u_username = $profile['preferredUsername'] ?? '';
-      $this->user->u_gender = $profile['gender'] ?? '';
-      $this->user->u_birthday = $profile['birthday'] ?? '';
-      $this->user->u_email = $profile['email'] ?? '';
-      $this->user->u_url = $profile['url'] ?? '';
-
-      $this->user->u_phone = $profile['phoneNumber'] ?? '';
-      $this->user->u_photo = $profile['photo'] ?? '';
-
-      $name = $profile['name'] ?? '';
-
-      $this->user->u_fname = $name['givenName'] ?? '';
-      $this->user->u_lname = $name['familyName'] ?? '';
-
-      $ufname = trim($this->user->u_fname);
-      $this->fat->set('ufname',$ufname);
-      $ulname = trim($this->user->u_lname);
-      $this->fat->set('ulname',$ulname);
-      $uname = trim($ufname . ' ' . $ulname);
-      $this->fat->set('uname',$uname);
-
-      $address = $profile['Address'] ?? '';
-
-      $this->user->u_province = $address['region'] ?? '';
-
-      // $ucountry = $profile['country'] ?? '';
-      $this->user->u_country = $address['country'] ?? '';
-
-      $this->user->save();
-      $this->uid = $this->user->_id;
-      $this->fat->set('SESSION.email',$this->user->u_email);
-      $this->fat->set('SESSION.suid',$this->user->u_suid);
-      $this->fat->set('Email',$this->user->u_email);
-      $return_value = '1';
-    }
-    return $return_value;
   }
 
 }

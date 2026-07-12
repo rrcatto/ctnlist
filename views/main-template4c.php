@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <meta name="robots" content="all">
     <meta name="description" content="email marketing software">
-    <meta name="author" content="Richard Catto">
+    <meta name="author" content="rc-webs">
     <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon">
     <link rel="icon" href="/favicon.ico" type="image/x-icon">
 
@@ -87,35 +87,6 @@
     <!-- Link to CKeditor javascript routines -->
     <script src="//cdn.ckeditor.com/4.15.1/full/ckeditor.js"></script>
     <script src="https://kit.fontawesome.com/5385ffda53.js" crossorigin="anonymous"></script>
-
-<script type="text/javascript">
-(function() {
-    if (typeof window.janrain !== 'object') window.janrain = {};
-    if (typeof window.janrain.settings !== 'object') window.janrain.settings = {};
-
-    janrain.settings.tokenUrl = '<?php echo $token_url; ?>';
-
-    function isReady() { janrain.ready = true; };
-    if (document.addEventListener) {
-      document.addEventListener("DOMContentLoaded", isReady, false);
-    } else {
-      window.attachEvent('onload', isReady);
-    }
-
-    var e = document.createElement('script');
-    e.type = 'text/javascript';
-    e.id = 'janrainAuthWidget';
-
-    if (document.location.protocol === 'https:') {
-      e.src = 'https://rpxnow.com/js/lib/ctnlist/engage.js';
-    } else {
-      e.src = 'http://widget-cdn.rpxnow.com/js/lib/ctnlist/engage.js';
-    }
-
-    var s = document.getElementsByTagName('script')[0];
-    s.parentNode.insertBefore(e, s);
-})();
-</script>
 
   </head>
 
@@ -201,7 +172,6 @@
             echo "<a href=\"{$BaseURL}advanced-queue\" class=\"btn btn-primary btn-sm\">Queue Multiple Messages</a>";
             echo "<a href=\"{$BaseURL}processqueue\" target=\"_blank\" class=\"btn btn-success btn-sm\">Start Send</a>";
             echo "<a href=\"{$BaseURL}stop-send\" class=\"btn btn-warning btn-sm\">Stop Send</a>";
-            echo "<a href=\"{$BaseURL}dropqueue\" class=\"btn btn-danger btn-sm\">Drop Queue</a>";
             echo "</div> ";
 
             echo "<div class=\"btn-group my-2 mr-2\" role=\"group\" aria-label=\"stats buttons\">";

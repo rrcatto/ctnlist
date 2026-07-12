@@ -49,7 +49,7 @@ class UsersM extends \DB\SQL\Mapper
   }
 
   protected function GetToken() {
-    return hash('md5', uniqid(mt_rand(), true));
+    return bin2hex(random_bytes(16));
   }
 
   // ensure that the generated token is unique. uses recursion

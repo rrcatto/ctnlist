@@ -8,16 +8,33 @@ require __DIR__ . '/vendor/autoload.php';
 
 Dotenv::createImmutable(__DIR__)->safeLoad();
 
-$database = static function (string $suffix = ''): array {
-    return [
-        'adapter' => 'pgsql',
-        'host' => $_ENV['DB_HOST' . $suffix] ?? $_SERVER['DB_HOST' . $suffix] ?? '127.0.0.1',
-        'name' => $_ENV['DB_NAME' . $suffix] ?? $_SERVER['DB_NAME' . $suffix] ?? 'ctnlist',
-        'user' => $_ENV['DB_USER' . $suffix] ?? $_SERVER['DB_USER' . $suffix] ?? 'ctnlist',
-        'pass' => $_ENV['DB_PASS' . $suffix] ?? $_SERVER['DB_PASS' . $suffix] ?? '',
-        'port' => (int) ($_ENV['DB_PORT' . $suffix] ?? $_SERVER['DB_PORT' . $suffix] ?? 5432),
-        'charset' => 'utf8',
+$env = static function (string $name, string $default = ''): string {
+    $value = $_ENV[$name] ?? $_SERVER[$name] ?? getenv($name);
+    return is_string($value) && $value !== '' ? $value : $default;
+};
+
+$database = static function (string $suffix = '') use ($env): array {
+    $driver = strtolower($env('DB_DRIVER' . $suffix, $env('DB_DRIVER', 'pgsql')));
+    if (!in_array($driver, ['pgsql', 'mysql'], true)) {
+        throw new RuntimeException('Unsupported DB_DRIVER: ' . $driver);
+    }
+
+    $defaultPort = $driver === 'pgsql' ? 5432 : 3306;
+    $config = [
+        'adapter' => $driver,
+        'host' => $env('DB_HOST' . $suffix, '127.0.0.1'),
+        'name' => $env('DB_NAME' . $suffix, 'ctnlist'),
+        'user' => $env('DB_USER' . $suffix, 'ctnlist'),
+        'pass' => $env('DB_PASS' . $suffix, ''),
+        'port' => (int) $env('DB_PORT' . $suffix, (string) $defaultPort),
+        'charset' => $driver === 'mysql' ? 'utf8mb4' : 'utf8',
     ];
+
+    if ($driver === 'pgsql') {
+        $config['sslmode'] = $env('DB_SSLMODE' . $suffix, $env('DB_SSLMODE', 'prefer'));
+    }
+
+    return $config;
 };
 
 return [
