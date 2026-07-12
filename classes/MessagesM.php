@@ -15,33 +15,8 @@ class MessagesM extends \DB\SQL\Mapper {
 
     // 2019.06.19 change m_from to m_from_name
     // add m_from_address, m_max_send
-    $dbPDO->exec("CREATE TABLE IF NOT EXISTS `messages` (
-    `m_id` int(11) NOT NULL AUTO_INCREMENT,
-    `m_uniqid` varchar(32) DEFAULT NULL,
-    `m_t_id` int(11) NOT NULL DEFAULT '0',
-    `m_from_name` varchar(100) DEFAULT NULL,
-    `m_from_address` varchar(254) DEFAULT NULL,
-    `m_subject` varchar(200) DEFAULT NULL,
-    `m_priority` int(11) NOT NULL DEFAULT '0',
-    `m_listname` varchar(50) NOT NULL DEFAULT 'ALL',
-    `m_html` longtext,
-    `m_text` longtext,
-    `m_datesent` datetime DEFAULT NULL,
-    `m_queued` int(11) NOT NULL DEFAULT '0',
-    `m_sent` int(11) NOT NULL DEFAULT '0',
-    `m_max_send` int(11) NOT NULL DEFAULT '0',
-    `m_reads` int(11) NOT NULL DEFAULT '0',
-    `m_last_read` datetime DEFAULT NULL,
-    `m_likes` int(11) NOT NULL DEFAULT '0',
-    `m_last_like` datetime DEFAULT NULL,
-    `m_dislikes` int(11) NOT NULL DEFAULT '0',
-    `m_last_dislike` datetime DEFAULT NULL,
-    `m_bounces` int(11) DEFAULT '0',
-    `m_a_id` int(11) NOT NULL DEFAULT '0',
-    PRIMARY KEY (`m_id`),
-    UNIQUE KEY `m_uniqid` (`m_uniqid`),
-    KEY `m_a_id` (`m_a_id`)
-    ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;");
+
+    // Database schema is managed by Phinx migrations.
 
     parent::__construct($dbPDO,'messages');
   }

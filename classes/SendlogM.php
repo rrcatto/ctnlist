@@ -15,20 +15,8 @@ class SendlogM extends \DB\SQL\Mapper
         $dbPDO = $fat->get('dbPDO');
 
         // 2019.06.19 maximum size of email address is 254
-        $dbPDO->exec("CREATE TABLE IF NOT EXISTS `sendlog` (
-        `sl_id` serial,
-        `sl_suid` varchar(32) GENERATED ALWAYS AS (md5(`sl_email`)) STORED,
-        `sl_muid` varchar(32) NOT NULL DEFAULT '',
-        `sl_datesent` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        `sl_type` varchar(20) NOT NULL,
-        `sl_email` varchar(254) NOT NULL DEFAULT '',
-        `sl_listname` varchar(50) NOT NULL DEFAULT '',
-        `sl_subject` varchar(200) NOT NULL DEFAULT '',
-        PRIMARY KEY (`sl_id`),
-        KEY `sl_type` (`sl_type`),
-        KEY `sl_email` (`sl_email`),
-        KEY `sl_datesent` (`sl_datesent`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=latin1;");
+
+        // Database schema is managed by Phinx migrations.
 
         parent::__construct($dbPDO,'sendlog');
     }

@@ -18,37 +18,8 @@ class SmlogM extends \DB\SQL\Mapper {
 
     // 2018 change sml_date_queued to sml_date_added
     // 2019.06.19 maximum size of email address is 254
-    $dbPDO->exec("CREATE TABLE IF NOT EXISTS `smlog` (
-    `sml_id` serial,
-    `sml_suid` varchar(32) NOT NULL,
-    `sml_email` varchar(254) NOT NULL,
-    `sml_listname` varchar(50) DEFAULT '',
-    `sml_muid` varchar(32) NOT NULL,
-    `sml_date_added` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    `sml_date_sent` datetime DEFAULT NULL,
-    `sml_reads` int(11) NOT NULL DEFAULT '0',
-    `sml_last_read` datetime DEFAULT NULL,
-    `sml_likes` int(11) NOT NULL DEFAULT '0',
-    `sml_last_like` datetime DEFAULT NULL,
-    `sml_dislikes` int(11) NOT NULL DEFAULT '0',
-    `sml_last_dislike` datetime DEFAULT NULL,
-    `sml_updates` int(11) NOT NULL DEFAULT '0',
-    `sml_last_update` datetime DEFAULT NULL,
-    `sml_confirms` int(11) NOT NULL DEFAULT '0',
-    `sml_confirmed_at` datetime DEFAULT NULL,
-    `sml_forwards` int(11) NOT NULL DEFAULT '0',
-    `sml_last_forwarded` datetime DEFAULT NULL,
-    `sml_bookings` int(11) NOT NULL DEFAULT '0',
-    `sml_last_booking` datetime DEFAULT NULL,
-    `sml_subscribe` tinyint(1) NOT NULL DEFAULT '0',
-    `sml_subscribed_at` datetime DEFAULT NULL,
-    `sml_unsubscribe` tinyint(1) NOT NULL DEFAULT '0',
-    `sml_unsubscribed_at` datetime DEFAULT NULL,
-    PRIMARY KEY (`sml_id`),
-    UNIQUE KEY `sml_default` (`sml_suid`,`sml_muid`),
-    KEY `sml_suid` (`sml_suid`),
-    KEY `sml_muid` (`sml_muid`)
-    ) ENGINE=InnoDB DEFAULT CHARSET=latin1;");
+
+    // Database schema is managed by Phinx migrations.
 
     parent::__construct($dbPDO,'smlog');
   }

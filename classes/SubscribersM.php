@@ -32,38 +32,8 @@ class SubscribersM extends \DB\SQL\Mapper {
     // maximum size of user name is 64
     // maximum size of domain name is 253
     // s_subscribedby = Listname the subscriber belongs to
-    $dbPDO->exec("CREATE TABLE IF NOT EXISTS `subscribers` (
-    `s_id` int(11) NOT NULL AUTO_INCREMENT,
-    `s_email` varchar(254) NOT NULL,
-    `s_email_user` varchar(64) GENERATED ALWAYS AS (SUBSTRING_INDEX(`s_email`,'@',1)) STORED,
-    `s_email_domain` varchar(253) GENERATED ALWAYS AS  (SUBSTRING_INDEX(`s_email`,'@',-1)) STORED,
-    `s_uniqid` varchar(32) GENERATED ALWAYS AS (md5(`s_email`)) STORED,
-    `s_last_interacted` datetime DEFAULT NULL,
-    `s_priority` int(11) NOT NULL DEFAULT '0',
-    `s_subscribedate` datetime DEFAULT CURRENT_TIMESTAMP,
-    `s_subscribedby` varchar(50) NOT NULL DEFAULT 'SELF',
-    `s_confirm` tinyint(1) NOT NULL DEFAULT '0',
-    `s_confirmdate` datetime DEFAULT NULL,
-    `s_unsubscribe` tinyint(1) NOT NULL DEFAULT '0',
-    `s_unsubscribedate` datetime DEFAULT NULL,
-    `s_unsubscribereason` varchar(100) DEFAULT NULL,
-    `s_bounces` int(11) DEFAULT '0',
-    `s_emailsleft` int(11) NOT NULL DEFAULT '0',
-    `s_fname` varchar(50) DEFAULT NULL,
-    `s_lname` varchar(50) DEFAULT NULL,
-    `s_province` varchar(30) DEFAULT NULL,
-    `s_country` varchar(30) DEFAULT NULL,
-    `s_gender` varchar(30) DEFAULT NULL,
-    PRIMARY KEY (`s_id`),
-    UNIQUE KEY `s_email` (`s_email`),
-    UNIQUE KEY `s_uniqid` (`s_uniqid`),
-    KEY `s_confirm` (`s_confirm`),
-    KEY `s_email_user` (`s_email_user`),
-    KEY `s_email_domain` (`s_email_domain`),
-    KEY `s_last_interacted` (`s_last_interacted`),
-    KEY `s_priority` (`s_priority`),
-    KEY `s_unsubscribe` (`s_unsubscribe`)
-    ) ENGINE=InnoDB  DEFAULT CHARSET=latin1;");
+
+    // Database schema is managed by Phinx migrations.
 
     $this->gu = new GlobalUnsubscribeController($fat);
     $this->gdu = new GlobalDomainUnsubscribeController($fat);
