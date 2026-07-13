@@ -23,13 +23,15 @@
     "optimize-autoloader": true,
     "sort-packages": true,
     "platform": {
-    "php": "8.4.0"
-}
+      "php": "8.4.0"
+    }
   },
   "scripts": {
     "analyse": "php -d memory_limit=-1 vendor/bin/phpstan analyse",
-    "migrate": "vendor/bin/phinx migrate -e production",
-    "migrate:dev": "vendor/bin/phinx migrate -e development",
+    "migrate-paralegal": "vendor/bin/phinx migrate -c phinx/phinx-paralegal.php -e production",
+    "migrate-banlist": "vendor/bin/phinx migrate -c phinx/phinx-banlist.php -e production",
+    "status-paralegal": "vendor/bin/phinx status -c phinx/phinx-paralegal.php -e production",
+    "status-banlist": "vendor/bin/phinx status -c phinx/phinx-banlist.php -e production",
     "test": "vendor/bin/phpunit"
   }
 }
