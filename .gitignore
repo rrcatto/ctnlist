@@ -2,6 +2,7 @@
 /.env
 /.env.local
 /.env.*.local
+/phinx/ban.env
 /var/cache/
 /var/log/
 /storage/*
