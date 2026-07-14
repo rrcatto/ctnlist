@@ -1,11 +1,10 @@
-
 <?php
 /*
 
 Module: GlobalUnsubscribeController class
-Version: 4.3
+Version: 5.0
 Author: Richard Catto
-Creation Date: 2017-07-27
+Original Creation Date: 2017-07-27
 
 */
 
@@ -14,19 +13,18 @@ class GlobalUnsubscribeController extends Controller
   public $fat;
   public $gu;
 
-  // $dbconn is a mysqli connection object to an open MySQL database
   function __construct(Base $fat) {
     $this->fat = $fat;
     $this->gu = new GlobalUnsubscribeM($fat);
   }
 
   public function readGU($email) {
-    $this->gu->load(array('`gu_email` = :email', ':email' => $email));
+    $this->gu->load(array('gu_email = :email', ':email' => $email));
     return $this->gu->valid();
   }
 
   public function RetrieveGU($suid) {
-    $this->gu->load(array('`gu_suid` = :suid', ':suid' => $suid));
+    $this->gu->load(array('gu_suid = :suid', ':suid' => $suid));
     return $this->gu->valid();
   }
 
@@ -38,7 +36,7 @@ class GlobalUnsubscribeController extends Controller
   }
 
   public function IsUnsubscribed($email) {
-    $count = $this->gu->count(array("`gu_email` = :email and `gu_active` = '1'", ':email' => $email));
+    $count = $this->gu->count(array('gu_email = :email and gu_active = :active', ':email' => $email, ':active' => 1));
     return (bool) ($count == 1);
   }
 

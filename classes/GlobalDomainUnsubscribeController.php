@@ -2,9 +2,9 @@
 /*
 
 Module: GlobalDomainUnsubscribeController class
-Version: 4.3
+Version: 5.0
 Author: Richard Catto
-Creation Date: 2017-07-27
+Original Creation Date: 2017-07-27
 
 */
 
@@ -13,19 +13,18 @@ class GlobalDomainUnsubscribeController extends Controller
   public $fat;
   public $gdu;
 
-  // $dbconn is a mysqli connection object to an open MySQL database
   function __construct(Base $fat) {
     $this->fat = $fat;
     $this->gdu = new GlobalDomainUnsubscribeM($fat);
   }
 
   public function readGDU($domain) {
-    $this->gdu->load(array('`gdu_domain_name` = :domain', ':domain' => $domain));
+    $this->gdu->load(array('gdu_domain_name = :domain', ':domain' => $domain));
     return $this->gdu->valid();
   }
 
   public function IsUnsubscribed($domain) {
-    $count = $this->gdu->count(array("`gdu_domain_name` = :domain and `gdu_active` = '1'", ':domain' => $domain));
+    $count = $this->gdu->count(array('gdu_domain_name = :domain and gdu_active = :active', ':domain' => $domain, ':active' => 1));
     return (bool) ($count == 1);
   }
 

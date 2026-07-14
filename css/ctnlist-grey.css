@@ -1,0 +1,11 @@
+body {
+    /* background: url('https://financial-courses.co.za/img/grey-paper.jpg') no-repeat center center fixed; */
+    background: url('https://financial-courses.co.za/img/yellow-tile.jpg');
+    background-repeat: repeat !important;
+    background-size: initial !important;
+    background-color: #FFFFCC !important;
+    -webkit-background-size: cover;
+    -moz-background-size: cover;
+    background-size: cover;
+    -o-background-size: cover;
+}

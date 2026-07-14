@@ -149,18 +149,19 @@ $banEnvDirectory = CTNLIST_SHARED_DIRECTORY . 'phinx';
 $banEnvFile = $banEnvDirectory . '/ban.env';
 
 if (!is_file($banEnvFile)) {
-  throw new RuntimeException(
-    'Global suppression database configuration file not found: ' . $banEnvFile
-  );
+    throw new RuntimeException(
+        'Global suppression database configuration file not found: ' . $banEnvFile
+    );
 }
 
 \Dotenv\Dotenv::createImmutable($banEnvDirectory, 'ban.env')->safeLoad();
 
 $gdbdriver = strtolower((string) $envOr('GDB_DRIVER', 'pgsql'));
+
 if ($gdbdriver !== 'pgsql') {
-  throw new RuntimeException(
-    "Unsupported global suppression database driver: {$gdbdriver}"
-  );
+    throw new RuntimeException(
+        "Unsupported global suppression database driver: {$gdbdriver}"
+    );
 }
 
 $gdbhost = (string) $envOr('GDB_HOST', '127.0.0.1');
@@ -171,6 +172,7 @@ $gdbport = (int) $envOr('GDB_PORT', '5432');
 $gdbsslmode = (string) $envOr('GDB_SSLMODE', 'prefer');
 
 $gdbdsn = "pgsql:host={$gdbhost};port={$gdbport};dbname={$gdbname};sslmode={$gdbsslmode}";
+
 $gdbPDO = new \DB\SQL($gdbdsn, $gdbuser, $gdbpass, $args);
 
 $fat->set('gdbdriver', $gdbdriver);

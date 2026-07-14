@@ -2,7 +2,6 @@
 <html lang="en">
 <head>
   <title>{{@ListName}} | {{@title}}</title>
-
   <meta charset="utf-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
@@ -13,8 +12,7 @@
   <link rel="icon" href="/favicon.ico" type="image/x-icon">
 
   <!-- Latest compiled and minified CSS -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-+0n0xVW2eSR5OomGNYDnhzAbDsOXxcvSN1TPprVMTNDbiYZCxYbOOl7+AMvyTG2x" crossorigin="anonymous">
-
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
   <!-- Google Fonts -->
   <link rel="stylesheet" href="//fonts.googleapis.com/css?family=Open+Sans%3A400%2C300%2C500%2C600%2C700%7CPlayfair+Display%7CRoboto%7CRaleway%7CSpectral%7CRubik">
 
@@ -22,16 +20,24 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.5.0/font/bootstrap-icons.css">
 
   <!-- CSS Unify -->
-  <link rel="stylesheet" type="text/css" href="https://financial-courses.co.za/css/unify-core.css">
-  <link rel="stylesheet" type="text/css" href="https://financial-courses.co.za/css/unify-components.css">
-  <link rel="stylesheet" type="text/css" href="https://financial-courses.co.za/css/unify-globals.css">
+  <link rel="stylesheet" type="text/css" href="{{@BaseURL}}css/unify-core.css">
+  <link rel="stylesheet" type="text/css" href="{{@BaseURL}}css/unify-components.css">
+  <link rel="stylesheet" type="text/css" href="{{@BaseURL}}css/unify-globals.css">
 
   <!-- CSS Customization -->
-  <link rel="stylesheet" href="https://financial-courses.co.za/css/unify-custom-a.css">
+  <link rel="stylesheet" href="{{@BaseURL}}css/unify-custom-a.css">
 
   <script src="https://kit.fontawesome.com/5385ffda53.js" crossorigin="anonymous"></script>
-  <script src="//cdn.ckeditor.com/4.15.1/full/ckeditor.js"></script>
 
+  <!-- CK Editor -->
+  <link rel="icon" type="image/png" href="https://ckeditor.com/assets/images/favicons/32x32.png" sizes="32x32">
+  <link rel="icon" type="image/png" href="https://ckeditor.com/assets/images/favicons/96x96.png" sizes="96x96">
+  <link rel="apple-touch-icon" type="image/png" href="https://ckeditor.com/assets/images/favicons/120x120.png" sizes="120x120">
+  <link rel="apple-touch-icon" type="image/png" href="https://ckeditor.com/assets/images/favicons/152x152.png" sizes="152x152">
+  <link rel="apple-touch-icon" type="image/png" href="https://ckeditor.com/assets/images/favicons/167x167.png" sizes="167x167">
+  <link rel="apple-touch-icon" type="image/png" href="https://ckeditor.com/assets/images/favicons/180x180.png" sizes="180x180">
+  <link rel="stylesheet" href="{{@BaseURL}}css/ck-style.css">
+  <link rel="stylesheet" href="https://cdn.ckeditor.com/ckeditor5/48.3.1/ckeditor5.css" crossorigin>
 </head>
 
 <body>
@@ -198,7 +204,7 @@
               <h2 class="u-heading-v2__title h6 text-uppercase mb-0">About Us</h2>
             </div>
 
-            <p>We sell Accounting, Business, Financial and Computer self study courses</p>
+            <p>{{@AboutUs}}</p>
           </div>
           <!-- End Footer Content -->
 
@@ -232,8 +238,7 @@
             <div class="u-heading-v2-3--bottom g-brd-white-opacity-0_8 g-mb-20">
               <h2 class="u-heading-v2__title h6 text-uppercase mb-0">Our Contact Info</h2>
             </div>
-
-            <address class="g-bg-no-repeat g-font-size-12 mb-0" style="background-image: url(https://financial-courses.co.za/img/map2.png);">
+            <address class="g-bg-no-repeat g-font-size-12 mb-0" style="background-image: url({{@BaseURL}}img/map2.png);">
           <!-- Location -->
           <div class="d-flex g-mb-20">
             <div class="g-mr-10">
@@ -241,7 +246,8 @@
                 <i class="fas fa-map-marker-alt"></i>
               </span>
             </div>
-            <p class="mb-0">Bergridge Park, Firgrove Way<br />Meadowridge,Cape Town</p>
+
+            <p class="mb-0">{{@StreetAddress}}</p>
           </div>
           <!-- End Location -->
 
@@ -252,7 +258,7 @@
                 <i class="fab fa-whatsapp"></i>
               </span>
             </div>
-            <p class="mb-0"><a href="https://wa.me/27814204799" target="_blank">+27 81 420 4799</a></p>
+            <p class="mb-0"><a href="{{@WhatsAppURL}}" target="_blank">{{@WhatsApp}}</a></p>
           </div>
           <!-- End Phone -->
 
@@ -264,7 +270,7 @@
               </span>
             </div>
             <p class="mb-0">
-              <a class="g-color-white-opacity-0_8 g-color-white--hover" href="mailto:edumapza@gmail.com">edumapza@gmail.com</a>
+              <a class="g-color-white-opacity-0_8 g-color-white--hover" href="mailto:{{@AdminEmail}}">{{@AdminName}}</a>
             </p>
           </div>
           <!-- End Email -->
@@ -282,7 +288,7 @@
         <div class="row">
           <div class="col-md-8 text-center text-md-left g-mb-10 g-mb-0--md">
             <div class="d-lg-flex">
-              <small class="d-block g-font-size-default g-mr-10 g-mb-10 g-mb-0--md">2020 &copy; All Rights Reserved.</small>
+              <small class="d-block g-font-size-default g-mr-10 g-mb-10 g-mb-0--md">2009-2026 &copy; All Rights Reserved.</small>
               <ul class="u-list-inline">
                 <li class="list-inline-item">
                   <a class="g-color-white-opacity-0_8 g-color-white--hover" href="/">Home</a>
@@ -300,7 +306,7 @@
           <div class="col-md-4 align-self-center">
             <ul class="list-inline text-center text-md-right mb-0">
               <li class="list-inline-item g-mx-10" data-toggle="tooltip" data-placement="top" title="Facebook">
-                <a href="https://facebook.com/edumap.org.za" class="g-color-white-opacity-0_5 g-color-white--hover">
+                <a href="{{@FacebookPageURL}}" class="g-color-white-opacity-0_5 g-color-white--hover">
                   <i class="fa fa-facebook"></i>
                 </a>
               </li>
@@ -320,7 +326,9 @@
 ================================================== -->
 <!-- Placed at the end of the document so the pages load faster -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/js/bootstrap.bundle.min.js" integrity="sha384-gtEjrD/SeCtmISkJkNUaaKMoLD0//ElJ19smozuHV6z3Iehds+3Ulb9Bn9Plx0x4" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+<script src="https://cdn.ckeditor.com/ckeditor5/48.3.1/ckeditor5.umd.js" crossorigin></script>
+<script src="{{@BaseURL}}js/ck-main.js"></script>
 
 <script>
 (function() {

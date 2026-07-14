@@ -103,6 +103,8 @@ class MessagesController extends Controller {
       $legend = 'Create Message';
       $this->message->reset();
       $this->message->m_from_address = $this->FromAddress;
+      $m_html = "Enter your message here";
+      $m_subject = "Your subject here";
     } else {
       $msgexists = $this->RetrieveMessage($muid);
       if (!$msgexists) {
@@ -110,17 +112,22 @@ class MessagesController extends Controller {
         return $html;
       }
       $legend = 'Edit Message';
+      $m_html = $this->message->m_html;
+      $m_subject = $this->message->m_subject;
     }
 
     $ff = new formfield;
 
     // javascript variable
+    /*
     $ckjs = "<script>";
     $ckjs .= "CKEDITOR.config.height = {{@textareaheight}};";
     $ckjs .= "CKEDITOR.config.width = {{@textareawidth}};";
     $ckjs .= "CKEDITOR.config.font_names = 'Arial/Arial, Helvetica, sans-serif;' + 'Calibri/Calibri, sans-serif;' + 'Comic Sans MS/Comic Sans MS, cursive;' + 'Courier New/Courier New, Courier, monospace;' + 'Georgia/Georgia, serif;' + 'Lucida Sans Unicode/Lucida Sans Unicode, Lucida Grande, sans-serif;' + 'Tahoma/Tahoma, Geneva, sans-serif;' + 'Times New Roman/Times New Roman, Times, serif;' + 'Trebuchet MS/Trebuchet MS, Helvetica, sans-serif;' + 'Verdana/Verdana, Geneva, sans-serif;';";
     $ckjs .= "CKEDITOR.replace( 'm_html' );";
     $ckjs .= "</script>";
+    */
+    $ckjs = "";
 
     $html .= $ff->FF_FormOpen("messageform","{{@BaseURL}}message","POST");
     $html .= $ff->FF_FieldsetOpen("{{@fieldsetclass}}");
@@ -160,13 +167,15 @@ class MessagesController extends Controller {
     $html .= $ff->FF_Label("Maximum emails to send","m_max_send","{{@labelclass}}");
     $html .= $ff->FF_DivClose();
 
+    $m_subject =  htmlspecialchars($this->message->m_subject ?? '',ENT_QUOTES | ENT_SUBSTITUTE,'UTF-8');
     $html .= $ff->FF_DivOpen("{{@columnclass12}}");
-    $html .= $ff->FF_input("m_subject","text",htmlspecialchars($this->message->m_subject)," required","{{@inputclass}}");
+    $html .= $ff->FF_input("m_subject","text",$m_subject," required","{{@inputclass}}");
     $html .= $ff->FF_Label("Message Subject","m_subject","{{@labelclass}}");
     $html .= $ff->FF_DivClose();
 
+    $msg_content = htmlspecialchars($m_html ?? '',ENT_QUOTES | ENT_SUBSTITUTE,'UTF-8');
     $html .= $ff->FF_DivOpen("{{@columnclass12}}");
-    $html .= $ff->FF_textarea("m_html",$this->message->m_html,$ckjs,"{{@textareaclass}}","{{@textareawidth}}","{{@textareaheight}}");
+    $html .= $ff->FF_textarea("mt_html",$msg_content,$ckjs,"{{@textareaclass}}","{{@textareawidth}}","{{@textareaheight}}");
     $html .= $ff->FF_Label("HTML part","m_html","{{@labelclass}}");
     $html .= $ff->FF_DivClose();
 
@@ -213,7 +222,7 @@ class MessagesController extends Controller {
       $this->message->m_subject = $msubject;
       $this->message->m_priority = (int) $this->fat->get('POST.m_priority');
       $this->message->m_max_send = (int) $this->fat->get('POST.m_max_send');
-      $this->message->m_html = $this->fat->get('POST.m_html');
+      $this->message->m_html = $this->fat->get('POST.mt_html');
       $this->message->m_text = $this->fat->get('POST.m_text');
       $this->message->save();
       $html .= "<p class=\"{{@pclass}\">message saved</p>";

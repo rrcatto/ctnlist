@@ -147,7 +147,6 @@ class TemplatesController extends Controller {
     $ckjs .="CKEDITOR.config.font_names = 'Arial/Arial, Helvetica, sans-serif;' + 'Calibri/Calibri, sans-serif;' + 'Comic Sans MS/Comic Sans MS, cursive;' + 'Courier New/Courier New, Courier, monospace;' + 'Georgia/Georgia, serif;' + 'Lucida Sans Unicode/Lucida Sans Unicode, Lucida Grande, sans-serif;' + 'Tahoma/Tahoma, Geneva, sans-serif;' + 'Times New Roman/Times New Roman, Times, serif;' + 'Trebuchet MS/Trebuchet MS, Helvetica, sans-serif;' + 'Verdana/Verdana, Geneva, sans-serif;';";
     $ckjs .= "CKEDITOR.replace('t_html',{ width : '1175px', height : '900px' });";
     $ckjs .= "</script>";
-    */
 
     $ckjs = "<script>";
     $ckjs .= "CKEDITOR.config.height = {{@textareaheight}};";
@@ -155,6 +154,8 @@ class TemplatesController extends Controller {
     $ckjs .= "CKEDITOR.config.font_names = 'Arial/Arial, Helvetica, sans-serif;' + 'Calibri/Calibri, sans-serif;' + 'Comic Sans MS/Comic Sans MS, cursive;' + 'Courier New/Courier New, Courier, monospace;' + 'Georgia/Georgia, serif;' + 'Lucida Sans Unicode/Lucida Sans Unicode, Lucida Grande, sans-serif;' + 'Tahoma/Tahoma, Geneva, sans-serif;' + 'Times New Roman/Times New Roman, Times, serif;' + 'Trebuchet MS/Trebuchet MS, Helvetica, sans-serif;' + 'Verdana/Verdana, Geneva, sans-serif;';";
     $ckjs .= "CKEDITOR.replace( 't_html' );";
     $ckjs .= "</script>";
+    */
+    $ckjs = "";
 
     $html .= $ff->FF_FormOpen("templateform","{{@BaseURL}}template","POST");
     $html .= $ff->FF_FieldsetOpen("{{@fieldsetclass}}");
@@ -169,8 +170,10 @@ class TemplatesController extends Controller {
     $html .= $ff->FF_Label("Template Name","t_name","{{@labelclass}}");
     $html .= $ff->FF_DivClose();
 
+    $tmp_content = htmlspecialchars($thtml ?? '',ENT_QUOTES | ENT_SUBSTITUTE,'UTF-8');
+    // $tmp_content = $thtml;
     $html .= $ff->FF_DivOpen("{{@columnclass12}}");
-    $html .= $ff->FF_textarea("t_html",$thtml,$ckjs,"{{@textareaclass}}","{{@textareawidth}}","{{@textareaheight}}");
+    $html .= $ff->FF_textarea("mt_html",$tmp_content,$ckjs,"{{@textareaclass}}","{{@textareawidth}}","{{@textareaheight}}");
     $html .= $ff->FF_Label("HTML part","t_html","{{@labelclass}}");
     $html .= $ff->FF_DivClose();
 
@@ -207,7 +210,7 @@ class TemplatesController extends Controller {
       $html .= "<p class=\"{{@pclass}\">Template saved</p>";
     }
     $this->template->t_name = $this->fat->get('POST.t_name');
-    $this->template->t_html = $this->fat->get('POST.t_html');
+    $this->template->t_html = $this->fat->get('POST.mt_html');
     $this->template->t_text = $this->fat->get('POST.t_text');
     $this->template->save();
     return $html;
