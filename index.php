@@ -30,51 +30,71 @@ entry point for app - front end controller
 
 */
 
-// You may specify a relative or absolute path to the classes path here
-define('CTNLIST_CLASS_DIRECTORY', '/usr/local/lib/php/ctnlist/4.4/classes/');
+// Shared ctnlist 5.0 codebase. Every domain can keep its own small index.php
+// while classes, Composer dependencies, migrations, views and themes live here.
+define('CTNLIST_SHARED_DIRECTORY', '/usr/local/lib/php/ctnlist/5.0/');
+define('CTNLIST_INSTANCE_DIRECTORY', dirname(__DIR__) . DIRECTORY_SEPARATOR);
+define('CTNLIST_CLASS_DIRECTORY', CTNLIST_SHARED_DIRECTORY . 'classes/');
+define('CTNLIST_VIEW_DIRECTORY', CTNLIST_SHARED_DIRECTORY . 'views/');
+define('CTNLIST_THEME_DIRECTORY', CTNLIST_SHARED_DIRECTORY . 'theme/');
+define('CTNLIST_MIGRATION_DIRECTORY', CTNLIST_SHARED_DIRECTORY . 'database/migrations/');
 
-define('CLASS_FOLDERS', "/usr/local/lib/php/; /usr/local/lib/php/f3/lib/; /usr/local/lib/php/ctnlist/4.4/classes/; /usr/local/lib/php/lexer/lib/");
-
-define('CTNLIST_VIEW_DIRECTORY', '/usr/local/lib/php/ctnlist/4.4/views/');
-// define('CTNLIST_DESIGN_MAIN', 'main-template4c.php');
-//define('CTNLIST_DESIGN_NEW_ORDERFORM', 'default-contact-form.php');
 define('CTNLIST_DESIGN_MAIN', 'unify-main-template.html');
 define('CTNLIST_DESIGN_NEW_ORDERFORM', 'unify-contact-form.html');
 define('CTNLIST_DESIGN_STORE', 'unify-custom-store.html');
 
-// Load Composer dependencies and environment configuration.
-$composerAutoload = __DIR__ . '/vendor/autoload.php';
+// Composer dependencies are shared by every ctnlist installation.
+$composerAutoload = CTNLIST_SHARED_DIRECTORY . 'vendor/autoload.php';
 if (!is_file($composerAutoload)) {
-  throw new RuntimeException('Composer dependencies are missing. Run: composer install');
+  throw new RuntimeException('Shared ctnlist Composer dependencies are missing: ' . $composerAutoload);
 }
 require_once $composerAutoload;
 
-\Dotenv\Dotenv::createImmutable(__DIR__)->safeLoad();
+// Each domain keeps its own .env one level above public_html.
+\Dotenv\Dotenv::createImmutable(CTNLIST_INSTANCE_DIRECTORY)->safeLoad();
 
-// Fat-Free Framework is now loaded through Composer.
+$envOr = static function (string $name, $fallback = null) {
+  $value = $_ENV[$name] ?? $_SERVER[$name] ?? getenv($name);
+  return ($value !== false && $value !== '') ? $value : $fallback;
+};
+
+// Fat-Free Framework is loaded through the shared Composer installation.
 $fat = \Base::instance();
 
-$fat->set('CACHE',FALSE);
+$fat->set('CACHE', false);
+$fat->set('DEBUG', filter_var((string) $envOr('APP_DEBUG', 'false'), FILTER_VALIDATE_BOOLEAN) ? 3 : 0);
+$fat->set('UI', CTNLIST_VIEW_DIRECTORY);
+$fat->set('LOGS', CTNLIST_INSTANCE_DIRECTORY . 'logs/');
+$fat->set('TZ', (string) $envOr('APP_TIMEZONE', 'Africa/Johannesburg'));
+$fat->set('ESCAPE', false);
 
-// debug level set to 3 for testing. 0 for production
-$fat->set('DEBUG',0);
-$fat->set('UI',CTNLIST_VIEW_DIRECTORY);
-$fat->set('LOGS','/');
-$fat->set('AUTOLOAD',CLASS_FOLDERS);
+// Optional shared configuration, retained for backwards compatibility and for
+// settings that are intentionally common across multiple domains.
+$sharedDbConfig = CTNLIST_CLASS_DIRECTORY . 'dbconfig.ini';
+if (is_file($sharedDbConfig)) {
+  $fat->config($sharedDbConfig, true);
+}
 
-$fat->set('TZ',"Africa/Johannesburg");
-$fat->set('ESCAPE',false);
+// Every domain keeps its own config.ini outside public_html, matching the old
+// deployment model: /home/<domain-user>/f3/config.ini.
+$instanceConfig = CTNLIST_INSTANCE_DIRECTORY . 'f3/config.ini';
+if (!is_file($instanceConfig)) {
+  throw new RuntimeException('Domain configuration file not found: ' . $instanceConfig);
+}
+$fat->config($instanceConfig, true);
 
-// read global config file
-$fat->config(CTNLIST_CLASS_DIRECTORY . 'dbconfig.ini',true);
+// Shared design configuration means a theme change is deployed to every domain.
+$designConfig = CTNLIST_THEME_DIRECTORY . 'design.ini';
+if (!is_file($designConfig)) {
+  throw new RuntimeException('Shared design configuration file not found: ' . $designConfig);
+}
+$fat->config($designConfig, true);
 
-// read unique domain config file
-// $fat->config('config/config.ini',true);
-$fat->config('../f3/config.ini',true);
-
-// CSS classes for layout
-// $fat->config('theme/design.ini',true);
-$fat->config(CTNLIST_CLASS_DIRECTORY . 'design.ini',true);
+// Environment values override matching per-domain config values where appropriate.
+$appBaseUrl = trim((string) $envOr('APP_BASE_URL', ''));
+if ($appBaseUrl !== '') {
+  $fat->set('BaseURL', rtrim($appBaseUrl, '/') . '/');
+}
 
 // turns off the automatic creation of archives
 if (!$fat->exists('archive')) {
@@ -91,12 +111,6 @@ $fat->set('today',$today);
 
 // Establish the main application database connection. Environment variables are
 // preferred, with the legacy F3 configuration retained as a transitional fallback.
-$envOr = static function (string $name, $fallback = null) {
-  $value = $_ENV[$name] ?? $_SERVER[$name] ?? getenv($name);
-  // return ($value !== false && $value !== null && $value !== '') ? $value : $fallback;
-  return ($value !== false && $value !== '') ? $value : $fallback;
-};
-
 $dbdriver = strtolower((string) $envOr('DB_DRIVER', $fat->get('dbdriver') ?: 'mysql'));
 $dbhost = (string) $envOr('DB_HOST', $fat->get('dbhost') ?: '127.0.0.1');
 $dbuser = (string) $envOr('DB_USER', $fat->get('dbuser'));
@@ -129,6 +143,38 @@ $dbPDO = new \DB\SQL($dsn,$dbuser,$dbpass,$args);
 
 $fat->set('dbdriver',$dbdriver);
 $fat->set('dbPDO',$dbPDO);
+
+// Establish the shared global suppression database connection.
+$banEnvDirectory = CTNLIST_SHARED_DIRECTORY . 'phinx';
+$banEnvFile = $banEnvDirectory . '/ban.env';
+
+if (!is_file($banEnvFile)) {
+  throw new RuntimeException(
+    'Global suppression database configuration file not found: ' . $banEnvFile
+  );
+}
+
+\Dotenv\Dotenv::createImmutable($banEnvDirectory, 'ban.env')->safeLoad();
+
+$gdbdriver = strtolower((string) $envOr('GDB_DRIVER', 'pgsql'));
+if ($gdbdriver !== 'pgsql') {
+  throw new RuntimeException(
+    "Unsupported global suppression database driver: {$gdbdriver}"
+  );
+}
+
+$gdbhost = (string) $envOr('GDB_HOST', '127.0.0.1');
+$gdbuser = (string) $envOr('GDB_USER');
+$gdbpass = (string) $envOr('GDB_PASS');
+$gdbname = (string) $envOr('GDB_NAME', 'banlist');
+$gdbport = (int) $envOr('GDB_PORT', '5432');
+$gdbsslmode = (string) $envOr('GDB_SSLMODE', 'prefer');
+
+$gdbdsn = "pgsql:host={$gdbhost};port={$gdbport};dbname={$gdbname};sslmode={$gdbsslmode}";
+$gdbPDO = new \DB\SQL($gdbdsn, $gdbuser, $gdbpass, $args);
+
+$fat->set('gdbdriver', $gdbdriver);
+$fat->set('gdbPDO', $gdbPDO);
 
 $version = '5.0.0-dev';
 $fat->set('version',$version);

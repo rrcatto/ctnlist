@@ -16,9 +16,9 @@ $env = static function (string $name, string $default = ''): string {
     return is_string($value) && $value !== '' ? $value : $default;
 };
 
-$driver = strtolower($env('DB_DRIVER', 'pgsql'));
+$driver = strtolower($env('GDB_DRIVER', 'pgsql'));
 if ($driver !== 'pgsql') {
-    throw new RuntimeException('phinx-banlist.php requires DB_DRIVER=pgsql.');
+    throw new RuntimeException('phinx-banlist.php requires GDB_DRIVER=pgsql.');
 }
 
 return [
@@ -31,13 +31,13 @@ return [
         'default_environment' => 'production',
         'production' => [
             'adapter' => 'pgsql',
-            'host' => $env('DB_HOST', '127.0.0.1'),
-            'name' => $env('DB_NAME', 'banlist'),
-            'user' => $env('DB_USER'),
-            'pass' => $env('DB_PASS'),
-            'port' => (int) $env('DB_PORT', '5432'),
+            'host' => $env('GDB_HOST', '127.0.0.1'),
+            'name' => $env('GDB_NAME', 'banlist'),
+            'user' => $env('GDB_USER'),
+            'pass' => $env('GDB_PASS'),
+            'port' => (int) $env('GDB_PORT', '5432'),
             'charset' => 'utf8',
-            'sslmode' => $env('DB_SSLMODE', 'prefer'),
+            'sslmode' => $env('GDB_SSLMODE', 'prefer'),
         ],
     ],
     'version_order' => 'creation',
