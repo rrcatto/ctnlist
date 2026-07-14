@@ -3,16 +3,12 @@
 /*
 
 File: index.php
-Version: 4.4
+Version: 5.0
 Author: Richard Catto
-Creation Date: 2017-06-30
-Update date: 2021.01.03 17:47
-
-v4.4 2019.08.04 17h03 current one in use
-
-v.4.5 - 4.6 skipped over
-
-v4.7 2021.01.03 18h01 - never implemented, only proposed
+Creation: 2017-06-30
+Update: 2021.01.03 17:47
+v4.4 2019.08.04 17h03
+Update: 2026-07-15 v5.0
 
 Change View rendering to Template rendering:
 

@@ -167,7 +167,7 @@ class MessagesController extends Controller {
     $html .= $ff->FF_Label("Maximum emails to send","m_max_send","{{@labelclass}}");
     $html .= $ff->FF_DivClose();
 
-    $m_subject =  htmlspecialchars($this->message->m_subject ?? '',ENT_QUOTES | ENT_SUBSTITUTE,'UTF-8');
+    $m_subject =  htmlspecialchars($m_subject ?? '',ENT_QUOTES | ENT_SUBSTITUTE,'UTF-8');
     $html .= $ff->FF_DivOpen("{{@columnclass12}}");
     $html .= $ff->FF_input("m_subject","text",$m_subject," required","{{@inputclass}}");
     $html .= $ff->FF_Label("Message Subject","m_subject","{{@labelclass}}");
@@ -176,7 +176,7 @@ class MessagesController extends Controller {
     $msg_content = htmlspecialchars($m_html ?? '',ENT_QUOTES | ENT_SUBSTITUTE,'UTF-8');
     $html .= $ff->FF_DivOpen("{{@columnclass12}}");
     $html .= $ff->FF_textarea("mt_html",$msg_content,$ckjs,"{{@textareaclass}}","{{@textareawidth}}","{{@textareaheight}}");
-    $html .= $ff->FF_Label("HTML part","m_html","{{@labelclass}}");
+    $html .= $ff->FF_Label("HTML part","mt_html","{{@labelclass}}");
     $html .= $ff->FF_DivClose();
 
     $html .= $ff->FF_DivOpen("{{@columnclass12}}");

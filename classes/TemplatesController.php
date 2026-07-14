@@ -174,7 +174,7 @@ class TemplatesController extends Controller {
     // $tmp_content = $thtml;
     $html .= $ff->FF_DivOpen("{{@columnclass12}}");
     $html .= $ff->FF_textarea("mt_html",$tmp_content,$ckjs,"{{@textareaclass}}","{{@textareawidth}}","{{@textareaheight}}");
-    $html .= $ff->FF_Label("HTML part","t_html","{{@labelclass}}");
+    $html .= $ff->FF_Label("HTML part","mt_html","{{@labelclass}}");
     $html .= $ff->FF_DivClose();
 
     $html .= $ff->FF_DivOpen("{{@columnclass12}}");
