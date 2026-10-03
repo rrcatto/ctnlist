@@ -5,19 +5,26 @@ declare(strict_types=1);
 use Dotenv\Dotenv;
 
 $projectRoot = dirname(__DIR__);
-
 require $projectRoot . '/vendor/autoload.php';
 
-Dotenv::createImmutable('/home/paralegal')->safeLoad();
+$instanceEnvDirectory = (string) (
+    $_ENV['INSTANCE_ENV_DIR']
+    ?? $_SERVER['INSTANCE_ENV_DIR']
+    ?? getenv('INSTANCE_ENV_DIR')
+    ?: '/home/paralegal'
+);
+
+if (!is_dir($instanceEnvDirectory)) {
+    throw new RuntimeException('Instance environment directory not found: ' . $instanceEnvDirectory);
+}
+Dotenv::createImmutable($instanceEnvDirectory)->safeLoad();
 
 $env = static function (string $name, string $default = ''): string {
     $value = $_ENV[$name] ?? $_SERVER[$name] ?? getenv($name);
-
     return is_string($value) && $value !== '' ? $value : $default;
 };
 
-$driver = strtolower($env('DB_DRIVER', 'pgsql'));
-if ($driver !== 'pgsql') {
+if (strtolower($env('DB_DRIVER', 'pgsql')) !== 'pgsql') {
     throw new RuntimeException('phinx-paralegal.php requires DB_DRIVER=pgsql.');
 }
 

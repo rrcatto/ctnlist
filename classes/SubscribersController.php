@@ -1,1004 +1,864 @@
 <?php
-/*{{@pclass}}
 
-Module: SubscribersController class
-Version: 4.3
-Author: Richard Catto
-Creation Date: 2017-07-02
+declare(strict_types=1);
 
-*/
+/**
+ * Subscriber identity, profile and per-list consent controller.
+ *
+ * v5.0 profile, bulk-management, import/export and notification workflows are
+ * retained. v5.0.1 stores consent per list and uses the subscriber UUIDv7 as
+ * the public identity.
+ */
+class SubscribersController extends Controller
+{
+    protected Base $fat;
+    protected \DB\SQL $dbPDO;
+    protected string $BaseURL;
+    protected string $ListName;
+    protected string $FromAddress;
+    protected string $Domain;
+    protected ListService $lists;
 
-class SubscribersController extends Controller {
-  protected $fat;
-  protected $dbPDO;
-  protected $BaseURL;
+    public SubscribersM $subscriber;
+    public SmlogController $smlog;
+    public ?mailer $mailer = null;
+    public GlobalUnsubscribeController $gu;
+    public GlobalDomainUnsubscribeController $gdu;
 
-  protected $API;
-  protected $Domain;
-  protected $ListName;
-  protected $FromAddress;
-  protected $SubscriptionConfirmAmount;
-  protected $SubscriptionConfirmLevel;
+    public string $find_email_preg = '/\b([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,63})\b/i';
 
-  public $subscriber, $smlog, $mailer;
-  public $gu, $gdu;
-
-  // from regular-expressions.info to find a valid email address
-  public $find_email_preg = "/\b([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,15})\b/i";
-
-  function __construct(Base $fat, SmlogController $smlog) {
-    $this->fat = $fat;
-    $this->smlog = $smlog;
-
-    $this->BaseURL = $fat->get('BaseURL');
-    $this->dbPDO = $fat->get('dbPDO');
-
-    $this->subscriber = new SubscribersM($fat);
-    $this->gu = new GlobalUnsubscribeController($fat);
-    $this->gdu = new GlobalDomainUnsubscribeController($fat);
-
-    $this->API = $fat->get('API');
-    $this->Domain = $fat->get('Domain');
-    $this->ListName = $fat->get('ListName');
-    $this->FromAddress = $fat->get('FromAddress');
-    $this->SubscriptionConfirmAmount = $fat->get('SubscriptionConfirmAmount');
-    $this->SubscriptionConfirmLevel = $fat->get('SubscriptionConfirmLevel');
-  }
-
-  public function SetMailer(mailer $mailer) {
-    $this->mailer = $mailer;
-  }
-
-  // This finds all email addresses in a string
-  public function find_email_addresses($email) {
-    if (preg_match_all($this->find_email_preg,$email,$matches)) {
-      return $matches[1];
-    }	else {
-      return "";
+    public function __construct(Base $fat, SmlogController $smlog)
+    {
+        $this->fat = $fat;
+        $this->dbPDO = $fat->get('dbPDO');
+        $this->BaseURL = (string) $fat->get('BaseURL');
+        $this->ListName = (string) $fat->get('ListName');
+        $this->FromAddress = (string) $fat->get('FromAddress');
+        $this->Domain = (string) $fat->get('Domain');
+        $this->smlog = $smlog;
+        $this->subscriber = new SubscribersM($fat);
+        $this->lists = new ListService($fat, $this->dbPDO);
+        $this->gu = new GlobalUnsubscribeController($fat);
+        $this->gdu = new GlobalDomainUnsubscribeController($fat);
     }
-  }
 
-  public function NumSubscribers() {
-    return $this->subscriber->numsubscribers();
-  }
+    public function SetMailer(mailer $mailer): void { $this->mailer = $mailer; }
 
-  public function ActiveReaders() {
-    return $this->subscriber->activeReaders();
-  }
-
-  public function Confirmed() {
-    return $this->subscriber->confirmed();
-  }
-
-  public function Unsubscribed() {
-    return $this->subscriber->unsubscribed();
-  }
-
-  public function export($offset,$amount) {
-    set_time_limit(86400);
-    $this->subscriber->load(null,array('order' => '(s_last_interacted IS NULL) ASC, s_last_interacted DESC, s_priority DESC, s_email ASC', 'limit' => $amount, 'offset' => $offset));
-    $fp = fopen("export.txt", "a");
-    while ($this->subscriber->valid()) {
-      $semail = $this->subscriber->s_email;
-      fwrite($fp, "{$semail}\n" );
-      $this->subscriber->skip();
+    /** @return list<string> */
+    public function find_email_addresses(string $input): array
+    {
+        if (!preg_match_all($this->find_email_preg, $input, $matches)) {
+            return [];
+        }
+        $emails = array_map([SubscribersM::class, 'normaliseEmail'], $matches[1]);
+        $emails = array_filter($emails, [SubscribersM::class, 'validEmail']);
+        return array_values(array_unique($emails));
     }
-    fclose($fp);
-    $html = "<p class=\"{{@pclass}}\">Export complete</p>";
-    return $html;
-  }
 
-  public function exportToFile($sql,$filename) {
-    set_time_limit(86400);
-    $result = $this->dbPDO->exec($sql);
-    $fp = fopen($filename, "a");
-    foreach ($result as $row) {
-      $email = $row['s_email'];
-      fwrite($fp, "$email\n" );
+    public function NumSubscribers(): int { return $this->subscriber->numsubscribers(); }
+    public function ActiveReaders(): int { return $this->subscriber->activeReaders(); }
+    public function Confirmed(): int { return $this->subscriber->confirmed(); }
+    public function Unsubscribed(): int { return $this->subscriber->unsubscribed(); }
+    public function RetrieveSubscriber(string $token): bool { return $this->subscriber->read($token); }
+    public function LoadSubscriber(string $email): bool { return $this->subscriber->loadByEmail($email); }
+    public function IsSubscribed(string $email): bool { return $this->subscriber->isSubscribed($email); }
+    public function getEmail(string $token): string { return $this->subscriber->getEmail($token); }
+    public function bumpPriority(string $token, int $amount = 1): bool { return $this->subscriber->bumpPriority($token, $amount); }
+    public function ResetPriority(string $token): bool { return $this->subscriber->resetPriority($token); }
+    public function setPriority(string $token, int $priority): bool { return $this->subscriber->setPriority($token, $priority); }
+
+    /**
+     * The shared suppression database remains authoritative across every local
+     * list. Keep this check in the subscriber service so queue, confirmation
+     * and import workflows all use the same rule.
+     */
+    public function IsGloballySuppressed(string $email): bool
+    {
+        $email = $this->subscriber->normaliseCandidateEmail($email);
+        if (!SubscribersM::validEmail($email)) {
+            return true;
+        }
+        $domain = $this->subscriber->getEmailDomain($email);
+        return $this->gu->IsUnsubscribed($email) || $this->gdu->IsUnsubscribed($domain);
     }
-    fclose($fp);
-    $html = "<p class=\"{{@pclass}}\">{$filename} - export complete</p>";
-    return $html;
-  }
 
-  // $args = array(':offset' => (int) $offset, ':limit' => (int) $limit);
-  public function exportPDO($offset = 0,$limit = 10000000) {
-    $html = "";
-    $sql = "select s_email from subscribers where s_unsubscribe = 0 order by (s_last_interacted IS NULL) ASC, s_last_interacted DESC, s_priority DESC, s_email ASC";
-    $filename = "export-subscribers.txt";
-    $html .= $this->exportToFile($sql,$filename);
-    $sql = "select s_email from subscribers where s_unsubscribe = 1 order by s_email";
-    $filename = "export-remove.txt";
-    $html .= $this->exportToFile($sql,$filename);
-    return $html;
-  }
+    /**
+     * Synchronise local list eligibility with a shared global suppression.
+     * This replaces the single v5 s_unsubscribe flag in the multi-list schema.
+     */
+    public function UnsubscribeAllLists(int $subscriberId, string $reason = ''): void
+    {
+        if ($subscriberId > 0) {
+            $this->lists->unsubscribeAll($subscriberId, $reason);
+        }
+    }
 
-  public function RetrieveSubscriber($suid) {
-    return $this->subscriber->read($suid);
-  }
+    /** Restore the old offset/amount export operation. */
+    public function export(int $offset, int $amount): string
+    {
+        if (!Controller::allowed($this->fat, 'subscribers.view')) {
+            return '<p class="{{@pclass}}">Access denied.</p>';
+        }
+        return $this->writeExportFile(
+            $this->subscriber->exportEmails(true, $offset, $amount),
+            'export.txt',
+            true
+        );
+    }
 
-  public function LoadSubscriber($email) {
-    return $this->subscriber->loadByEmail($email);
-  }
+    /** @param list<string> $emails */
+    private function writeExportFile(array $emails, string $filename, bool $append = false): string
+    {
+        $logs = rtrim((string) $this->fat->get('LOGS'), DIRECTORY_SEPARATOR);
+        if ($logs === '') {
+            $logs = '.';
+        }
+        if (!is_dir($logs)) {
+            mkdir($logs, 0770, true);
+        }
+        $path = $logs . DIRECTORY_SEPARATOR . basename($filename);
+        $handle = fopen($path, $append ? 'ab' : 'wb');
+        if ($handle === false) {
+            return '<p class="{{@pclass}}">Unable to create export file.</p>';
+        }
+        foreach ($emails as $email) {
+            fwrite($handle, $email . PHP_EOL);
+        }
+        fclose($handle);
+        return '<p class="{{@pclass}}">' . htmlspecialchars(basename($filename)) . ' - export complete (' . count($emails) . ' addresses).</p>';
+    }
 
-  public function IsSubscribed($email) {
-    return $this->subscriber->isSubscribed($email);
-  }
-
-  public function getEmail($suid) {
-    return $this->subscriber->getEmail($suid);
-  }
-
-  public function bumpPriority($suid,$p = 1) {
-    return $this->subscriber->bumpPriority($suid,$p);
-  }
-
-  public function ResetPriority($suid) {
-    $this->subscriber->resetPriority($suid);
-  }
-
-  public function setPriority($suid,$priority) {
-    $this->subscriber->setPriority($suid,$priority);
-  }
-
-  public function CreateSubscriberHTMLform($suid = "",$muid = "") {
-    $html = "";
-    if ($suid <> '') { // edit an existing subscriber
-      if (!$this->RetrieveSubscriber($suid)) { // subscriber does not exist
-        $html .= "<p class=\"{{@pclass}}\">The subscriber does not exist.</p>";
+    /**
+     * Restores the two v5 export files using per-list consent semantics.
+     */
+    public function exportPDO(int $offset = 0, int $limit = 10000000, int $listId = 0): string
+    {
+        if (!Controller::allowed($this->fat, 'subscribers.view')) {
+            return '<p class="{{@pclass}}">Access denied.</p>';
+        }
+        $html = $this->writeExportFile(
+            $this->subscriber->exportEmails(true, $offset, $limit, $listId),
+            'export-subscribers.txt'
+        );
+        $html .= $this->writeExportFile(
+            $this->subscriber->exportEmails(false, $offset, $limit, $listId),
+            'export-remove.txt'
+        );
         return $html;
-      }
-      $email_disabled = " readonly"; // disable the input for email of existing subscriber
-      $legend = 'Edit Subscriber';
-    } else { // add a new subscriber
-      $this->subscriber->reset();
-      $email_disabled = " required"; // require email to be input because new subscriber
-      $legend = 'Add New Subscriber';
     }
 
-    $ff = new formfield;
-
-    $html .= $ff->FF_FormOpen("subscribeform","{{@BaseURL}}subscribe","POST");
-    $html .= $ff->FF_FieldsetOpen("{{@fieldsetclass}}");
-    $html .= $ff->FF_Legend($legend);
-
-    $html .= $ff->FF_hidden("muid",$muid);
-    $html .= $ff->FF_hidden("suid",$suid);
-    $html .= $ff->FF_hidden("s_priority",$this->subscriber->s_priority);
-    $html .= $ff->FF_hidden("s_subscribedby",$this->subscriber->s_subscribedby);
-
-    $html .= $ff->FF_DivOpen("{{@rowclass}}");
-
-    if ($this->fat->get('uadmin') == '1') {
-      $html .= $ff->FF_DivOpen("{{@columnclass6}}");
-      $html .= $ff->FF_input("s_subscribedby","text",$this->subscriber->s_subscribedby," required","{{@inputclass}}");
-      $html .= $ff->FF_Label("Subscribed by / listname","s_subscribedby","{{@labelclass}}");
-      $html .= $ff->FF_DivClose();
-
-      $html .= $ff->FF_DivOpen("{{@columnclass6}}");
-      $html .= $ff->FF_input("s_priority","number",$this->subscriber->s_priority," required","{{@inputclass}}");
-      $html .= $ff->FF_Label("Priority","s_priority","{{@labelclass}}");
-      $html .= $ff->FF_DivClose();
-    }
-
-    $html .= $ff->FF_DivOpen("{{@columnclass6}}");
-    $html .= $ff->FF_input("s_fname","text",$this->subscriber->s_fname,"","{{@inputclass}}");
-    $html .= $ff->FF_Label("First Name","s_fname","{{@labelclass}}");
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen("{{@columnclass6}}");
-    $html .= $ff->FF_input("s_lname","text",$this->subscriber->s_lname,"","{{@inputclass}}");
-    $html .= $ff->FF_Label("Last Name","s_lname","{{@labelclass}}");
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen("{{@columnclass6}}");
-    $html .= $ff->FF_input("s_email","email",$this->subscriber->s_email,$email_disabled,"{{@inputclass}}");
-    $html .= $ff->FF_Label("Email Address","s_email","{{@labelclass}}");
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen("{{@columnclass6}}");
-    $html .= $ff->FF_DropDown("s_gender",$ff->CreateGenderHTMLDropDown($this->subscriber->s_gender),"{{@selectclass}}");
-    $html .= $ff->FF_Label("Gender","s_gender","{{@labelclass}}");
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen("{{@columnclass6}}");
-    $html .= $ff->FF_DropDown("s_province",$ff->CreateProvinceHTMLDropDown($this->subscriber->s_province),"{{@selectclass}}");
-    $html .= $ff->FF_Label("Province","s_province","{{@labelclass}}");
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen("{{@columnclass6}}");
-    $html .= $ff->FF_DropDown("s_country",$ff->CreateCountryHTMLDropDown($this->subscriber->s_country),"{{@selectclass}}");
-    $html .= $ff->FF_Label("Country","s_country","{{@labelclass}}");
-    $html .= $ff->FF_DivClose();
-
-    if (!$this->fat->get('uloggedin')) {
-      $html .= $ff->FF_DivOpen("{{@columnclass6}}");
-      $html .= "<img src=\"/captcha\" title=\"Refresh page for new captcha image. No timeout.\" alt=\"captcha\"/>";
-      $html .= $ff->FF_DivClose();
-
-      $html .= $ff->FF_DivOpen("{{@columnclass6}}");
-      $html .= $ff->FF_input("captcha","text","","","{{@inputclass}}");
-      $html .= $ff->FF_Label("Captcha code","captcha","{{@labelclass}}");
-      $html .= $ff->FF_DivClose();
-    }
-
-    $html .= $ff->FF_DivOpen("{{@columnclass6}}");
-    $html .= $ff->FF_Button("submit","Subscribe","{{@buttonclass}}");
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_FieldsetClose();
-    $html .= $ff->FF_FormClose();
-    return $html;
-  }
-
-  // $suid == '' means new subscriber - check if email they enter is already subscribed
-  // $suid <> '' means existing subscriber, discard the email because email, once entered, is read only
-  public function save() {
-    $html = '';
-    $suid = $this->fat->get('POST.suid');
-    $muid = $this->fat->get('POST.muid');
-
-    $email = strtolower(trim($this->fat->get('POST.s_email')));
-
-    if ($suid == '') { // NEW SUBSCRIBER - email must not be blank or already be in the database
-      if ($email == '') {
-        $html .= '<p class=\"{{@pclass}}\">email is blank</p>';
-        return $html;
-      }
-      $subscribed = $this->IsSubscribed($email);
-      if ($subscribed) {
-        $html .= "<p class=\"{{@pclass}}\">{$email} is already in database</p>";
-        return $html;
-      }
-      $this->subscriber->reset();
-      $this->subscriber->s_email = $email;
-      $this->subscriber->save();
-      $suid = $this->subscriber->s_uniqid;
-      $this->smlog->logMsgSub($suid,$muid);
-      $html .= "<p class=\"{{@pclass}}\">{$email} has been subscribed to {$this->ListName}</p>";
-
-      // $subject = "{$this->ListName} notification: {$email} has been subscribed";
-      $subject = "{$email} has subscribed to {$this->ListName}";
-
-      $mhtml = "<p>{$email} has been subscribed to {$this->ListName}.</p><p>Please confirm your subscription by clicking this link:<br /><a href=\"{$this->BaseURL}confirm/{$suid}/{$muid}\">CONFIRM SUBSCRIPTION</a></p>";
-      $mtext = "{$email} has been subscribed to {$this->ListName}.\nPlease confirm your subscription by clicking this link:\n{$this->BaseURL}confirm/{$suid}/{$muid}";
-      $mtype = "SUBSCRIBE";
-    } else { // UPDATE PROFILE - existing subscriber - check if $suid exists - email is read only
-      $valid = $this->RetrieveSubscriber($suid);
-      if (!$valid) {
-        $html .= '<p class=\"{{@pclass}}\">invalid subscriber id</p>';
-        return $html;
-      }
-      $this->subscriber->s_unsubscribe = (int) 0;
-      $this->subscriber->s_unsubscribedate = null;
-
-      $this->smlog->logMsgUpdate($suid,$muid);
-      $html .= "<p class=\"{{@pclass}}\">{$email} subscriber info updated</p>";
-
-      // $subject = "{$this->ListName} notification: {$email} has been updated their profile";
-      $subject = "{$email} has updated their profile on {$this->ListName}";
-      $mhtml = "<p>Subscriber info for {$email} on {$this->ListName} has been updated.</p><p><a href=\"{$this->BaseURL}subscribe/{$suid}/{$muid}\">UPDATE YOUR PROFILE</a></p>";
-      $mtext = "Subscriber info for {$email} on {$this->ListName} has been updated.\nUpdate your profile: {$this->BaseURL}subscribe/{$suid}/{$muid}";
-      $mtype = "UPDATE-PROFILE";
-    }
-
-    $this->subscriber->s_subscribedby = $this->fat->get('POST.s_subscribedby');
-    $this->subscriber->s_fname = trim($this->fat->get('POST.s_fname'));
-    $this->subscriber->s_lname = trim($this->fat->get('POST.s_lname'));
-    $this->subscriber->s_province = $this->fat->get('POST.s_province');
-    $this->subscriber->s_country = trim($this->fat->get('POST.s_country'));
-    $this->subscriber->s_gender = trim($this->fat->get('POST.s_gender'));
-    $this->subscriber->save();
-
-    $priority = (int) $this->fat->get('POST.s_priority') + 100;
-    $this->setPriority($suid,$priority);
-
-    $mfrom = $this->FromAddress;
-    $sname = $this->subscriber->s_fname . " " . $this->subscriber->s_lname;
-
-    $this->mailer->OpenSMTP();
-    $this->mailer->SendNotification($muid,$mtype,$mfrom,$email,$sname,$subject,$mhtml,$mtext);
-    $this->mailer->CloseSMTP();
-    return $html;
-  }
-
-  // gotta fix this - check if $suid is valid
-  public function CreateUnsubscribeHTMLform($suid,$muid = '') {
-    $html = "";
-    if (!$this->RetrieveSubscriber($suid)) {
-      $gemail = $this->gu->getEmail($suid);
-      if ($gemail <> '') {
-        $html .= "<p class=\"{{@pclass}}\">Your {$gemail} has already been globally banned from receiving mail</p>";
-      } else {
-        $html .= "<p class=\"{{@pclass}}\">Your email is unknown to this service {$this->ListName}</p>";
-      }
-      return $html;
-    }
-    $semail = $this->subscriber->s_email;
-    if ($this->subscriber->s_unsubscribe == 1) {
-      $html .= "<p class=\"{{@pclass}}\">Your email account {$semail} on {$this->ListName} was previously removed</p>";
-      return $html;
-    }
-
-    $ff = new formfield;
-
-    $html .= $ff->FF_FormOpen("unsubscribeform","{{@BaseURL}}unsubscribe","POST");
-    $html .= $ff->FF_FieldsetOpen("{{@fieldsetclass}}");
-    $html .= $ff->FF_Legend("Unsubscribe");
-
-    $html .= $ff->FF_hidden("suid",$suid);
-    $html .= $ff->FF_hidden("muid",$muid);
-    $html .= $ff->FF_hidden("email",$semail);
-
-    $html .= $ff->FF_DivOpen("{{@rowclass}}");
-
-    $html .= $ff->FF_DivOpen("{{@columnclass12}}");
-    $html .= "Email address to be unsubscribed: <b>{$semail}</b>";
-    $html .= $ff->FF_DivClose();
-
-    $radio_name = "sglobalunsubscribe";
-    $radio_div_class = "{{@checkdivclass}}";
-    $radio_class = "{{@checkclass}}";
-    $radio_labelclass = "{{@checklabelclass}}";
-
-    $html .= $ff->FF_DivOpen($radio_div_class);
-    $html .= $ff->FF_radio($radio_name,"sg1","b","",$radio_class);
-    $html .= $ff->FF_Label("\n&nbsp;Address does not exist\n","sg1",$radio_labelclass);
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen($radio_div_class);
-    $html .= $ff->FF_radio($radio_name,"sg2","s","",$radio_class);
-    $html .= $ff->FF_Label("\n&nbsp;Stop sending me SPAM\n","sg2",$radio_labelclass);
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen($radio_div_class);
-    $html .= $ff->FF_radio($radio_name,"sg3","g","",$radio_class);
-    $html .= $ff->FF_Label("\n&nbsp;Remove me from ALL mailing lists\n","sg3",$radio_labelclass);
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen($radio_div_class);
-    $html .= $ff->FF_radio($radio_name,"sg4","o"," checked",$radio_class);
-    $html .= $ff->FF_Label("\n&nbsp;Take me off this list only\n","sg4",$radio_labelclass);
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen("{{@columnclass12}}");
-    $html .= $ff->FF_textarea("sunsubscribereason","","","{{@textareaclass}}","{{@textareawidth2}}","{{@textareaheight2}}");
-    $html .= $ff->FF_Label("Reason / comments","sunsubscribereason","{{@labelclass}}");
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen("{{@columnclass6}}");
-    $html .= $ff->FF_Button("submit","Unsubscribe","{{@buttonclass}}");
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_FieldsetClose();
-    $html .= $ff->FF_FormClose();
-    return $html;
-  }
-
-  public function Unsubscribe() {
-    $html = "";
-    $suid = $this->fat->get('POST.suid');
-    $muid = $this->fat->get('POST.muid');
-    $pemail = $this->fat->get('POST.email');
-    $sglobalunsubscribe = $this->fat->get('POST.sglobalunsubscribe');
-    $sunsubscribereason = $this->fat->get('POST.sunsubscribereason');
-
-    if ($this->fat->get('uadmin') == 1) {
-      $admin = true;
-    } else {
-      $admin = false;
-    }
-
-    $exists = $this->RetrieveSubscriber($suid);
-    if (!$exists) {
-      $gemail = $this->gu->getEmail($suid);
-      if ($gemail <> '') {
-        $html .= "<p class=\"{{@pclass}}\">Your {$gemail} has been globally banned from receiving mail</p>";
-      } elseif ($pemail <> '') {
-        $html .= "<p class=\"{{@pclass}}\">Your {$pemail} is unknown to this service {$this->ListName}</p>";
-      } else {
-        $html .= "<p class=\"{{@pclass}}\">Your email is blank and is thus unknown to this service {$this->ListName}</p>";
-      }
-      return $html;
-    }
-
-    $semail = $this->subscriber->s_email;
-
-    if ($this->subscriber->s_unsubscribe == 1) {
-      $html .= "<p class=\"{{@pclass}}\">Your email account {$semail} on {$this->ListName} was previously erased</p>";
-      return $html;
-    }
-
-    if ($sglobalunsubscribe == "b") {
-      $global = true;
-      $subject_tag = "BOUNCE";
-      $gutype = ($admin ? 'BOUNCE-ADMIN' : 'BOUNCE');
-    } elseif ($sglobalunsubscribe == "s") {
-      $global = true;
-      $subject_tag = "SPAM";
-      $gutype = ($admin ? 'SPAM-ADMIN' : 'SPAM');
-    } elseif ($sglobalunsubscribe == "g") {
-      $global = true;
-      $subject_tag = "GLOBAL";
-      $gutype = ($admin ? 'ADMIN' : 'USER');
-    } else { // unsubscribe only from this list
-      $global = false;
-      $subject_tag = "LIST";
-      $gutype = "";
-    }
-
-    $this->subscriber->s_unsubscribe = (int) 1;
-    $this->subscriber->s_unsubscribedate = date("Y-m-d H:i:s");
-    $this->subscriber->s_unsubscribereason = $sunsubscribereason;
-    $this->subscriber->save();
-
-    $this->ResetPriority($suid);
-    $this->smlog->logMsgUnsub($suid,$muid);
-
-    $mtype = "UNSUBSCRIBE";
-    $mfrom = $this->FromAddress;
-    $sname = $this->subscriber->s_fname . " " . $this->subscriber->s_lname;
-    $subject = "{$semail} has been unsubscribed from {$this->ListName} - {$subject_tag}";
-    $mhtml = "<p>{$semail} has been unsubscribed from {$this->ListName}.</p><p>Reason: {$sunsubscribereason}</p><p><a href=\"{$this->BaseURL}subscribe/{$suid}/{$muid}\">RE-SUBSCRIBE</a></p>";
-    $mtext = "{$semail} has been unsubscribed from {$this->ListName}.\nReason: {$sunsubscribereason}\nRe-subscribe: {$this->BaseURL}subscribe/{$suid}/{$muid}";
-
-    $this->mailer->OpenSMTP();
-    $this->mailer->SendNotification($muid,$mtype,$mfrom,$semail,$sname,$subject,$mhtml,$mtext);
-    $this->mailer->CloseSMTP();
-
-    $html .= "<p class=\"{{@pclass}}\">{$semail} has been unsubscribed from {$this->ListName}.</p>";
-
-    if ($global) {
-      $success = $this->gu->save($semail,$gutype,$sunsubscribereason);
-      if ($success) $html .= "<p class=\"{{@pclass}}\">{$semail} was removed from ALL mailing lists.</p>";
-    }
-    return $html;
-  }
-
-  // returns true if added subscriber else false
-  // maybe use AddOrUpdate() instead of save() defined in SubscriberM which calls FixEmail
-  public function SimpleSubscribe($email,$priority = 0,$saddedby = 'ADMIN') {
-    $email = strtolower(trim($email));
-    if ($email == '') return false;
-    $maxpriority = (int) 10000000;
-    $valid = $this->LoadSubscriber($email);
-    if ($valid) {
-      $ipriority = max($priority,$this->subscriber->s_priority);
-      $ipriority = min($ipriority,$maxpriority);
-      $this->subscriber->s_priority = (int) $ipriority;
-      // $this->subscriber->s_subscribedby = $saddedby;
-      $this->subscriber->save();
-    } else {
-      $this->subscriber->reset();
-      $this->subscriber->s_email = $email;
-      $this->subscriber->s_priority = min($priority,$maxpriority);
-      $this->subscriber->s_subscribedby = $saddedby;
-      $this->subscriber->save();
-      return true;
-    }
-    return false;
-  }
-
-  public function SyncSubscribers() {
-    set_time_limit(86400);
-    $dbservers = $this->fat->get('dbservers');
-    $num_db_servers = count($dbservers);
-    $total_added = 0;
-    $fp1 = fopen("sync.txt", "a");
-    $bdate = date("Y-m-d H:i:s");
-    fwrite($fp1, "--------------\n");
-    fwrite($fp1, $bdate . "\n");
-    fwrite($fp1, "--------------\n");
-
-    foreach ($dbservers as $db_server) {
-      if (($db_server['active'] == 1) && ($this->Domain <> $db_server['domain'])) {
-        $domain = $db_server['domain'];
-        // $saddedby = $domain;
-        fwrite($fp1, "Domain: $domain\n");
-        $domain_total = 0;
-
-        $dbhost = $db_server['host'];
-        $dbuser = $db_server['user'];
-        $dbpass = $db_server['pass'];
-        $dbname = $db_server['name'];
-        $driver = strtolower((string) ($db_server['driver'] ?? 'mysql'));
-        $defaultPort = $driver === 'pgsql' ? 5432 : 3306;
-        $port = (int) ($db_server['port'] ?? $defaultPort);
-
-        if ($driver === 'pgsql') {
-          $sslmode = (string) ($db_server['sslmode'] ?? 'prefer');
-          $dsn = "pgsql:host={$dbhost};port={$port};dbname={$dbname};sslmode={$sslmode}";
-        } elseif ($driver === 'mysql') {
-          $charset = (string) ($db_server['charset'] ?? 'utf8mb4');
-          $dsn = "mysql:host={$dbhost};port={$port};dbname={$dbname};charset={$charset}";
-        } else {
-          throw new RuntimeException("Unsupported sync database driver: {$driver}");
+    public function CreateSubscriberHTMLform(string $token = '', string $muid = ''): string
+    {
+        $admin = Controller::allowed($this->fat, 'subscribers.manage');
+        $loggedInToken = (string) $this->fat->get('SESSION.suid');
+        if ($token !== '' && !$admin && !hash_equals($loggedInToken, $token)) {
+            return '<p class="{{@pclass}}">Access denied.</p>';
         }
 
-        $extPDO = new \DB\SQL($dsn,$dbuser,$dbpass);
-
-        $limit = 5000000;
-        $sql = "select s_email, s_priority, s_last_interacted, s_subscribedby from subscribers WHERE (s_unsubscribe = 0) and (s_last_interacted is not null) ORDER BY s_last_interacted DESC, s_priority DESC, s_email ASC LIMIT {$limit}";
-
-        $result = $extPDO->exec($sql);
-
-        foreach ($result as $row) {
-          // set_time_limit(0);
-          $email = trim(strtolower($row['s_email']));
-          $priority = (int) $row['s_priority'];
-          $lastinteracted = $row['s_last_interacted'];
-		  $saddedby = $row['s_subscribedby'];
-          if (!is_null($lastinteracted)) $priority = (int) $priority + 1000000;
-          $subscribed = $this->SimpleSubscribe($email,$priority,$saddedby);
-          if ($subscribed) {
-            fwrite($fp1, "{$email}\n");
-            $total_added++;
-            $domain_total++;
-          }
-        }
-        $extPDO = null;
-        $result = null;
-        $row = null;
-        fwrite($fp1, "Domain total subscribed: $domain_total\n");
-      }
-    }
-    fwrite($fp1, "--------------\n");
-    fwrite($fp1, "Total subscribed: $total_added\n");
-    fclose($fp1);
-    return $total_added;
-  }
-
-  // To display a drop down select box in the edit messages form
-  public function CreateListHTMLDropDown($listName = "ALL") {
-    $html = "";
-    $sub = new SubscribersM($this->fat);
-    $sub->s_total = "COUNT(s_subscribedby)";
-    $sub->load(null,array('group' => 's_subscribedby', 'order' => 's_subscribedby'));
-    $selected = ($listName == "ALL") ? 'selected' : '';
-    $html .= "<option {$selected} value=\"ALL\">ALL</option>";
-    while(!$sub->dry()) {
-      $addedby = $sub->s_subscribedby;
-      $stotal = $sub->s_total;
-      $selected = ($listName == $addedby) ? 'selected' : '';
-      $html .= "<option {$selected} value=\"{$addedby}\">{$addedby} ({$stotal})</option>";
-      $sub->skip();
-    }
-    return $html;
-  }
-
-  // new parameter: $includeunsubs for activesubscribers is always 0
-  public function CreateSubscribersHTMLList($ssemail = '',$pageno = 1,$numrows = 25,$activesubs = false, $includeunsubs = 0) {
-    $html = "";
-    $filter = null;
-    $action = $activesubs ? "activesubscribers" : "subscribers";
-    $ff = new formfield;
-    // begin
-    if ($this->fat->get('uadmin') == 1) {
-      $html .= $ff->FF_FormOpen("subscribersform","{{@BaseURL}}{$action}","GET");
-      $html .= $ff->FF_DivOpen("{{@rowclass}}");
-
-      if (!$activesubs) {
-        $html .= $ff->FF_DivOpen("{{@columnclass2}}");
-        $html .= $ff->FF_DivOpen("{{@checkdivclass}}");
-        $html .= $ff->FF_checkbox("u","us1","1","","{{@checkclass}}");
-        $html .= $ff->FF_Label("\n&nbsp;Include unsubscribed\n","us1","{{@checklabelclass}}");
-        $html .= $ff->FF_DivClose();
-        $html .= $ff->FF_DivClose();
-      }
-
-      $html .= $ff->FF_DivOpen("{{@columnclass3}}");
-      $html .= $ff->FF_DropDown("l",$this->CreateListHTMLDropDown(),"{{@selectclass}}");
-      $html .= $ff->FF_Label("Listname","l","{{@labelclass}}");
-      $html .= $ff->FF_DivClose();
-
-      $html .= $ff->FF_DivOpen("{{@columnclass3}}");
-      $html .= $ff->FF_input("e","search",$ssemail,"","{{@inputclass}}");
-      $html .= $ff->FF_Label("Email address","e","{{@labelclass}}");
-      $html .= $ff->FF_DivClose();
-
-      $html .= $ff->FF_DivOpen("{{@columnclass2}}");
-      $html .= $ff->FF_Button("submit","Search","{{@buttonclass}}");
-      $html .= $ff->FF_DivClose();
-
-      $html .= $ff->FF_DivClose();
-
-      $html .= $ff->FF_FormClose();
-    } else {
-      $html .= "<p class=\"{{@pclass}}\">Access denied</p>";
-      return $html;
-    }
-    // end
-    if ($activesubs) {
-      $action = "activesubscribers";
-      if ($ssemail == '') {
-        $filter = array("(s_unsubscribe = :zero) and (s_last_interacted is not null)", ':zero' => 0);
-      } else {
-        $filter = array("(s_unsubscribe = :zero) and (s_last_interacted is not null) and (LOWER(s_email) like LOWER(:email))", ':zero' => 0, ':email' => "%{$ssemail}%");
-      }
-    } else {
-      $action = "subscribers";
-      if ($ssemail == '') {
-        $filter = array("s_unsubscribe = :zero", ':zero' => 0);
-      } else {
-        $filter = array("(s_unsubscribe = :zero) and (LOWER(s_email) like LOWER(:email))", ':zero' => 0, ':email' => "%{$ssemail}%");
-      }
-    }
-
-    // $html .= "<p class=\"{{@pclass}}\">filter: <pre>". print_r($filter,true) . "</pre></p>";
-    $totalmatches = $this->subscriber->count($filter);
-    if ($totalmatches == 0) {
-      $html .= "<p class=\"{{@pclass}}\">No subscribers match that search.</p>";
-      return $html;
-    }
-    $lastpage = ceil($totalmatches/$numrows);
-    $pageno = (int) $pageno;
-    if ($pageno > $lastpage) {
-      $pageno = $lastpage;
-    } elseif ($pageno < 1) {
-      $pageno = 1;
-    }
-    // email, last interacted, priority, confirmed, unsubscribed,
-    $html .= $ff->FF_DivOpen("{{@tableresponsive}}");
-    $html .= $ff->FF_TableOpen("{{@tableclass}}");
-    $html .= $ff->FF_TheadOpen("{{@theadclass}}");
-    $html .= $ff->FF_TrOpen("{{@trclass}}");
-
-    $html .= $ff->FF_Th("Email","{{@thclass}}");
-    $html .= $ff->FF_Th("Listname","{{@thclass}}");
-    $html .= $ff->FF_Th("Last Interacted","{{@thclass}}");
-    $html .= $ff->FF_Th("Priority","{{@thclass}}");
-    $html .= $ff->FF_Th("Confirmed","{{@thclass}}");
-    $html .= $ff->FF_Th("Unsubscribed","{{@thclass}}");
-
-    $html .= $ff->FF_TrClose();
-    $html .= $ff->FF_TheadClose();
-    $html .= $ff->FF_TbodyOpen("{{@tbodyclass}}");
-
-    $page = $this->subscriber->paginate($pageno - 1,$numrows,$filter,array('order' => 's_unsubscribe ASC, (s_last_interacted IS NULL) ASC, s_last_interacted DESC, s_priority DESC, s_email ASC'));
-    // $html .= "<p class=\"{{@pclass}}\">page.subset:<br/><pre>". print_r($page['subset'],true) . "</pre></p>";
-    // $html .= "<p class=\"{{@pclass}}\">page.subset:<br/><pre> {$numrows} ". count($page['subset'],true) . "</pre></p>";
-
-    foreach ($page['subset'] as $row) {
-      $suid = $row['s_uniqid'];
-      $semail = $row['s_email'];
-      $slemail = "<a href=\"{{@BaseURL}}subscribe/{$suid}\"><i class=\"fa fa-pencil\" aria-hidden=\"true\"></i> {$semail}</a>";
-      $saddedby = $row['s_subscribedby'];
-      $lastinteracted = $row['s_last_interacted'];
-      $spriority = $row['s_priority'];
-      $sconfirm = ($row['s_confirm'] == 1 ? 'Yes' : "<a href=\"{{@BaseURL}}confirm/{$suid}\"><i class=\"fa fa-check\" aria-hidden=\"true\"></i> confirm</a>");
-      $sunsubscribe = ($row['s_unsubscribe'] == 1 ? 'Yes' : "<a href=\"{{@BaseURL}}unsubscribe/{$suid}\"><i class=\"fa fa-times\" aria-hidden=\"true\"></i> unsubscribe</a>");
-      $html .= $ff->FF_TrOpen("");
-      $html .= $ff->FF_Td($slemail,"");
-      $html .= $ff->FF_Td($saddedby,"");
-      $html .= $ff->FF_Td($lastinteracted,"");
-      $html .= $ff->FF_Td($spriority,"");
-      $html .= $ff->FF_Td($sconfirm,"");
-      $html .= $ff->FF_Td($sunsubscribe,"");
-      $html .= $ff->FF_TrClose();
-    }
-    $html .= $ff->FF_TbodyClose();
-    $html .= $ff->FF_TableClose();
-    $html .= $ff->FF_DivClose();
-
-    $qsemail = urlencode($ssemail);
-    $querystring = '';
-    if ($ssemail == '') {
-      $querystring = '';
-    } else {
-      $querystring = "?e={$qsemail}";
-    }
-
-    $hh = new htmlhelper($this->fat);
-    $html .= $hh->paginate($page,$action,$querystring);
-    return $html;
-  }
-
-  public function CreateBulkSubscribeHTMLform() {
-    $html = "";
-    if ($this->fat->get('uadmin') <> 1) {
-      $html = "<p class=\"{{@pclass}}\">Access denied</p>";
-      return $html;
-    }
-
-    $ff = new formfield;
-
-    $html .= $ff->FF_FormOpen("bsubscribeform","{{@BaseURL}}bulk-subscribe","POST");
-    $html .= $ff->FF_FieldsetOpen("{{@fieldsetclass}}");
-    $html .= $ff->FF_Legend("Subscribe multiple emails");
-
-    $html .= $ff->FF_DivOpen("{{@rowclass}}");
-
-    $html .= $ff->FF_DivOpen("{{@columnclass6}}");
-    $html .= $ff->FF_input("spriority","number","10"," required","{{@inputclass}}");
-    $html .= $ff->FF_Label("Priority","spriority","{{@labelclass}}");
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen("{{@columnclass6}}");
-    $html .= $ff->FF_input("saddedby","text","ADMIN"," required","{{@inputclass}}");
-    $html .= $ff->FF_Label("Added by / listname","saddedby","{{@labelclass}}");
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen("{{@columnclass12}}");
-    $html .= $ff->FF_textarea("bemail","","","{{@textareaclass}}","{{@textareawidth}}","{{@textareaheight2}}");
-    $html .= $ff->FF_Label("Emails to subscribe","bemail","{{@labelclass}}");
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen("{{@columnclass6}}");
-    $html .= $ff->FF_Button("submit","Subscribe Emails","{{@buttonclass}}");
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_FieldsetClose();
-    $html .= $ff->FF_FormClose();
-    return $html;
-  }
-
-  // BulkSubscribe from a file
-  // this method uses the file() function to read the entire file into memory which places a limit on file size
-  public function BulkSubscribe($fname,$spriority = 0,$saddedby = 'FILE',$prt_debug = false) {
-    $html = "";
-    $fcontents = file($fname);
-    $html .= $this->BulkSubscribeForm($fcontents,$spriority,$saddedby,$prt_debug);
-    return $html;
-  }
-
-  // method to iterate through lines in a file
-  // this is a generator
-  function GetLineFromFile($filename) {
-    $fh = fopen($filename, 'r');
-    while (($line = fgets($fh)) !== false) {
-      yield $line;
-    }
-    fclose($fh);
-  }
-
-  // process a large input file, line by line, which is memory efficient
-  public function BulkSubScribeFile($fname,$spriority = 0,$saddedby = 'FILE',$prt_debug = false) {
-    $html = "";
-    $num = 0;
-    set_time_limit(86400);
-    $fp1 = fopen("emails_added.txt", "a");
-    $fp2 = fopen("emails_rejected.txt", "a");
-
-    foreach ($this->GetLineFromFile($fname) as $line) {
-      // set_time_limit(0);
-      $nline = strtolower(trim($line));
-      // Extract all the email addresses in $semail into an array
-      $EmailAddresses = $this->find_email_addresses($nline);
-      if (is_array($EmailAddresses)) {
-        foreach ($EmailAddresses as $email) {
-          $subscribed = $this->SimpleSubscribe($email,$spriority,$saddedby);
-          if ($subscribed) {
-            if ($prt_debug) $html .= "<p class=\"{{@pclass}}\">{$email}</p>";
-            fwrite($fp1, "{$email}\n");
-            $num++;
-          } else {
-            if ($prt_debug) $html .= "<p class=\"{{@pclass}}\">NS {$email}</p>";
-          }
-        }
-      } else { // did not find at least one valid email address
-        fwrite($fp2, "{$nline}\n");
-      }
-    }
-    if ($prt_debug) $html .= "<p class=\"{{@pclass}}\">Number subscribed: {$num}</p>";
-    fwrite($fp1, "Number subscribed: {$num}\n");
-    fclose($fp1);
-    fclose($fp2);
-    return $html;
-  }
-
-  public function BulkSubscribeForm($bemail,$spriority = 0,$saddedby = 'ADMIN',$prt_debug = true) {
-    $html = "";
-    // $html .= "<p class=\"{{@pclass}}\">{$bemail}</p>";
-    set_time_limit(86400);
-    if (is_array($bemail)) {
-      // $html .= "<p class=\"{{@pclass}}\">bemail is an array</p>";
-      $fcontents = $bemail;
-    } else {
-      // $pattern = array("/\r\n/","/\r/");
-      // $txt = trim($bemail);
-      // $txt = preg_replace($pattern, "\n", $txt);
-      // $fcontents = explode("\n",$txt);
-      // $fcontents = explode("\w",$bemail);
-      // $fcontents = preg_split("\w",$bemail);
-      preg_match_all('/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/', $bemail, $matches);
-      $fcontents = $matches[0];
-      // $html .= "<pre>". print_r($fcontents,true) . "</pre>";
-    }
-    $num = 0;
-    // Open the file and append to end of file
-    $fp1 = fopen("emails_added.txt", "a");
-    $fp2 = fopen("emails_rejected.txt", "a");
-    // Write the data to the file
-    $bdate = date("Y-m-d H:i:s");
-    fwrite($fp1, "--------------\n");
-    fwrite($fp1, $bdate . "\n");
-    fwrite($fp2, "--------------\n");
-    fwrite($fp2, $bdate . "\n");
-    for($i = 0; $i < sizeof($fcontents); $i++) {
-      $semail = strtolower(trim($fcontents[$i]));
-      // $html .= "<p class=\"{{@pclass}}\">{$semail}</p>";
-      // Extract all the email addresses in $semail into an array
-      $EmailAddresses = $this->find_email_addresses($semail);
-      if (is_array($EmailAddresses)) {
-        foreach ($EmailAddresses as $email) {
-          $subscribed = $this->SimpleSubscribe($email,$spriority,$saddedby);
-          if ($subscribed) {
-            if ($prt_debug) $html .= "<p class=\"{{@pclass}}\">{$email}</p>";
-            fwrite($fp1, "{$email}\n");
-            $num++;
-          } else {
-            if ($prt_debug) $html .= "<p class=\"{{@pclass}}\">NS {$email}</p>";
-          }
-        }
-      } else { // did not find at least one valid email address
-        fwrite($fp2, "{$semail}\n");
-      }
-      // script is allowed to run for 10 mins
-      // set_time_limit(0);
-    }
-    if ($prt_debug) $html .= "<p class=\"{{@pclass}}\">Number subscribed: {$num}</p>";
-    fwrite($fp1, "Number subscribed: {$num}\n");
-    fclose($fp1);
-    fclose($fp2);
-    return $html;
-  }
-
-  public function CreateBulkUnsubscribeHTMLform() {
-    $html = "";
-    if ($this->fat->get('uadmin') <> 1) {
-      $html = "<p class=\"{{@pclass}}\">Access denied</p>";
-      return $html;
-    }
-
-    $ff = new formfield;
-
-    $html .= $ff->FF_FormOpen("bunsubscribeform","{{@BaseURL}}bulk-unsubscribe","POST");
-    $html .= $ff->FF_FieldsetOpen("{{@fieldsetclass}}");
-    $html .= $ff->FF_Legend("Unsubscribe multiple emails");
-
-    $html .= $ff->FF_DivOpen("{{@rowclass}}");
-
-    $radio_name = "bbounce";
-    $radio_div_class = "{{@checkdivclass}}";
-    $radio_class = "{{@checkclass}}";
-    $radio_labelclass = "{{@checklabelclass}}";
-
-    $html .= $ff->FF_DivOpen($radio_div_class);
-    $html .= $ff->FF_radio($radio_name,"bb1","l"," checked",$radio_class);
-    $html .= $ff->FF_Label("\n&nbsp;Remove from this list only\n","bb1",$radio_labelclass);
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen($radio_div_class);
-    $html .= $ff->FF_radio($radio_name,"bb2","d","",$radio_class);
-    $html .= $ff->FF_Label("\n&nbsp;Filter entire domains\n","bb2",$radio_labelclass);
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen($radio_div_class);
-    $html .= $ff->FF_radio($radio_name,"bb3","b","",$radio_class);
-    $html .= $ff->FF_Label("\n&nbsp;These are bounces\n","bb3",$radio_labelclass);
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen($radio_div_class);
-    $html .= $ff->FF_radio($radio_name,"bb4","s","",$radio_class);
-    $html .= $ff->FF_Label("\n&nbsp;These are spam complainers\n","bb4",$radio_labelclass);
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen("{{@columnclass12}}");
-    $html .= $ff->FF_textarea("bemail","","","{{@textareaclass}}","{{@textareawidth}}","{{@textareaheight2}}");
-    $html .= $ff->FF_Label("Emails to unsubscribe","bemail","{{@labelclass}}");
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen("{{@columnclass6}}");
-    $html .= $ff->FF_Button("submit","Unsubscribe Emails","{{@buttonclass}}");
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_FieldsetClose();
-    $html .= $ff->FF_FormClose();
-    return $html;
-  }
-
-  // bulk unsubscribes emails entered into a textarea, each on a separate line
-  public function BulkUnsubscribeForm($bemail,$bounce = "") {
-    $html = "";
-    set_time_limit(86400);
-    if ($bounce == "b") {
-      $gutype = 'BOUNCE-ADMIN';
-      $html .= "<p class=\"{{@pclass}}\">BOUNCE-ADMIN</p>";
-      $globalunsub = true;
-    } elseif ($bounce == "s") {
-      $gutype = 'SPAM-ADMIN';
-      $html .= "<p class=\"{{@pclass}}\">SPAM-ADMIN</p>";
-      $globalunsub = true;
-    } elseif ($bounce == "d") {
-      $gutype = '';
-      $globalunsub = true;
-    } else {
-      $gutype = '';
-      $globalunsub = false;
-    }
-    $reason = "bulk unsubscribed";
-    $txt = preg_replace('/\r\n|\r/', "\n", $bemail);
-    $fcontents = explode("\n",trim($txt));
-    $num = 0;
-    for($i = 0; $i < sizeof($fcontents); $i++) {
-      $semail = strtolower(trim($fcontents[$i]));
-      // Extract all the email addresses in $semail into an array
-      $EmailAddresses = $this->find_email_addresses($semail);
-      if (is_array($EmailAddresses)) {
-        foreach ($EmailAddresses as $email) {
-          $domain = $this->subscriber->getEmailDomain($email);
-          if ($email <> '') {
-            if ($globalunsub) {
-              if ($bounce == "d") {
-                $this->gdu->save($domain,"SPAM");
-                $html .= "<p class=\"{{@pclass}}\">GDU {$domain}</p>";
-                $num++;
-              } else {
-                $this->gu->save($email,$gutype,$reason);
-                $html .= "<p class=\"{{@pclass}}\">GU {$email}</p>";
-                $num++;
-              }
-            } else {
-              $added = $this->SimpleSubscribe($email);
-              $this->subscriber->s_unsubscribe = (int) 1;
-              $this->subscriber->s_unsubscribedate = date("Y-m-d H:i:s");
-              $this->subscriber->s_unsubscribereason = $reason;
-              $this->subscriber->save();
-              $html .= "<p class=\"{{@pclass}}\">U {$email}</p>";
-              $num++;
+        if ($token !== '') {
+            if (!$this->RetrieveSubscriber($token)) {
+                return '<p class="{{@pclass}}">The subscriber does not exist.</p>';
             }
-          }
+            $legend = 'Edit Subscriber';
+            $emailState = ' readonly';
+        } else {
+            if (!$admin) {
+                return '<p class="{{@pclass}}">Use the sign-in form to create an account.</p>';
+            }
+            $this->subscriber->reset();
+            $legend = 'Add New Subscriber';
+            $emailState = '';
         }
-      }
-      // script is allowed to run forever
-      // set_time_limit(0);
+
+        $e = static fn(mixed $value): string => htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $csrf = Csrf::field($this->fat);
+        $gender = (new formfield())->CreateGenderHTMLDropDown((string) $this->subscriber->s_gender);
+        $province = (new formfield())->CreateProvinceHTMLDropDown((string) $this->subscriber->s_province);
+        $country = (new formfield())->CreateCountryHTMLDropDown((string) $this->subscriber->s_country);
+        $listOptions = $this->CreateListHTMLDropDown(ListsM::ALL_SHORTCODE);
+        $membershipHtml = '';
+        if ($token !== '') {
+            $membershipHtml = '<div class="col-12"><h2 class="h5">List memberships</h2><ul>';
+            foreach ($this->lists->memberships((int) $this->subscriber->s_id) as $membership) {
+                $state = empty($membership['ls_uuid'])
+                    ? 'not joined'
+                    : ((bool) $membership['ls_unsubscribed'] ? 'unsubscribed' : ((bool) $membership['ls_confirmed'] ? 'confirmed' : 'pending'));
+                $membershipHtml .= '<li>' . $e($membership['l_name']) . ' (' . $e($membership['l_shortcode']) . '): ' . $e($state) . '</li>';
+            }
+            $membershipHtml .= '</ul></div>';
+        }
+
+        $adminFields = '';
+        if ($admin) {
+            $adminFields = '<div class="col-md-6"><label class="form-label">Add to list</label><select class="form-select" name="list_id">'
+                . $listOptions . '</select></div>'
+                . '<div class="col-md-6"><label class="form-label">Priority</label><input class="form-control" type="number" name="s_priority" value="'
+                . $e($this->subscriber->s_priority) . '"></div>';
+        }
+
+        return <<<HTML
+<form action="{{@BaseURL}}subscribe" method="post">
+  {$csrf}
+  <input type="hidden" name="subscriber_token" value="{$e($token)}">
+  <input type="hidden" name="muid" value="{$e($muid)}">
+  <fieldset class="border rounded p-4">
+    <legend>{$legend}</legend>
+    <div class="row g-3">
+      {$adminFields}
+      <div class="col-md-6"><label class="form-label">First name</label><input class="form-control" name="s_fname" value="{$e($this->subscriber->s_fname)}"></div>
+      <div class="col-md-6"><label class="form-label">Last name</label><input class="form-control" name="s_lname" value="{$e($this->subscriber->s_lname)}"></div>
+      <div class="col-md-6"><label class="form-label">Email</label><input class="form-control" type="email" name="s_email" value="{$e($this->subscriber->s_email)}"{$emailState}></div>
+      <div class="col-md-6"><label class="form-label">Gender</label><select class="form-select" name="s_gender">{$gender}</select></div>
+      <div class="col-md-6"><label class="form-label">Province</label><select class="form-select" name="s_province">{$province}</select></div>
+      <div class="col-md-6"><label class="form-label">Country</label><select class="form-select" name="s_country">{$country}</select></div>
+      {$membershipHtml}
+      <div class="col-12"><button class="btn btn-primary" type="submit">Save Subscriber</button></div>
+    </div>
+  </fieldset>
+</form>
+HTML;
     }
-    $html .= "<p class=\"{{@pclass}}\">Number unsubscribed: $num</p>";
-    return $html;
-  }
 
-  public function ConfirmSubscription($suid,$muid = '') {
-    $html = "";
-    $valid = $this->RetrieveSubscriber($suid);
-    if ($valid) {
-      $html .= "<p class=\"{{@pclass}}\">Subscriber exists</p>";
-      $email = $this->subscriber->s_email;
-      $this->subscriber->s_confirm = (int) 1;
-      $this->subscriber->s_confirmdate = date("Y-m-d H:i:s");
-      $this->subscriber->save();
+    /** Save a subscriber and restore the established transactional notification. */
+    public function save(): string
+    {
+        Csrf::requireValid($this->fat);
+        $token = strtolower(trim((string) $this->fat->get('POST.subscriber_token')));
+        $muid = trim((string) $this->fat->get('POST.muid'));
+        $admin = Controller::allowed($this->fat, 'subscribers.manage');
+        $loggedInToken = (string) $this->fat->get('SESSION.suid');
+        $new = $token === '';
 
-      $priority = $this->subscriber->s_priority + 10;
-      $this->setPriority($suid,$priority);
+        if ($new) {
+            if (!$admin) {
+                return '<p class="{{@pclass}}">Access denied.</p>';
+            }
+            $email = SubscribersM::normaliseEmail((string) $this->fat->get('POST.s_email'));
+            if (!SubscribersM::validEmail($email)) {
+                return '<p class="{{@pclass}}">Enter a valid email address.</p>';
+            }
+            if (!$this->SimpleSubscribe($email, (int) $this->fat->get('POST.s_priority'), (int) $this->fat->get('POST.list_id'))) {
+                return '<p class="{{@pclass}}">The subscriber could not be added.</p>';
+            }
+            $this->subscriber->loadByEmail($email);
+            $token = (string) $this->subscriber->s_uuid;
+            if ($muid !== '') {
+                // Preserve the v5 message-linked subscription activity record.
+                $this->smlog->logMsgSub($token, $muid);
+            }
+        } else {
+            if (!$admin && !hash_equals($loggedInToken, $token)) {
+                return '<p class="{{@pclass}}">Access denied.</p>';
+            }
+            if (!$this->RetrieveSubscriber($token)) {
+                return '<p class="{{@pclass}}">Invalid subscriber identifier.</p>';
+            }
+        }
 
-      $this->smlog->logMsgConfirm($suid,$muid);
+        $this->subscriber->s_fname = trim((string) $this->fat->get('POST.s_fname'));
+        $this->subscriber->s_lname = trim((string) $this->fat->get('POST.s_lname'));
+        $this->subscriber->s_gender = trim((string) $this->fat->get('POST.s_gender'));
+        $this->subscriber->s_province = trim((string) $this->fat->get('POST.s_province'));
+        $this->subscriber->s_country = trim((string) $this->fat->get('POST.s_country'));
+        if ($admin) {
+            $this->subscriber->s_priority = (int) $this->fat->get('POST.s_priority');
+            $listId = (int) $this->fat->get('POST.list_id');
+            if ($listId > 0) {
+                $createdMembership = $this->lists->ensureMembership((int) $this->subscriber->s_id, $listId);
+                if ($createdMembership) {
+                    $this->sendMembershipInvitation($listId);
+                }
+            }
+        }
+        $this->subscriber->save();
 
-      $html .= "<p class=\"{{@pclass}}\">Subscriber updated: {$email}</p>";
+        // Preserve the v5.0 profile-save engagement update. For a normal
+        // subscriber the priority field is absent, so the established result
+        // is 100; an administrator-supplied priority is increased by 100.
+        $this->setPriority($token, (int) $this->fat->get('POST.s_priority') + 100);
 
-      $mtype = "CONFIRM";
-      $mfrom = $this->FromAddress;
-      $sname = $this->subscriber->s_fname . " " . $this->subscriber->s_lname;
-      // $subject = "{$this->ListName} notification: {$email} has confirmed subscription";
-      $subject = "{$email} has confirmed subscription to {$this->ListName}";
-      $mhtml = "<p>{$email} has confirmed their subscription to {$this->ListName}.</p><p>{$suid}</p>";
-      $mtext = "{$email} has confirmed their subscription to {$this->ListName}.\n{$suid}";
+        if (!$new) {
+            if ($muid !== '') {
+                $this->smlog->logMsgUpdate($token, $muid);
+            }
+            $this->sendProfileNotification($token, $muid, 'UPDATE-PROFILE');
+        }
 
-      $this->mailer->OpenSMTP();
-      $this->mailer->SendNotification($muid,$mtype,$mfrom,$email,$sname,$subject,$mhtml,$mtext);
-      $this->mailer->CloseSMTP();
-
-      $html .= "<p class=\"{{@pclass}}\">{$email} has confirmed their subscription to {$this->ListName}.</p>";
-      return $html;
-    } else {
-      $html .= "<p class=\"{{@pclass}}\">Confirmation code is incorrect.</p>";
+        return '<p class="{{@pclass}}">Subscriber saved.</p>';
     }
-    return $html;
-  }
+
+    /**
+     * Create the identity and pending membership. This method never silently
+     * grants bulk-mail consent.
+     */
+    public function SimpleSubscribe(string $email, int $priority = 0, int|string $list = ListsM::ALL_SHORTCODE): bool
+    {
+        $email = $this->subscriber->normaliseCandidateEmail($email);
+        if (!SubscribersM::validEmail($email)) {
+            return false;
+        }
+        $domain = $this->subscriber->getEmailDomain($email);
+        if ($this->gu->IsUnsubscribed($email) || $this->gdu->IsUnsubscribed($domain)) {
+            return false;
+        }
+
+        $listId = $this->resolveListId($list);
+        if ($listId < 1) {
+            return false;
+        }
+
+        $identityCreated = false;
+        if (!$this->subscriber->loadByEmail($email)) {
+            if (!$this->subscriber->createIdentity($email)) {
+                return false;
+            }
+            $identityCreated = true;
+        }
+
+        $this->subscriber->s_priority = max((int) $this->subscriber->s_priority, min($priority, 10000000));
+        $this->subscriber->save();
+
+        $membershipCreated = $this->lists->ensureMembership((int) $this->subscriber->s_id, $listId);
+
+        // The subscriber insert trigger creates a pending ALL membership. Send
+        // only one invitation per newly relevant membership.
+        if ($identityCreated) {
+            $all = $this->lists->findByShortcode(ListsM::ALL_SHORTCODE);
+            if ($all !== null) {
+                $this->sendMembershipInvitation((int) $all['l_id']);
+            }
+        }
+        if ($membershipCreated) {
+            $target = $this->lists->findById($listId);
+            if ($target !== null && (!$identityCreated || (string) $target['l_shortcode'] !== ListsM::ALL_SHORTCODE)) {
+                $this->sendMembershipInvitation($listId);
+            }
+        }
+
+        return true;
+    }
+
+    private function sendMembershipInvitation(int $listId): void
+    {
+        if ($this->mailer === null) {
+            return;
+        }
+        $list = $this->lists->findById($listId);
+        if ($list === null || !$this->subscriber->valid() || !$this->mailer->OpenSMTP()) {
+            return;
+        }
+        try {
+            $this->mailer->SendListConfirmationInvitation(
+                (string) $this->subscriber->s_email,
+                (string) $this->subscriber->s_uuid,
+                (string) $list['l_shortcode'],
+                (string) $list['l_name']
+            );
+        } finally {
+            $this->mailer->CloseSMTP();
+        }
+    }
+
+    public function CreateListHTMLDropDown(int|string $selected = ListsM::ALL_SHORTCODE, bool $includeBlank = false): string
+    {
+        $selectedId = is_int($selected) || ctype_digit((string) $selected)
+            ? (int) $selected
+            : (int) (($this->lists->findByShortcode((string) $selected)['l_id'] ?? 0));
+        $html = $includeBlank ? '<option value="">All lists</option>' : '';
+        foreach ($this->lists->all() as $list) {
+            $id = (int) $list['l_id'];
+            $html .= '<option value="' . $id . '"' . ($id === $selectedId ? ' selected' : '') . '>'
+                . htmlspecialchars((string) $list['l_name']) . ' (' . htmlspecialchars((string) $list['l_shortcode']) . ')</option>';
+        }
+        return $html;
+    }
+
+    /** Message audience checkboxes: ALL is available but never forced. */
+    public function CreateListHTMLCheckboxes(array $selectedIds = []): string
+    {
+        $selectedIds = array_map('intval', $selectedIds);
+        $html = '<div class="row g-2">';
+        foreach ($this->lists->all() as $list) {
+            $id = (int) $list['l_id'];
+            $checked = in_array($id, $selectedIds, true) ? ' checked' : '';
+            $html .= '<div class="col-md-6"><div class="form-check border rounded p-3 ps-5">'
+                . '<input class="form-check-input" type="checkbox" name="list_ids[]" value="' . $id
+                . '" id="message-list-' . $id . '"' . $checked . '>'
+                . '<label class="form-check-label" for="message-list-' . $id . '"><strong>'
+                . htmlspecialchars((string) $list['l_name']) . '</strong> – '
+                . htmlspecialchars((string) $list['l_description']) . '</label></div></div>';
+        }
+        return $html . '</div>';
+    }
+
+    /** Restored subscriber search, filtering and pagination. */
+    public function CreateSubscribersHTMLList(
+        string $searchEmail = '',
+        int $pageNo = 1,
+        int $numRows = 25,
+        bool $activeOnly = false,
+        int $includeUnsubscribed = 0,
+        int $listId = 0
+    ): string {
+        if (!Controller::allowed($this->fat, 'subscribers.view')) {
+            return '<p class="{{@pclass}}">Access denied.</p>';
+        }
+
+        $numRows = max(1, min(200, $numRows));
+        $total = $this->subscriber->reportCount($searchEmail, $activeOnly, (bool) $includeUnsubscribed, $listId);
+        $csrf = Csrf::field($this->fat);
+        $html = '<form method="get" action="{{@BaseURL}}' . ($activeOnly ? 'activesubscribers' : 'subscribers') . '" class="row g-3 mb-4">'
+            . '<div class="col-md-4"><label class="form-label">Email address</label><input class="form-control" type="search" name="e" value="'
+            . htmlspecialchars($searchEmail) . '"></div>'
+            . '<div class="col-md-3"><label class="form-label">List</label><select class="form-select" name="l">'
+            . $this->CreateListHTMLDropDown($listId, true) . '</select></div>'
+            . '<div class="col-md-2"><label class="form-label">Rows</label><input class="form-control" type="number" name="r" value="' . $numRows . '"></div>'
+            . '<div class="col-md-2 form-check align-self-end mb-2"><input class="form-check-input" type="checkbox" name="u" value="1" id="include-unsubscribed"'
+            . ($includeUnsubscribed ? ' checked' : '') . '><label class="form-check-label" for="include-unsubscribed">Include unsubscribed</label></div>'
+            . '<div class="col-md-1 align-self-end"><button class="btn btn-primary" type="submit">Search</button></div></form>';
+
+        if ($total === 0) {
+            return $html . '<p class="{{@pclass}}">There are no matching subscribers.</p>';
+        }
+        $lastPage = max(1, (int) ceil($total / $numRows));
+        $pageNo = max(1, min($pageNo, $lastPage));
+        $rows = $this->subscriber->reportPage(
+            $searchEmail,
+            ($pageNo - 1) * $numRows,
+            $numRows,
+            $activeOnly,
+            (bool) $includeUnsubscribed,
+            $listId
+        );
+
+        $html .= '<div class="table-responsive"><table class="table table-striped table-hover table-bordered">'
+            . '<thead><tr><th>Email</th><th>Name</th><th>Lists</th><th>Priority</th><th>Bounces</th><th>Emails left</th><th>Last interaction</th></tr></thead><tbody>';
+        foreach ($rows as $row) {
+            $token = rawurlencode((string) $row['s_uuid']);
+            $html .= '<tr><td><a href="{{@BaseURL}}subscribe/' . $token . '">' . htmlspecialchars((string) $row['s_email']) . '</a></td>'
+                . '<td>' . htmlspecialchars(trim((string) $row['s_fname'] . ' ' . (string) $row['s_lname'])) . '</td>'
+                . '<td>' . htmlspecialchars((string) $row['memberships']) . '</td>'
+                . '<td>' . (int) $row['s_priority'] . '</td><td>' . (int) $row['s_bounces'] . '</td>'
+                . '<td>' . (int) $row['s_emailsleft'] . '</td><td>' . htmlspecialchars((string) $row['s_last_interacted']) . '</td></tr>';
+        }
+        $html .= '</tbody></table></div>';
+
+        $page = ['pos' => $pageNo - 1, 'count' => $lastPage, 'total' => $total];
+        $query = '?e=' . rawurlencode($searchEmail) . '&r=' . $numRows . '&u=' . ($includeUnsubscribed ? 1 : 0) . '&l=' . $listId;
+        return $html . (new htmlhelper($this->fat))->paginate($page, $activeOnly ? 'activesubscribers' : 'subscribers', $query);
+    }
+
+    public function CreateBulkSubscribeHTMLform(): string
+    {
+        if (!Controller::allowed($this->fat, 'subscribers.manage')) {
+            return '<p class="{{@pclass}}">Access denied.</p>';
+        }
+        return '<form action="{{@BaseURL}}bulk-subscribe" method="post">' . Csrf::field($this->fat)
+            . '<fieldset class="border rounded p-4"><legend>Subscribe multiple emails</legend>'
+            . '<div class="mb-3"><label class="form-label">List</label><select class="form-select" name="list_id">'
+            . $this->CreateListHTMLDropDown(ListsM::ALL_SHORTCODE) . '</select></div>'
+            . '<div class="mb-3"><label class="form-label">Priority</label><input class="form-control" type="number" name="s_priority" value="10"></div>'
+            . '<div class="mb-3"><label class="form-label">Email addresses</label><textarea class="form-control" rows="12" name="bemail"></textarea></div>'
+            . '<button class="btn btn-primary" type="submit">Subscribe Emails</button></fieldset></form>';
+    }
+
+    public function BulkSubscribeForm(string|array $input, int $priority = 0, int|string $list = ListsM::ALL_SHORTCODE, bool $debug = true, bool $validateCsrf = true): string
+    {
+        if ($validateCsrf) {
+            Csrf::requireValid($this->fat);
+        }
+        set_time_limit(86400);
+        $text = is_array($input) ? implode("\n", $input) : $input;
+        $emails = $this->find_email_addresses($text);
+        $processed = 0;
+        $addedLog = [];
+        foreach ($emails as $email) {
+            if ($this->SimpleSubscribe($email, $priority, $list)) {
+                $processed++;
+                $addedLog[] = $email;
+            }
+        }
+        $this->appendImportLog('emails_added.txt', $addedLog, 'Number subscribed: ' . $processed);
+        return '<p class="{{@pclass}}">Number subscribed: ' . $processed . '</p>';
+    }
+
+    public function BulkSubscribe(string $filename, int $priority = 0, int|string $list = ListsM::ALL_SHORTCODE, bool $debug = false): string
+    {
+        if (!is_file($filename)) {
+            return '<p class="{{@pclass}}">Import file does not exist.</p>';
+        }
+        return $this->BulkSubscribeForm(file($filename, FILE_IGNORE_NEW_LINES) ?: [], $priority, $list, $debug, false);
+    }
+
+    /** @return Generator<int,string> */
+    public function GetLineFromFile(string $filename): Generator
+    {
+        $handle = fopen($filename, 'rb');
+        if ($handle === false) {
+            return;
+        }
+        try {
+            while (($line = fgets($handle)) !== false) {
+                yield $line;
+            }
+        } finally {
+            fclose($handle);
+        }
+    }
+
+    public function BulkSubScribeFile(string $filename, int $priority = 0, int|string $list = ListsM::ALL_SHORTCODE, bool $debug = false): string
+    {
+        if (!is_file($filename)) {
+            return '<p class="{{@pclass}}">Import file does not exist.</p>';
+        }
+        $lines = [];
+        foreach ($this->GetLineFromFile($filename) as $line) {
+            $lines[] = $line;
+        }
+        return $this->BulkSubscribeForm($lines, $priority, $list, $debug, false);
+    }
+
+    public function CreateImportHTMLform(): string
+    {
+        if (!Controller::allowed($this->fat, 'subscribers.manage')) {
+            return '<p class="{{@pclass}}">Access denied.</p>';
+        }
+        return '<form action="{{@BaseURL}}import" method="post" enctype="multipart/form-data">' . Csrf::field($this->fat)
+            . '<fieldset class="border rounded p-4"><legend>Import subscriber file</legend>'
+            . '<div class="mb-3"><label class="form-label">List</label><select class="form-select" name="list_id">'
+            . $this->CreateListHTMLDropDown(ListsM::ALL_SHORTCODE) . '</select></div>'
+            . '<div class="mb-3"><label class="form-label">Priority</label><input class="form-control" type="number" name="s_priority" value="0"></div>'
+            . '<div class="mb-3"><label class="form-label">File</label><input class="form-control" type="file" name="subscriber_file"></div>'
+            . '<button class="btn btn-primary" type="submit">Import</button></fieldset></form>';
+    }
+
+    public function ImportUploadedFile(): string
+    {
+        Csrf::requireValid($this->fat);
+        $file = $_FILES['subscriber_file'] ?? null;
+        if (!is_array($file) || (int) ($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
+            return '<p class="{{@pclass}}">No readable import file was uploaded.</p>';
+        }
+        return $this->BulkSubScribeFile(
+            (string) $file['tmp_name'],
+            (int) $this->fat->get('POST.s_priority'),
+            (int) $this->fat->get('POST.list_id'),
+            false
+        );
+    }
+
+    public function CreateBulkUnsubscribeHTMLform(): string
+    {
+        if (!Controller::allowed($this->fat, 'subscribers.manage')) {
+            return '<p class="{{@pclass}}">Access denied.</p>';
+        }
+        return '<form action="{{@BaseURL}}bulk-unsubscribe" method="post">' . Csrf::field($this->fat)
+            . '<fieldset class="border rounded p-4"><legend>Unsubscribe multiple emails</legend>'
+            . '<div class="mb-3"><label class="form-label">List</label><select class="form-select" name="list_id">'
+            . $this->CreateListHTMLDropDown(ListsM::ALL_SHORTCODE) . '</select></div>'
+            . '<div class="form-check"><input class="form-check-input" type="radio" name="scope" value="list" id="scope-list" checked><label class="form-check-label" for="scope-list">Remove from selected list only</label></div>'
+            . '<div class="form-check"><input class="form-check-input" type="radio" name="scope" value="domain" id="scope-domain"><label class="form-check-label" for="scope-domain">Filter entire domains</label></div>'
+            . '<div class="form-check"><input class="form-check-input" type="radio" name="scope" value="bounce" id="scope-bounce"><label class="form-check-label" for="scope-bounce">These are bounces</label></div>'
+            . '<div class="form-check mb-3"><input class="form-check-input" type="radio" name="scope" value="spam" id="scope-spam"><label class="form-check-label" for="scope-spam">These are spam complainers</label></div>'
+            . '<div class="mb-3"><label class="form-label">Reason</label><input class="form-control" name="reason" value="Bulk unsubscribe"></div>'
+            . '<div class="mb-3"><label class="form-label">Email addresses</label><textarea class="form-control" rows="12" name="bemail"></textarea></div>'
+            . '<button class="btn btn-danger" type="submit">Unsubscribe Emails</button></fieldset></form>';
+    }
+
+    public function BulkUnsubscribeForm(string $input, int|string $list = ListsM::ALL_SHORTCODE, string $reason = 'Bulk unsubscribe', string $scope = 'list'): string
+    {
+        Csrf::requireValid($this->fat);
+        $listId = $this->resolveListId($list);
+        if ($scope === 'list' && $listId < 1) {
+            return '<p class="{{@pclass}}">The selected list does not exist.</p>';
+        }
+        $count = 0;
+        foreach ($this->find_email_addresses($input) as $email) {
+            $domain = $this->subscriber->getEmailDomain($email);
+            if ($scope === 'domain') {
+                if ($this->gdu->save($domain, 'SPAM')) {
+                    $count++;
+                }
+                continue;
+            }
+            if ($scope === 'bounce' || $scope === 'spam') {
+                $type = $scope === 'bounce' ? 'BOUNCE-ADMIN' : 'SPAM-ADMIN';
+                if ($this->gu->save($email, $type, $reason)) {
+                    $count++;
+                }
+                continue;
+            }
+            if ($this->subscriber->loadByEmail($email) && $this->lists->unsubscribe((int) $this->subscriber->s_id, $listId, $reason)) {
+                $count++;
+            }
+        }
+        return '<p class="{{@pclass}}">Number unsubscribed: ' . $count . '</p>';
+    }
+
+    /** Restore cross-installation synchronisation where dbservers are configured. */
+    public function SyncSubscribers(): int
+    {
+        set_time_limit(86400);
+        $servers = $this->fat->get('dbservers');
+        if (!is_array($servers)) {
+            return 0;
+        }
+        $totalAdded = 0;
+        foreach ($servers as $server) {
+            if (!is_array($server) || (int) ($server['active'] ?? 0) !== 1 || (string) ($server['domain'] ?? '') === $this->Domain) {
+                continue;
+            }
+            $driver = strtolower((string) ($server['driver'] ?? 'pgsql'));
+            $port = (int) ($server['port'] ?? ($driver === 'pgsql' ? 5432 : 3306));
+            if ($driver === 'pgsql') {
+                $dsn = 'pgsql:host=' . $server['host'] . ';port=' . $port . ';dbname=' . $server['name'] . ';sslmode=' . ($server['sslmode'] ?? 'prefer');
+            } elseif ($driver === 'mysql') {
+                $dsn = 'mysql:host=' . $server['host'] . ';port=' . $port . ';dbname=' . $server['name'] . ';charset=' . ($server['charset'] ?? 'utf8mb4');
+            } else {
+                continue;
+            }
+            $external = new \DB\SQL($dsn, (string) $server['user'], (string) $server['pass']);
+            $rows = $external->exec(
+                'SELECT s_email, s_priority, s_last_interacted FROM subscribers WHERE s_last_interacted IS NOT NULL ORDER BY s_last_interacted DESC, s_priority DESC, s_email ASC LIMIT 5000000'
+            );
+            $list = (string) ($server['list_shortcode'] ?? ListsM::ALL_SHORTCODE);
+            foreach ($rows as $row) {
+                $priority = (int) $row['s_priority'] + 1000000;
+                if ($this->SimpleSubscribe((string) $row['s_email'], $priority, $list)) {
+                    $totalAdded++;
+                }
+            }
+        }
+        return $totalAdded;
+    }
+
+    public function CreateConfirmHTMLform(string $token, string $shortcode, UsersController $auth, string $muid = ''): string
+    {
+        if (!$this->RetrieveSubscriber($token)) {
+            $this->fat->error(404);
+        }
+        $list = $this->lists->findByShortcode($shortcode);
+        if ($list === null || !filter_var($list['l_active'], FILTER_VALIDATE_BOOLEAN)) {
+            $this->fat->error(404);
+        }
+        if (!$auth->matchesSubscriberToken($token)) {
+            return $auth->authenticationPrompt($token, 'confirm', $muid !== '' && $this->messageIdFromMuid($muid) > 0 ? $muid : null, (int) $list['l_id']);
+        }
+        if (!$auth->can('lists.confirm')) {
+            $this->fat->error(403);
+        }
+        return '<form action="{{@BaseURL}}confirm" method="post" class="card card-body mx-auto" style="max-width:620px">'
+            . Csrf::field($this->fat)
+            . '<input type="hidden" name="subscriber_token" value="' . htmlspecialchars($token) . '">'
+            . '<input type="hidden" name="list_shortcode" value="' . htmlspecialchars((string) $list['l_shortcode']) . '">'
+            . '<input type="hidden" name="muid" value="' . htmlspecialchars($muid) . '">'
+            . '<h1 class="h4">Confirm subscription to ' . htmlspecialchars((string) $list['l_name']) . '</h1>'
+            . '<button class="btn btn-success" type="submit">Confirm subscription</button></form>';
+    }
+
+    public function ConfirmSubscription(UsersController $auth): string
+    {
+        Csrf::requireValid($this->fat);
+        $token = strtolower(trim((string) $this->fat->get('POST.subscriber_token')));
+        $shortcode = strtoupper(trim((string) $this->fat->get('POST.list_shortcode')));
+        $muid = trim((string) $this->fat->get('POST.muid'));
+        if (!$this->RetrieveSubscriber($token)) {
+            $this->fat->error(404);
+        }
+        $auth->requireMatchingSubscriberToken($token);
+        if (!$auth->can('lists.confirm')) {
+            $this->fat->error(403);
+        }
+        if ($this->IsGloballySuppressed((string) $this->subscriber->s_email)) {
+            return '<p class="{{@pclass}}">This email address or domain is globally suppressed and cannot be confirmed for bulk mail.</p>';
+        }
+        $list = $this->lists->findByShortcode($shortcode);
+        if ($list === null || !$this->lists->confirm((int) $this->subscriber->s_id, (int) $list['l_id'])) {
+            return '<p class="{{@pclass}}">The subscription could not be confirmed.</p>';
+        }
+
+        $this->setPriority($token, (int) $this->subscriber->s_priority + 10);
+        if ($muid !== '') {
+            $this->smlog->logMsgConfirm($token, $muid);
+        }
+        $this->sendConsentNotification('CONFIRM', $token, $list, '', $muid);
+        return '<p class="{{@pclass}}">Your subscription to ' . htmlspecialchars((string) $list['l_name']) . ' is confirmed.</p>';
+    }
+
+    public function CreateUnsubscribeHTMLform(string $token, string $shortcode, UsersController $auth, string $muid = ''): string
+    {
+        if (!$this->RetrieveSubscriber($token)) {
+            $this->fat->error(404);
+        }
+        $list = $this->lists->findByShortcode($shortcode);
+        if ($list === null) {
+            $this->fat->error(404);
+        }
+        if (!$auth->matchesSubscriberToken($token)) {
+            return $auth->authenticationPrompt($token, 'unsubscribe', $muid !== '' && $this->messageIdFromMuid($muid) > 0 ? $muid : null, (int) $list['l_id']);
+        }
+        if (!$auth->can('lists.unsubscribe')) {
+            $this->fat->error(403);
+        }
+
+        // Retain the v5 choices. Administrator actions are distinguished in
+        // the suppression type, but ordinary subscribers may still report an
+        // invalid address or request global spam suppression.
+        $globalChoices = '<div class="form-check"><input class="form-check-input" type="radio" name="scope" value="bounce" id="unsub-bounce"><label class="form-check-label" for="unsub-bounce">Address does not exist</label></div>'
+            . '<div class="form-check"><input class="form-check-input" type="radio" name="scope" value="spam" id="unsub-spam"><label class="form-check-label" for="unsub-spam">Stop sending me spam</label></div>';
+        return '<form action="{{@BaseURL}}unsubscribe" method="post" class="card card-body mx-auto" style="max-width:620px">'
+            . Csrf::field($this->fat)
+            . '<input type="hidden" name="subscriber_token" value="' . htmlspecialchars($token) . '">'
+            . '<input type="hidden" name="list_shortcode" value="' . htmlspecialchars((string) $list['l_shortcode']) . '">'
+            . '<input type="hidden" name="muid" value="' . htmlspecialchars($muid) . '">'
+            . '<h1 class="h4">Unsubscribe from ' . htmlspecialchars((string) $list['l_name']) . '</h1>'
+            . '<div class="form-check"><input class="form-check-input" type="radio" name="scope" value="list" id="unsub-list" checked><label class="form-check-label" for="unsub-list">This list only</label></div>'
+            . '<div class="form-check"><input class="form-check-input" type="radio" name="scope" value="global" id="unsub-global"><label class="form-check-label" for="unsub-global">All ctnlist installations using the global suppression database</label></div>'
+            . $globalChoices
+            . '<div class="mb-3 mt-3"><label class="form-label">Reason or comments</label><textarea class="form-control" name="reason" rows="4"></textarea></div>'
+            . '<button class="btn btn-danger" type="submit">Unsubscribe</button></form>';
+    }
+
+    public function Unsubscribe(UsersController $auth): string
+    {
+        Csrf::requireValid($this->fat);
+        $token = strtolower(trim((string) $this->fat->get('POST.subscriber_token')));
+        $shortcode = strtoupper(trim((string) $this->fat->get('POST.list_shortcode')));
+        $reason = trim((string) $this->fat->get('POST.reason'));
+        $scope = trim((string) $this->fat->get('POST.scope')) ?: 'list';
+        $muid = trim((string) $this->fat->get('POST.muid'));
+        if (!$this->RetrieveSubscriber($token)) {
+            $this->fat->error(404);
+        }
+        $auth->requireMatchingSubscriberToken($token);
+        if (!$auth->can('lists.unsubscribe')) {
+            $this->fat->error(403);
+        }
+        $list = $this->lists->findByShortcode($shortcode);
+        if ($list === null) {
+            return '<p class="{{@pclass}}">The subscription could not be updated.</p>';
+        }
+
+        $email = (string) $this->subscriber->s_email;
+        $subscriberId = (int) $this->subscriber->s_id;
+        $globalScope = in_array($scope, ['global', 'bounce', 'spam'], true);
+
+        if ($globalScope) {
+            // v5 used one subscriber-level unsubscribe flag. In the multi-list
+            // schema the equivalent is to unsubscribe every local membership.
+            $this->lists->unsubscribeAll($subscriberId, $reason);
+
+            if ($scope === 'global') {
+                $this->gu->save($email, Controller::allowed($this->fat, 'subscribers.manage') ? 'ADMIN' : 'USER', $reason);
+            } elseif ($scope === 'bounce') {
+                $this->gu->save($email, Controller::allowed($this->fat, 'subscribers.manage') ? 'BOUNCE-ADMIN' : 'BOUNCE', $reason);
+            } elseif ($scope === 'spam') {
+                $this->gu->save($email, Controller::allowed($this->fat, 'subscribers.manage') ? 'SPAM-ADMIN' : 'SPAM', $reason);
+            }
+        } elseif (!$this->lists->unsubscribe($subscriberId, (int) $list['l_id'], $reason)) {
+            return '<p class="{{@pclass}}">The subscription could not be updated.</p>';
+        }
+
+        $this->ResetPriority($token);
+        if ($muid !== '') {
+            $this->smlog->logMsgUnsub($token, $muid);
+        }
+        $this->sendConsentNotification('UNSUBSCRIBE', $token, $list, $reason, $muid);
+        if ($globalScope) {
+            return '<p class="{{@pclass}}">You have been unsubscribed from all local lists and added to the global suppression database.</p>';
+        }
+        return '<p class="{{@pclass}}">You have been unsubscribed from ' . htmlspecialchars((string) $list['l_name']) . '.</p>';
+    }
+
+    /** Restore the old integration entry point without granting consent. */
+    public function EcwidSubscribe(string $email, int|string $list = ListsM::ALL_SHORTCODE): bool
+    {
+        return $this->SimpleSubscribe($email, 0, $list);
+    }
+
+    private function sendProfileNotification(string $token, string $muid, string $type): void
+    {
+        if ($this->mailer === null || !$this->RetrieveSubscriber($token) || !$this->mailer->OpenSMTP()) {
+            return;
+        }
+        $email = (string) $this->subscriber->s_email;
+        $name = trim((string) $this->subscriber->s_fname . ' ' . (string) $this->subscriber->s_lname);
+        $profileUrl = rtrim($this->BaseURL, '/') . '/subscribe/' . rawurlencode($token) . ($muid !== '' ? '/' . rawurlencode($muid) : '');
+        $subject = $email . ' has updated their profile on ' . $this->ListName;
+        $html = '<p>Subscriber information for ' . htmlspecialchars($email) . ' on ' . htmlspecialchars($this->ListName) . ' has been updated.</p>'
+            . '<p><a href="' . htmlspecialchars($profileUrl) . '">View your profile</a></p>';
+        $text = "Subscriber information for {$email} on {$this->ListName} has been updated.\n{$profileUrl}\n";
+        try {
+            $this->mailer->SendNotification($muid, $type, $this->FromAddress, $email, $name, $subject, $html, $text, $token, '');
+        } finally {
+            $this->mailer->CloseSMTP();
+        }
+    }
+
+    /** @param array<string,mixed> $list */
+    private function sendConsentNotification(string $type, string $token, array $list, string $reason, string $muid): void
+    {
+        if ($this->mailer === null || !$this->RetrieveSubscriber($token) || !$this->mailer->OpenSMTP()) {
+            return;
+        }
+        $email = (string) $this->subscriber->s_email;
+        $name = trim((string) $this->subscriber->s_fname . ' ' . (string) $this->subscriber->s_lname);
+        $listName = (string) $list['l_name'];
+        $shortcode = (string) $list['l_shortcode'];
+        if ($type === 'CONFIRM') {
+            $subject = $email . ' has confirmed subscription to ' . $listName;
+            $html = '<p>' . htmlspecialchars($email) . ' has confirmed their subscription to <strong>' . htmlspecialchars($listName) . '</strong>.</p>';
+            $text = "{$email} has confirmed their subscription to {$listName}.\n";
+        } else {
+            $subject = $email . ' has been unsubscribed from ' . $listName;
+            $confirmUrl = rtrim($this->BaseURL, '/') . '/confirm/' . rawurlencode($token) . '/' . rawurlencode($shortcode)
+                . ($muid !== '' ? '/' . rawurlencode($muid) : '');
+            $html = '<p>' . htmlspecialchars($email) . ' has been unsubscribed from <strong>' . htmlspecialchars($listName) . '</strong>.</p>'
+                . '<p>Reason: ' . htmlspecialchars($reason !== '' ? $reason : 'No reason supplied') . '</p>'
+                . '<p><a href="' . htmlspecialchars($confirmUrl) . '">Re-subscribe</a></p>';
+            $text = "{$email} has been unsubscribed from {$listName}.\nReason: " . ($reason !== '' ? $reason : 'No reason supplied') . "\nRe-subscribe: {$confirmUrl}\n";
+        }
+        try {
+            $this->mailer->SendNotification($muid, $type, $this->FromAddress, $email, $name, $subject, $html, $text, $token, $shortcode);
+        } finally {
+            $this->mailer->CloseSMTP();
+        }
+    }
+
+    /** @param list<string> $lines */
+    private function appendImportLog(string $filename, array $lines, string $footer): void
+    {
+        $logs = rtrim((string) $this->fat->get('LOGS'), DIRECTORY_SEPARATOR);
+        if (!is_dir($logs)) {
+            mkdir($logs, 0770, true);
+        }
+        $handle = fopen($logs . DIRECTORY_SEPARATOR . basename($filename), 'ab');
+        if ($handle === false) {
+            return;
+        }
+        fwrite($handle, "--------------\n" . date('Y-m-d H:i:s') . "\n");
+        foreach ($lines as $line) {
+            fwrite($handle, $line . "\n");
+        }
+        fwrite($handle, $footer . "\n");
+        fclose($handle);
+    }
+
+    private function resolveListId(int|string $list): int
+    {
+        if (is_int($list) || ctype_digit((string) $list)) {
+            return (int) $list;
+        }
+        $found = $this->lists->findByShortcode((string) $list) ?? $this->lists->findByName((string) $list);
+        return (int) ($found['l_id'] ?? 0);
+    }
+
+    private function messageIdFromMuid(string $muid): int
+    {
+        if ($muid === '') {
+            return 0;
+        }
+        $message = new MessagesM($this->fat);
+        return $message->read($muid) ? (int) $message->m_id : 0;
+    }
 }

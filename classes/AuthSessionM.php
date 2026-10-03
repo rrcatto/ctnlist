@@ -1,10 +1,7 @@
 <?php
 
-/**
- * Mapper for revocable passwordless-login sessions.
- *
- * The table is created by Phinx migration, not at runtime.
- */
+declare(strict_types=1);
+
 class AuthSessionM extends \DB\SQL\Mapper
 {
     public function __construct(Base $fat)

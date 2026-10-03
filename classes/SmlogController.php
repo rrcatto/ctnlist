@@ -1,337 +1,280 @@
 <?php
-/*
 
-Module: SmlogController class
-Version: 4.3
-Author: Richard Catto
-Creation Date: 2017-07-09
+declare(strict_types=1);
 
-*/
+/**
+ * Controls subscriber/message activity and once-only delivery records.
+ */
+class SmlogController extends Controller
+{
+    public \DB\SQL $dbPDO;
+    protected string $BaseURL;
+    public SmlogM $smlog;
+    public Base $fat;
 
-class SmlogController extends Controller {
-  public $dbPDO;
-  protected $BaseURL;
-  public $smlog;
-  public $fat;
-
-  function __construct(Base $fat) {
-    $this->fat = $fat;
-    $this->dbPDO = $fat->get('dbPDO');
-    $this->BaseURL = $fat->get('BaseURL');
-    $this->smlog = new SmlogM($fat);
-  }
-
-  public function setSubscriber(SubscribersController $subscriber) {
-    $this->smlog->setSubscriber($subscriber);
-  }
-
-  public function setMessage(MessagesController $message) {
-    $this->smlog->SetMessage($message);
-  }
-
-  // shows a paginated list of every subscriber who viewed a particular message
-  public function CreateMessageReadsHTMLList($muid = '',$ssemail = '',$pageno = 1,$numrows= 25) {
-    $html = "";
-    if ($muid == '') {
-      $html .= "<p>No such message.</p>";
-      return $html;
-    }
-    if ($this->fat->get('uadmin') == '1') {
-
-      $ff = new formfield;
-
-      $html .= $ff->FF_FormOpen("messageviewsform","{{@BaseURL}}message-views/{$muid}","GET");
-      $html .= $ff->FF_DivOpen("{{@rowclass}}");
-
-      $html .= $ff->FF_DivOpen("{{@columnclass6}}");
-      $html .= $ff->FF_input("e","search",$ssemail,"","{{@inputclass}}");
-      $html .= $ff->FF_Label("Email address","e","{{@labelclass}}");
-      $html .= $ff->FF_DivClose();
-
-      $html .= $ff->FF_DivOpen("{{@columnclass6}}");
-      $html .= $ff->FF_Button("submit","Search Message Reads","{{@buttonclass}}");
-      $html .= $ff->FF_DivClose();
-
-      $html .= $ff->FF_DivClose();
-
-      $html .= $ff->FF_FormClose();
-    } else {
-      $html .= "<p>Access denied</p>";
-      return $html;
-    }
-    if ($ssemail == '') {
-      $filter = array("sml_muid = :muid and sml_reads > 0", ':muid' => $muid);
-    } else {
-      $filter = array("sml_muid = :muid and sml_reads > 0 and LOWER(sml_email) like LOWER(:email)", ':muid' => $muid, ':email' => "%{$ssemail}%");
-    }
-    $totalmatches = $this->smlog->count($filter);
-    if ($totalmatches == 0) {
-      if ($ssemail == '') {
-        $html .= "<p>No-one has read this message yet.</p>";
-      } else {
-        $html .= "<p>No email like that has read this message yet.</p>";
-      }
-      return $html;
-    }
-    $lastpage = ceil($totalmatches/$numrows);
-    $pageno = (int) $pageno;
-    if ($pageno > $lastpage) {
-      $pageno = $lastpage;
-    } elseif ($pageno < 1) {
-      $pageno = 1;
+    public function __construct(Base $fat)
+    {
+        $this->fat = $fat;
+        $this->dbPDO = $fat->get('dbPDO');
+        $this->BaseURL = (string) $fat->get('BaseURL');
+        $this->smlog = new SmlogM($fat);
     }
 
-    $ff = new formfield;
-    $html .= $ff->FF_DivOpen("{{@tableresponsive}}");
-    $html .= $ff->FF_TableOpen("{{@tableclass}}");
-    $html .= $ff->FF_TheadOpen("{{@theadclass}}");
-    $html .= $ff->FF_TrOpen("{{@trclass}}");
+    // Kept for compatibility with the established controller wiring.
+    public function SetSubscriber(SubscribersController $subscriber): void {}
+    public function SetMessage(MessagesController $message): void {}
 
-    $html .= $ff->FF_Th("Email","{{@thclass}}");
-    $html .= $ff->FF_Th("Listname","{{@thclass}}");
-    $html .= $ff->FF_Th("<i class=\"fa fa-envelope-open-o\" aria-hidden=\"true\"></i>","{{@thclass}}");
-    $html .= $ff->FF_Th("Read","{{@thclass}}");
-    $html .= $ff->FF_Th("<i class=\"fa fa-heart-o\" aria-hidden=\"true\"></i>","{{@thclass}}");
-    $html .= $ff->FF_Th("Last <i class=\"fa fa-heart-o\" aria-hidden=\"true\"></i>","{{@thclass}}");
-    $html .= $ff->FF_Th("<i class=\"fa fa-thumbs-o-down\" aria-hidden=\"true\"></i>","{{@thclass}}");
-    $html .= $ff->FF_Th("Last <i class=\"fa fa-thumbs-o-down\" aria-hidden=\"true\"></i>","{{@thclass}}");
+    /**
+     * Paginated message activity report, restored from v5.0.
+     */
+    public function CreateMessageReadsHTMLList(
+        string $muid = '',
+        string $searchEmail = '',
+        int $pageNo = 1,
+        int $numRows = 25
+    ): string {
+        if ($muid === '') {
+            return '<p>No such message.</p>';
+        }
+        if (!Controller::allowed($this->fat, 'logs.view')) {
+            return '<p>Access denied.</p>';
+        }
 
-    $html .= $ff->FF_TrClose();
-    $html .= $ff->FF_TheadClose();
-    $html .= $ff->FF_TbodyOpen("{{@tbodyclass}}");
+        $searchEmail = trim($searchEmail);
+        $filter = $searchEmail === ''
+            ? ['sml_muid = :muid AND sml_reads > 0', ':muid' => $muid]
+            : [
+                'sml_muid = :muid AND sml_reads > 0 AND LOWER(sml_email) LIKE LOWER(:email)',
+                ':muid' => $muid,
+                ':email' => '%' . $searchEmail . '%',
+            ];
 
-    if ($ssemail == '') {
-      $filter = array("sml_muid = :muid and sml_reads > 0", ':muid' => $muid);
-    } else {
-      $filter = array("sml_muid = :muid and sml_reads > 0 and LOWER(sml_email) like LOWER(:email)", ':muid' => $muid, ':email' => "%{$ssemail}%");
+        $html = '<form name="messageviewsform" action="{{@BaseURL}}message-views/'
+            . rawurlencode($muid) . '" method="get" class="row g-3 mb-4">'
+            . '<div class="col-md-6"><label class="form-label">Email address</label>'
+            . '<input class="form-control" type="search" name="e" value="'
+            . htmlspecialchars($searchEmail, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '"></div>'
+            . '<div class="col-md-3 align-self-end"><button class="btn btn-primary" type="submit">Search message activity</button></div>'
+            . '</form>';
+
+        $totalMatches = (int) $this->smlog->count($filter);
+        if ($totalMatches === 0) {
+            return $html . '<p>No matching subscriber has read this message yet.</p>';
+        }
+
+        $numRows = max(1, min(200, $numRows));
+        $lastPage = max(1, (int) ceil($totalMatches / $numRows));
+        $pageNo = max(1, min($pageNo, $lastPage));
+        $page = $this->smlog->paginate(
+            $pageNo - 1,
+            $numRows,
+            $filter,
+            ['order' => 'sml_last_read DESC, sml_id DESC']
+        );
+
+        $html .= '<div class="table-responsive"><table class="table table-striped table-hover table-bordered">'
+            . '<thead><tr><th>Email</th><th>List</th><th>Reads</th><th>Last read</th>'
+            . '<th>Likes</th><th>Last like</th><th>Dislikes</th><th>Last dislike</th>'
+            . '<th>Forwards</th><th>Subscribe</th><th>Unsubscribe</th></tr></thead><tbody>';
+
+        foreach ($page['subset'] as $row) {
+            $html .= '<tr>'
+                . '<td>' . htmlspecialchars((string) $row['sml_email']) . '</td>'
+                . '<td>' . htmlspecialchars((string) $row['sml_list_shortcode']) . '</td>'
+                . '<td>' . (int) $row['sml_reads'] . '</td>'
+                . '<td>' . htmlspecialchars((string) $row['sml_last_read']) . '</td>'
+                . '<td>' . (int) $row['sml_likes'] . '</td>'
+                . '<td>' . htmlspecialchars((string) $row['sml_last_like']) . '</td>'
+                . '<td>' . (int) $row['sml_dislikes'] . '</td>'
+                . '<td>' . htmlspecialchars((string) $row['sml_last_dislike']) . '</td>'
+                . '<td>' . (int) $row['sml_forwards'] . '</td>'
+                . '<td>' . ((int) $row['sml_subscribe'] > 0 ? 'Yes' : '') . '</td>'
+                . '<td>' . ((int) $row['sml_unsubscribe'] > 0 ? 'Yes' : '') . '</td>'
+                . '</tr>';
+        }
+        $html .= '</tbody></table></div>';
+
+        $queryString = $searchEmail === '' ? '' : '?e=' . rawurlencode($searchEmail);
+        return $html . (new htmlhelper($this->fat))->paginate(
+            $page,
+            'message-views/' . rawurlencode($muid),
+            $queryString
+        );
     }
-    $page = $this->smlog->paginate($pageno - 1,$numrows,$filter,array('order' => 'sml_last_read DESC'));
-    foreach ($page['subset'] as $row) {
-      $semail = $row['sml_email'];
-      $listname = $row['sml_listname'];
-      $reads = $row['sml_reads'];
-      $lastread = $row['sml_last_read'];
-      $likes = $row['sml_likes'];
-      $lastlike = $row['sml_last_like'];
-      $dislikes = $row['sml_dislikes'];
-      $lastdislike = $row['sml_last_dislike'];
 
-      $html .= $ff->FF_TrOpen("");
-      $html .= $ff->FF_Td($semail,"");
-      $html .= $ff->FF_Td($listname,"");
-      $html .= $ff->FF_Td($reads,"");
-      $html .= $ff->FF_Td($lastread,"");
-      $html .= $ff->FF_Td($likes,"");
-      $html .= $ff->FF_Td($lastlike,"");
-      $html .= $ff->FF_Td($dislikes,"");
-      $html .= $ff->FF_Td($lastdislike,"");
-      $html .= $ff->FF_TrClose();
-    }
-    $html .= $ff->FF_TbodyClose();
-    $html .= $ff->FF_TableClose();
-    $html .= $ff->FF_DivClose();
-
-    $action = "message-views/{$muid}";
-    $qsemail = urlencode($ssemail);
-    $querystring = '';
-    if ($ssemail == '') {
-      $querystring = '';
-    } else {
-      $querystring = "?e={$qsemail}";
+    // Compatibility name used by the first v5.0.1 routes.
+    public function CreateSmlogHTMLList(string $muid = '', string $email = '', int $pageNo = 1, int $numRows = 25): string
+    {
+        return $this->CreateMessageReadsHTMLList($muid, $email, $pageNo, $numRows);
     }
 
-    $hh = new htmlhelper($this->fat);
-    $html .= $hh->paginate($page,$action,$querystring);
-    return $html;
-  }
-
-  public function readLog($suid,$muid) {
-    return $this->smlog->read($suid,$muid);
-  }
-
-  // Model takes care of creating record
-  public function logMsgQueued($suid,$muid) {
-    $this->readLog($suid,$muid);
-  }
-
-  public function delMsg($muid) {
-    $this->smlog->deletemsg($muid);
-  }
-
-  public function logMsgSent($suid,$muid) {
-    if ($this->readLog($suid,$muid)) {
-      $this->smlog->sml_date_sent = date("Y-m-d H:i:s");
-      $this->smlog->save();
+    public function readLog(string $subscriberToken, string $muid, string $listShortcode = ''): bool
+    {
+        return $this->smlog->read($subscriberToken, $muid, $listShortcode);
     }
-  }
 
-  public function logRead($d) {
-    $reads = $this->smlog->sml_reads + 1;
-    $this->smlog->sml_reads = (int) $reads;
-    $this->smlog->sml_last_read = $d;
-  }
-
-  //
-  public function logMsgRead($suid,$muid) {
-    if ($this->readLog($suid,$muid)) {
-      $d = date("Y-m-d H:i:s");
-      $this->logRead($d);
-      $this->smlog->save();
+    public function hasMessageRecord(string $subscriberToken, string $muid): bool
+    {
+        $mapper = new SmlogM($this->fat);
+        return $mapper->hasMessageRecord($subscriberToken, $muid);
     }
-  }
 
-  public function logMsgLike($suid,$muid) {
-    if ($this->readLog($suid,$muid)) {
-      $d = date("Y-m-d H:i:s");
-      $likes = $this->smlog->sml_likes + 1;
-      $this->smlog->sml_likes = (int) $likes;
-      $this->smlog->sml_last_like = $d;
-      $this->logRead($d);
-      $this->smlog->save();
+    public function listShortcode(string $subscriberToken, string $muid): string
+    {
+        $mapper = new SmlogM($this->fat);
+        return $mapper->listShortcode($subscriberToken, $muid);
     }
-  }
 
-  public function logMsgDislike($suid,$muid) {
-    if ($this->readLog($suid,$muid)) {
-      $d = date("Y-m-d H:i:s");
-      $dislikes = $this->smlog->sml_dislikes + 1;
-      $this->smlog->sml_dislikes = (int) $dislikes;
-      $this->smlog->sml_last_dislike = $d;
-      $this->logRead($d);
-      $this->smlog->save();
+    /** The model creates the record when a message is queued. */
+    public function logMsgQueued(string $subscriberToken, string $muid, string $listShortcode = ''): bool
+    {
+        return $this->readLog($subscriberToken, $muid, $listShortcode);
     }
-  }
 
-  //
-  public function logMsgUpdate($suid,$muid) {
-    if ($this->readLog($suid,$muid)) {
-      $d = date("Y-m-d H:i:s");
-      $updates = $this->smlog->sml_updates + 1;
-      $this->smlog->sml_updates = (int) $updates;
-      $this->smlog->sml_last_update = $d;
-      $this->logRead($d);
-      $this->smlog->save();
+    public function delMsg(string $muid): void
+    {
+        $this->smlog->deletemsg($muid);
     }
-  }
 
-  //
-  public function logMsgConfirm($suid,$muid) {
-    if ($this->readLog($suid,$muid)) {
-      $d = date("Y-m-d H:i:s");
-      $confirms = $this->smlog->sml_confirms + 1;
-      $this->smlog->sml_confirms = (int) $confirms;
-      $this->smlog->sml_confirmed_at = $d;
-      $this->logRead($d);
-      $this->smlog->save();
+    public function logMsgSent(string $subscriberToken, string $muid, string $listShortcode = ''): void
+    {
+        if ($this->readLog($subscriberToken, $muid, $listShortcode)) {
+            $this->smlog->sml_date_sent = date('Y-m-d H:i:s');
+            $this->smlog->save();
+        }
     }
-  }
 
-  //
-  public function logMsgForward($suid,$muid) {
-    if ($this->readLog($suid,$muid)) {
-      $d = date("Y-m-d H:i:s");
-      $forwards = $this->smlog->sml_forwards + 1;
-      $this->smlog->sml_forwards = (int) $forwards;
-      $this->smlog->sml_last_forwarded = $d;
-      $this->logRead($d);
-      $this->smlog->save();
+    private function logRead(string $date): void
+    {
+        $this->smlog->sml_reads = (int) $this->smlog->sml_reads + 1;
+        $this->smlog->sml_last_read = $date;
     }
-  }
 
-  //
-  public function logMsgBooking($suid,$muid) {
-    if ($this->readLog($suid,$muid)) {
-      $d = date("Y-m-d H:i:s");
-      $bookings = $this->smlog->sml_bookings + 1;
-      $this->smlog->sml_bookings = (int) $bookings;
-      $this->smlog->sml_last_booking = $d;
-      $this->logRead($d);
-      $this->smlog->save();
+    public function logMsgRead(string $subscriberToken, string $muid): void
+    {
+        if ($this->readLog($subscriberToken, $muid)) {
+            $date = date('Y-m-d H:i:s');
+            $this->logRead($date);
+            $this->smlog->save();
+        }
     }
-  }
 
-  //
-  public function logMsgSub($suid,$muid) {
-    if ($this->readLog($suid,$muid)) {
-      $d = date("Y-m-d H:i:s");
-      $this->smlog->sml_subscribe = (int) 1;
-      $this->smlog->sml_subscribed_at = $d;
-      $this->logRead($d);
-      $this->smlog->save();
+    public function logMsgLike(string $subscriberToken, string $muid): void
+    {
+        if ($this->readLog($subscriberToken, $muid)) {
+            $date = date('Y-m-d H:i:s');
+            $this->smlog->sml_likes = (int) $this->smlog->sml_likes + 1;
+            $this->smlog->sml_last_like = $date;
+            $this->logRead($date);
+            $this->smlog->save();
+        }
     }
-  }
 
-  //
-  public function logMsgUnsub($suid,$muid) {
-    if ($this->readLog($suid,$muid)) {
-      $d = date("Y-m-d H:i:s");
-      $this->smlog->sml_unsubscribe = (int) 1;
-      $this->smlog->sml_unsubscribed_at = $d;
-      $this->logRead($d);
-      $this->smlog->save();
+    public function logMsgDislike(string $subscriberToken, string $muid): void
+    {
+        if ($this->readLog($subscriberToken, $muid)) {
+            $date = date('Y-m-d H:i:s');
+            $this->smlog->sml_dislikes = (int) $this->smlog->sml_dislikes + 1;
+            $this->smlog->sml_last_dislike = $date;
+            $this->logRead($date);
+            $this->smlog->save();
+        }
     }
-  }
 
-  // stats functions
-  // ucount = unique count, total = total number
-  public function numberOfReads($muid) {
-    $sql = "select count(*) as ucount, sum(sml_reads) as total from smlog where sml_muid = :muid and sml_reads > 0";
-    $opt = array(':muid' => $muid);
-    $rows = $this->dbPDO->exec($sql,$opt);
-    $row = $rows[0];
-    $counts = array('ucount' => $row['ucount'], 'total' => $row['total']);
-    return $counts;
-  }
+    public function logMsgUpdate(string $subscriberToken, string $muid): void
+    {
+        if ($this->readLog($subscriberToken, $muid)) {
+            $date = date('Y-m-d H:i:s');
+            $this->smlog->sml_updates = (int) $this->smlog->sml_updates + 1;
+            $this->smlog->sml_last_update = $date;
+            $this->logRead($date);
+            $this->smlog->save();
+        }
+    }
 
-  public function numberOfUpdates($muid) {
-    $sql = "select count(*) as ucount, sum(sml_updates) as total from smlog where sml_muid = :muid and sml_updates > 0";
-    $opt = array(':muid' => $muid);
-    $rows = $this->dbPDO->exec($sql,$opt);
-    $row = $rows[0];
-    $counts = array('ucount' => $row['ucount'], 'total' => $row['total']);
-    return $counts;
-  }
+    public function logMsgConfirm(string $subscriberToken, string $muid): void
+    {
+        if ($this->readLog($subscriberToken, $muid)) {
+            $date = date('Y-m-d H:i:s');
+            $this->smlog->sml_confirms = (int) $this->smlog->sml_confirms + 1;
+            $this->smlog->sml_confirmed_at = $date;
+            $this->logRead($date);
+            $this->smlog->save();
+        }
+    }
 
-  public function numberOfConfirms($muid) {
-    $sql = "select count(*) as ucount, sum(sml_confirms) as total from smlog where sml_muid = :muid and sml_confirms > 0";
-    $opt = array(':muid' => $muid);
-    $rows = $this->dbPDO->exec($sql,$opt);
-    $row = $rows[0];
-    $counts = array('ucount' => $row['ucount'], 'total' => $row['total']);
-    return $counts;
-  }
+    public function logMsgForward(string $subscriberToken, string $muid): void
+    {
+        if ($this->readLog($subscriberToken, $muid)) {
+            $date = date('Y-m-d H:i:s');
+            $this->smlog->sml_forwards = (int) $this->smlog->sml_forwards + 1;
+            $this->smlog->sml_last_forwarded = $date;
+            $this->logRead($date);
+            $this->smlog->save();
+        }
+    }
 
-  public function numberOfForwards($muid) {
-    $sql = "select count(*) as ucount, sum(sml_forwards) as total from smlog where sml_muid = :muid and sml_forwards > 0";
-    $opt = array(':muid' => $muid);
-    $rows = $this->dbPDO->exec($sql,$opt);
-    $row = $rows[0];
-    $counts = array('ucount' => $row['ucount'], 'total' => $row['total']);
-    return $counts;
-  }
+    public function logMsgBooking(string $subscriberToken, string $muid): void
+    {
+        if ($this->readLog($subscriberToken, $muid)) {
+            $date = date('Y-m-d H:i:s');
+            $this->smlog->sml_bookings = (int) $this->smlog->sml_bookings + 1;
+            $this->smlog->sml_last_booking = $date;
+            $this->logRead($date);
+            $this->smlog->save();
+        }
+    }
 
-  public function numberOfBookings($muid) {
-    $sql = "select count(*) as ucount, sum(sml_bookings) as total from smlog where sml_muid = :muid and sml_bookings > 0";
-    $opt = array(':muid' => $muid);
-    $rows = $this->dbPDO->exec($sql,$opt);
-    $row = $rows[0];
-    $counts = array('ucount' => $row['ucount'], 'total' => $row['total']);
-    return $counts;
-  }
+    public function logMsgSub(string $subscriberToken, string $muid): void
+    {
+        if ($this->readLog($subscriberToken, $muid)) {
+            $date = date('Y-m-d H:i:s');
+            $this->smlog->sml_subscribe = 1;
+            $this->smlog->sml_subscribed_at = $date;
+            $this->logRead($date);
+            $this->smlog->save();
+        }
+    }
 
-  public function numberOfQueued($muid) {
-    return $this->smlog->count(array("sml_muid = :muid", ':muid' => $muid));
-  }
+    public function logMsgUnsub(string $subscriberToken, string $muid): void
+    {
+        if ($this->readLog($subscriberToken, $muid)) {
+            $date = date('Y-m-d H:i:s');
+            $this->smlog->sml_unsubscribe = 1;
+            $this->smlog->sml_unsubscribed_at = $date;
+            $this->logRead($date);
+            $this->smlog->save();
+        }
+    }
 
-  public function numberOfSent($muid) {
-    return $this->smlog->count(array("sml_muid = :muid and sml_date_sent is not null", ':muid' => $muid));
-  }
+    /** @return array{ucount:int,total:int} */
+    public function numberOfReads(string $muid): array { return $this->smlog->aggregateCounts($muid, 'sml_reads'); }
+    /** @return array{ucount:int,total:int} */
+    public function numberOfUpdates(string $muid): array { return $this->smlog->aggregateCounts($muid, 'sml_updates'); }
+    /** @return array{ucount:int,total:int} */
+    public function numberOfConfirms(string $muid): array { return $this->smlog->aggregateCounts($muid, 'sml_confirms'); }
+    /** @return array{ucount:int,total:int} */
+    public function numberOfForwards(string $muid): array { return $this->smlog->aggregateCounts($muid, 'sml_forwards'); }
+    /** @return array{ucount:int,total:int} */
+    public function numberOfBookings(string $muid): array { return $this->smlog->aggregateCounts($muid, 'sml_bookings'); }
 
-  public function numberOfSubscribes($muid) {
-    return $this->smlog->count(array("sml_muid = :muid and sml_subscribe = 1", ':muid' => $muid));
-  }
+    public function numberOfQueued(string $muid): int
+    {
+        return (int) $this->smlog->count(['sml_muid = :muid', ':muid' => $muid]);
+    }
 
-  public function numberOfUnsubscribes($muid) {
-    return $this->smlog->count(array("sml_muid = :muid and sml_unsubscribe = 1", ':muid' => $muid));
-  }
+    public function numberOfSent(string $muid): int
+    {
+        return (int) $this->smlog->count(['sml_muid = :muid AND sml_date_sent IS NOT NULL', ':muid' => $muid]);
+    }
+
+    public function numberOfSubscribes(string $muid): int
+    {
+        return (int) $this->smlog->count(['sml_muid = :muid AND sml_subscribe > 0', ':muid' => $muid]);
+    }
+
+    public function numberOfUnsubscribes(string $muid): int
+    {
+        return (int) $this->smlog->count(['sml_muid = :muid AND sml_unsubscribe > 0', ':muid' => $muid]);
+    }
 }

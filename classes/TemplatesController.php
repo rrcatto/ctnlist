@@ -66,12 +66,12 @@ class TemplatesController extends Controller {
   // To display a paginated list of templates defined in the system
   public function CreateTemplatesHTMLList($pageno = 1,$numrows = 25,$saved = false) {
     $html = "";
-    if ((int) $this->fat->get('uadmin') < 1) {
+    if (!Controller::allowed($this->fat, 'templates.manage')) {
       $html .= "<p class=\"{{@pclass}}\">Access denied.</p>";
       return $html;
     }
     if ($saved) {
-      $html .= "<div class=\"alert col-md-2 text-center alert-info alert-dismissible fade show\" role=\"alert\"><button type=\"button\" class=\"close\" data-dismiss=\"alert\" aria-label=\"Close\"><span aria-hidden=\"true\">&times;</span></button><strong>Template saved!</strong></div>";
+      $html .= "<div class=\"alert col-md-2 text-center alert-info alert-dismissible fade show\" role=\"alert\"><button type=\"button\" class=\"close\" data-dismiss=\"alert\" aria-label=\"Close\"><span aria-hidden=\"true\">×</span></button><strong>Template saved!</strong></div>";
     }
     $totalmatches = $this->template->count();
     if ($totalmatches == 0) {
@@ -121,7 +121,7 @@ class TemplatesController extends Controller {
 
   public function CreateTemplateHTMLform($tid = 0) {
     $html = "";
-    if ($this->fat->get('uadmin') <> '1') {
+    if (!Controller::allowed($this->fat, 'templates.manage')) {
       $html .= "<p class=\"{{@pclass}\">Access denied</p>";
       return $html;
     }
@@ -158,6 +158,7 @@ class TemplatesController extends Controller {
     $ckjs = "";
 
     $html .= $ff->FF_FormOpen("templateform","{{@BaseURL}}template","POST");
+    $html .= Csrf::field($this->fat);
     $html .= $ff->FF_FieldsetOpen("{{@fieldsetclass}}");
     $html .= $ff->FF_Legend($legend);
 
@@ -166,7 +167,7 @@ class TemplatesController extends Controller {
     $html .= $ff->FF_DivOpen("{{@rowclass}}");
 
     $html .= $ff->FF_DivOpen("{{@columnclass6}}");
-    $html .= $ff->FF_input("t_name","text",$tname," required","{{@inputclass}}");
+    $html .= $ff->FF_input("t_name","text",$tname,"","{{@inputclass}}");
     $html .= $ff->FF_Label("Template Name","t_name","{{@labelclass}}");
     $html .= $ff->FF_DivClose();
 
@@ -200,6 +201,10 @@ class TemplatesController extends Controller {
 
   // check $valid for existing template
   public function save() {
+    Csrf::requireValid($this->fat);
+    if (!Controller::allowed($this->fat, 'templates.manage')) {
+      return '<p class="{{@pclass}}">Access denied.</p>';
+    }
     $html = "";
     $tid = $this->fat->get('POST.t_id');
     if ($tid == 0) {
@@ -235,13 +240,16 @@ class TemplatesController extends Controller {
       $lname = '';
       $emailsleft = (int) 0;
     } else {
-      $suid = $this->subscriber->subscriber->s_uniqid;
+      $suid = (string) $this->subscriber->subscriber->s_uuid;
       $fname = $this->subscriber->subscriber->s_fname;
       $lname = $this->subscriber->subscriber->s_lname;
       $emailsleft = $this->subscriber->subscriber->s_emailsleft;
     }
 
-    $muid = $this->message->message->m_uniqid;
+    $muid = (string) $this->message->message->m_uniqid;
+    $listShortcode = strtoupper(trim((string) $this->fat->get('CurrentQueueListShortcode')));
+    // The list context is supplied by the queue/send path. Do not invent ALL
+    // when an administrator has deliberately left a draft without an audience.
     $tid = $this->message->message->m_t_id;
     $mhtml = $this->message->message->m_html;
     $mtext = $this->message->message->m_text;
@@ -280,8 +288,12 @@ class TemplatesController extends Controller {
       $this->textpart = str_ireplace("{STORE}",$StoreURL,$this->textpart);
     }
 
-    $this->htmlpart = str_ireplace("{subscribe}","<a href=\"{$this->BaseURL}subscribe?m={$muid}\">SUBSCRIBE</a>",$this->htmlpart);
-    $this->textpart = str_ireplace("{subscribe}","{$this->BaseURL}subscribe?m={$muid}",$this->textpart);
+    $subscribeUrl = "{$this->BaseURL}subscribe?m=" . rawurlencode((string) $muid);
+    if ($listShortcode !== '') {
+      $subscribeUrl .= "&l=" . rawurlencode($listShortcode);
+    }
+    $this->htmlpart = str_ireplace("{subscribe}","<a href=\"" . htmlspecialchars($subscribeUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . "\">SUBSCRIBE</a>",$this->htmlpart);
+    $this->textpart = str_ireplace("{subscribe}",$subscribeUrl,$this->textpart);
 
     $this->htmlpart = str_ireplace("{listname}",$this->ListName,$this->htmlpart);
     $this->textpart = str_ireplace("{listname}",$this->ListName,$this->textpart);
@@ -353,17 +365,24 @@ class TemplatesController extends Controller {
       $this->shtml = str_ireplace("{subscription}",$submsg,$this->htmlpart);
       $this->stext = str_ireplace("{subscription}",$submsg,$this->textpart);
 
-      $this->shtml = str_ireplace("{archive}","<a href=\"{$this->BaseURL}archive/{$maid}/{$suid}/{$muid}\">ARCHIVE</a>",$this->shtml);
-      $this->stext = str_ireplace("{archive}","{$this->BaseURL}archive/{$maid}/{$suid}/{$muid}",$this->stext);
+      $this->shtml = str_ireplace("{archive}","<a href=\"{$this->BaseURL}archive/{$maid}\">ARCHIVE</a>",$this->shtml);
+      $this->stext = str_ireplace("{archive}","{$this->BaseURL}archive/{$maid}",$this->stext);
 
-      $this->shtml = str_ireplace("{unsubscribe}","<a href=\"{$this->BaseURL}unsubscribe/{$suid}/{$muid}\">UNSUBSCRIBE</a>",$this->shtml);
-      $this->stext = str_ireplace("{unsubscribe}","{$this->BaseURL}unsubscribe/{$suid}/{$muid}",$this->stext);
+      if ($listShortcode !== '') {
+        $this->shtml = str_ireplace("{unsubscribe}","<a href=\"{$this->BaseURL}unsubscribe/{$suid}/{$listShortcode}/{$muid}\">UNSUBSCRIBE</a>",$this->shtml);
+        $this->stext = str_ireplace("{unsubscribe}","{$this->BaseURL}unsubscribe/{$suid}/{$listShortcode}/{$muid}",$this->stext);
+      } else {
+        // A proof of an audience-less draft has no list from which the proof
+        // recipient could unsubscribe. Do not construct a malformed URL.
+        $this->shtml = str_ireplace("{unsubscribe}","UNSUBSCRIBE",$this->shtml);
+        $this->stext = str_ireplace("{unsubscribe}","UNSUBSCRIBE",$this->stext);
+      }
 
       $this->shtml = str_ireplace("{forward}","<a href=\"{$this->BaseURL}forward/{$suid}/{$muid}\">FORWARD</a>",$this->shtml);
       $this->stext = str_ireplace("{forward}","{$this->BaseURL}forward/{$suid}/{$muid}",$this->stext);
 
-      $this->shtml = str_ireplace("{preferences}","<a href=\"{$this->BaseURL}subscribe/{$suid}/{$muid}\">UPDATE</a>",$this->shtml);
-      $this->stext = str_ireplace("{preferences}","{$this->BaseURL}subscribe/{$suid}/{$muid}",$this->stext);
+      $this->shtml = str_ireplace("{preferences}","<a href=\"{$this->BaseURL}profile/subscriber/{$suid}\">UPDATE</a>",$this->shtml);
+      $this->stext = str_ireplace("{preferences}","{$this->BaseURL}profile/subscriber/{$suid}",$this->stext);
 
       if ($this->fat->exists('BookingURL')) {
         $BookingURL = $this->fat->get('BookingURL');
@@ -396,8 +415,13 @@ class TemplatesController extends Controller {
       $this->shtml = str_ireplace("{emailsleft}",$emailsleft,$this->shtml);
       $this->stext = str_ireplace("{emailsleft}",$emailsleft,$this->stext);
 
-      $this->shtml = str_ireplace("{confirm}","<a href=\"{$this->BaseURL}confirm/{$suid}/{$muid}\">YES</a>",$this->shtml);
-      $this->stext = str_ireplace("{confirm}","{$this->BaseURL}confirm/{$suid}/{$muid}",$this->stext);
+      if ($listShortcode !== '') {
+        $this->shtml = str_ireplace("{confirm}","<a href=\"{$this->BaseURL}confirm/{$suid}/{$listShortcode}/{$muid}\">YES</a>",$this->shtml);
+        $this->stext = str_ireplace("{confirm}","{$this->BaseURL}confirm/{$suid}/{$listShortcode}/{$muid}",$this->stext);
+      } else {
+        $this->shtml = str_ireplace("{confirm}","OPT IN",$this->shtml);
+        $this->stext = str_ireplace("{confirm}","OPT IN",$this->stext);
+      }
 
       $this->shtml = str_ireplace("{like}","<a href=\"{$this->BaseURL}like/{$suid}/{$muid}\">YES</a>",$this->shtml);
       $this->stext = str_ireplace("{like}","{$this->BaseURL}like/{$suid}/{$muid}",$this->stext);
@@ -409,6 +433,9 @@ class TemplatesController extends Controller {
 
       $this->shtml = str_ireplace("{baseurl}",$this->BaseURL,$this->shtml);
       $this->stext = str_ireplace("{baseurl}",$this->BaseURL,$this->stext);
+
+      $this->shtml = str_ireplace("{listshortcode}",$listShortcode,$this->shtml);
+      $this->stext = str_ireplace("{listshortcode}",$listShortcode,$this->stext);
 
       $this->shtml = str_ireplace("{muid}",$muid,$this->shtml);
       $this->stext = str_ireplace("{muid}",$muid,$this->stext);

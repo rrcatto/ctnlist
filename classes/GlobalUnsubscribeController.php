@@ -23,18 +23,6 @@ class GlobalUnsubscribeController extends Controller
     return $this->gu->valid();
   }
 
-  public function RetrieveGU($suid) {
-    $this->gu->load(array('gu_suid = :suid', ':suid' => $suid));
-    return $this->gu->valid();
-  }
-
-  public function getEmail($suid) {
-    if ($this->RetrieveGU($suid)) {
-      return $this->gu->gu_email;
-    }
-    return '';
-  }
-
   public function IsUnsubscribed($email) {
     $count = $this->gu->count(array('gu_email = :email and gu_active = :active', ':email' => $email, ':active' => 1));
     return (bool) ($count == 1);

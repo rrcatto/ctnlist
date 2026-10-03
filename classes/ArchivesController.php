@@ -116,51 +116,60 @@ class ArchivesController extends Controller {
     return $aid;
   }
 
+  /**
+   * Create an archive for an arbitrary message model during advanced queueing.
+   * The original controller mapper is restored immediately after the legacy
+   * archive/template workflow has run.
+   */
+  public function CreateArchiveForMessage(MessagesM $model): int {
+    if ($this->fat->get('archive') == 0) return 0;
+    $original = $this->message->message;
+    try {
+      $this->message->message = $model;
+      return (int) $this->CreateArchive();
+    } finally {
+      $this->message->message = $original;
+    }
+  }
+
   public function ShowArchive($aid,$suid = '',$muid = '') {
-    $html = "";
-    if ($this->fat->get('uloggedin')) {
-      if ($suid == '') $suid = $this->fat->get('SESSION.suid');
-      $html .= "<form name=\"forwardarchiveform\" action=\"{{@BaseURL}}forward-archive\" method=\"post\" role=\"form\">";
-      $html .= "<input name=\"aid\" type=\"hidden\" value=\"{$aid}\">";
-      $html .= "<input name=\"suid\" type=\"hidden\" value=\"{$suid}\">";
-      $html .= "<input name=\"muid\" type=\"hidden\" value=\"{$muid}\">";
-      $html .= "<fieldset class=\"form-group\"><legend>Forward Archive Message</legend>";
+    $html = '';
 
-      $textarea_text = array(
-        0 => array("bemail","Forward to these emails"),
-      );
-
-      foreach($textarea_text as $icontrol) {
-        $html .= "<div class=\"form-row\">";
-        $html .= "<div class=\"form-group col-md-6\">";
-        $html .= "<label class=\"col-form-label p-2 text-white bg-info\" for=\"{$icontrol[0]}\">{$icontrol[1]}</label>";
-        $html .= "<textarea class=\"form-control\" rows=\"5\" cols=\"90\" name=\"{$icontrol[0]}\"></textarea>";
-        $html .= "</div></div>";
+    // Preserve the v5 archive-forward workflow. Authentication/ACL is checked
+    // by the route and CSRF protects the state-changing submission.
+    if ((bool) $this->fat->get('uloggedin')) {
+      if ($suid === '') {
+        $suid = (string) $this->fat->get('SESSION.suid');
       }
-
-      $html .= "<div class=\"form-row\">";
-      $html .= "<div class=\"form-group col-md-6\">";
-      $html .= "<button class=\"btn btn-info\" type=\"submit\">Forward Message</button>";
-      $html .= "</div></div>";
-      $html .= "</fieldset></form>";
+      $html .= '<form name="forwardarchiveform" action="{{@BaseURL}}forward-archive" method="post" role="form" class="card card-body mb-4">';
+      $html .= Csrf::field($this->fat);
+      $html .= '<input name="aid" type="hidden" value="' . (int) $aid . '">';
+      $html .= '<input name="subscriber_token" type="hidden" value="' . htmlspecialchars((string) $suid, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">';
+      $html .= '<input name="muid" type="hidden" value="' . htmlspecialchars((string) $muid, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">';
+      $html .= '<h2 class="h5">Forward Archive Message</h2>';
+      $html .= '<label class="form-label" for="bemail">Forward to these emails</label>';
+      $html .= '<textarea class="form-control mb-3" rows="5" name="bemail" id="bemail"></textarea>';
+      $html .= '<button class="btn btn-primary" type="submit">Forward Message</button></form>';
     }
 
-    $this->archive->load(array('a_id = :aid', ':aid' => $aid));
-
-    if (!$this->archive->dry()) {
-      $html .= "<div class=\row\"><p class=\"{{@pclass}\">Date created: {$this->archive->a_datecreated}</p></div>";
-      $asubject = stripslashes($this->archive->a_subject);
-      $this->fat->set('title',"Archive - {$asubject}");
-      $html .= "<div class=\row\"><p class=\"{{@pclass}\">Subject: {$asubject}</p></div>";
-      $html .= $this->archive->a_html;
-
-      // increment a_viewed
-      $aviewed = $this->archive->a_viewed + 1;
-      $this->archive->a_viewed = $aviewed;
-      $this->archive->save();
-    } else {
-      $html .= "<p class=\"{{@pclass}\">Archive does not exist.</p>";
+    $this->archive->load(array('a_id = :aid', ':aid' => (int) $aid));
+    if ($this->archive->dry()) {
+      $this->fat->error(404);
     }
+
+    $subject = stripslashes((string) $this->archive->a_subject);
+    $this->fat->set('title', 'Archive - ' . $subject);
+    $html .= '<p class="{{@pclass}}">Date created: '
+      . htmlspecialchars((string) $this->archive->a_datecreated, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+      . '</p>';
+    $html .= '<p class="{{@pclass}}">Subject: '
+      . htmlspecialchars($subject, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+      . '</p>';
+    $html .= (string) $this->archive->a_html;
+
+    $this->archive->a_viewed = (int) $this->archive->a_viewed + 1;
+    $this->archive->save();
     return $html;
   }
+
 }

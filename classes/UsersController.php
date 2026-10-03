@@ -1,54 +1,58 @@
 <?php
 
+declare(strict_types=1);
+
 /**
- * User profile and passwordless authentication controller.
+ * Passwordless authentication and subscriber account controller.
  *
- * Janrain/RPX authentication has been removed. Login now uses a one-time
- * email link and revocable server-side sessions.
+ * The historical users table has been removed. Subscribers are the canonical
+ * identity records. A subscriber row does not imply mailing-list consent.
  */
 class UsersController extends Controller
 {
-    protected $fat;
-    protected $dbPDO;
-    protected $BaseURL;
-    protected $ListName;
-    protected $FromAddress;
-    protected $AdminEmail;
-    protected $AdminName;
+    protected Base $fat;
+    protected \DB\SQL $dbPDO;
+    protected string $BaseURL;
+    protected string $ListName;
+    protected string $FromAddress;
+    protected string $AdminEmail;
+    protected string $AdminName;
 
-    protected ?AuthLoginTokenM $loginToken = null;
-    protected ?AuthSessionM $authSession = null;
+    protected AuthLoginTokenM $loginToken;
+    protected AuthSessionM $authSession;
+    protected AclService $acl;
+    protected ListService $lists;
     protected int $magicLinkTtl;
     protected int $sessionTtl;
     protected string $sessionCookieName;
 
-    public $user;
-    public $uloggedin;
-    public $uadmin;
-    public $uid;
-    public $mailer = null;
+    public SubscribersM $user;
+    public bool $uloggedin = false;
+    public int $uadmin = 0;
+    public int $uid = 0;
+    public ?mailer $mailer = null;
 
     public function __construct(Base $fat)
     {
         $this->fat = $fat;
         $this->dbPDO = $fat->get('dbPDO');
-        $this->BaseURL = $fat->get('BaseURL');
-        $this->ListName = $fat->get('ListName');
-        $this->FromAddress = $fat->get('FromAddress');
-        $this->AdminEmail = $fat->get('AdminEmail');
-        $this->AdminName = $fat->get('AdminName');
+        $this->BaseURL = (string) $fat->get('BaseURL');
+        $this->ListName = (string) $fat->get('ListName');
+        $this->FromAddress = (string) $fat->get('FromAddress');
+        $this->AdminEmail = (string) $fat->get('AdminEmail');
+        $this->AdminName = (string) $fat->get('AdminName');
 
-        $this->magicLinkTtl = $this->envInt('AUTH_MAGIC_LINK_TTL', 900);
-        $this->sessionTtl = $this->envInt('AUTH_SESSION_TTL', 2419200);
+        $this->magicLinkTtl = $this->envInt('AUTH_MAGIC_LINK_TTL', 1800);
+        $this->sessionTtl = $this->envInt('AUTH_SESSION_TTL', 86400);
         $this->sessionCookieName = $this->envString('AUTH_SESSION_COOKIE', 'ctnlist_session');
 
-        $this->user = new UsersM($fat);
-        $this->clearUserContext();
+        $this->user = new SubscribersM($fat);
+        $this->loginToken = new AuthLoginTokenM($fat);
+        $this->authSession = new AuthSessionM($fat);
+        $this->acl = new AclService($fat, $this->dbPDO);
+        $this->lists = new ListService($fat, $this->dbPDO);
 
-        // The application must continue to render before the auth migration is
-        // run. Auth operations themselves remain unavailable until the tables
-        // exist, and the failure is logged rather than exposed to the visitor.
-        $this->initialiseAuthMappers();
+        $this->clearUserContext();
         $this->check_auth_cookies();
     }
 
@@ -57,13 +61,29 @@ class UsersController extends Controller
         $this->mailer = $mailer;
     }
 
-    public function CreateLoginHTMLform(): string
-    {
+    public function CreateLoginHTMLform(
+        string $returnAction = 'profile',
+        ?int $returnMessageId = null,
+        ?int $returnListId = null
+    ): string {
+        $csrf = Csrf::field($this->fat);
+        $safeAction = htmlspecialchars($returnAction, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $messageField = $returnMessageId === null
+            ? ''
+            : '<input type="hidden" name="return_message_id" value="' . $returnMessageId . '">';
+        $listField = $returnListId === null
+            ? ''
+            : '<input type="hidden" name="return_list_id" value="' . $returnListId . '">';
+
         return <<<HTML
 <form name="loginform" action="{{@BaseURL}}login" method="post" role="form" class="mx-auto" style="max-width: 520px;">
+  {$csrf}
+  <input type="hidden" name="return_action" value="{$safeAction}">
+  {$messageField}
+  {$listField}
   <fieldset class="border rounded p-4">
     <legend>Sign in by email</legend>
-    <p>Enter your email address. We will send you a one-time sign-in link.</p>
+    <p>Enter your email address. We will send you a one-time sign-in link valid for 30 minutes.</p>
     <div class="mb-3">
       <label class="form-label" for="login-email">Email address</label>
       <input class="form-control" id="login-email" name="email" type="email" maxlength="254" autocomplete="email" required>
@@ -74,26 +94,89 @@ class UsersController extends Controller
 HTML;
     }
 
-    /**
-     * Request a one-time magic link.
-     *
-     * The route must always show the same generic response, regardless of the
-     * return value, to avoid leaking whether an address already has an account.
-     */
-    public function requestMagicLink(string $email): bool
-    {
-        $email = strtolower(trim($email));
-        if (strlen($email) > 254 || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+    public function authenticationPrompt(
+        string $subscriberToken,
+        string $action,
+        ?string $messageUid = null,
+        ?int $listId = null
+    ): string {
+        $subscriber = new SubscribersM($this->fat);
+        if (!$subscriber->read($subscriberToken)) {
+            $this->fat->error(404);
+        }
+
+        $messageId = null;
+        if ($messageUid !== null && $messageUid !== '') {
+            // Use the established Mapper model for ordinary message lookup.
+            $message = new MessagesM($this->fat);
+            if ($message->read($messageUid)) {
+                $messageId = (int) $message->m_id;
+            }
+        }
+
+        $csrf = Csrf::field($this->fat);
+        $masked = htmlspecialchars(
+            SubscribersM::maskEmail((string) $subscriber->s_email),
+            ENT_QUOTES | ENT_SUBSTITUTE,
+            'UTF-8'
+        );
+        $token = htmlspecialchars($subscriberToken, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $safeAction = htmlspecialchars($action, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $midField = $messageId === null ? '' : '<input type="hidden" name="message_id" value="' . $messageId . '">';
+        $listField = $listId === null ? '' : '<input type="hidden" name="list_id" value="' . $listId . '">';
+
+        return <<<HTML
+<div class="card mx-auto" style="max-width: 620px;">
+  <div class="card-body">
+    <h1 class="h4">Authentication required</h1>
+    <p>This request relates to <strong>{$masked}</strong>.</p>
+    <p>Before continuing, verify that you can access this email account. The secure sign-in link will return you directly to this action.</p>
+    <form action="{{@BaseURL}}auth/request" method="post">
+      {$csrf}
+      <input type="hidden" name="subscriber_token" value="{$token}">
+      <input type="hidden" name="return_action" value="{$safeAction}">
+      {$midField}
+      {$listField}
+      <button class="btn btn-primary" type="submit">Send secure sign-in link</button>
+    </form>
+  </div>
+</div>
+HTML;
+    }
+
+    public function requestMagicLink(
+        string $email,
+        string $returnAction = 'profile',
+        ?int $returnMessageId = null,
+        ?int $returnListId = null
+    ): bool {
+        $email = SubscribersM::normaliseEmail($email);
+        if (!SubscribersM::validEmail($email) || $this->mailer === null) {
             return false;
         }
 
-        if (!$this->initialiseAuthMappers() || $this->mailer === null) {
+        $created = false;
+        if (!$this->user->loadByEmail($email)) {
+            if (!$this->user->createIdentity($email)) {
+                return false;
+            }
+            $created = true;
+        }
+
+        $subscriberId = (int) $this->user->s_id;
+        if ($subscriberId < 1 || $this->magicLinkRateLimited($email)) {
             return false;
         }
 
-        if ($this->magicLinkRateLimited($email)) {
-            error_log('ctnlist auth: magic-link rate limit reached');
-            return false;
+        if ($created && $returnAction === 'profile') {
+            $returnAction = 'confirm';
+            $returnListId = $this->lists->allListId();
+        }
+
+        if (!$this->validReturnAction($returnAction)) {
+            $returnAction = 'profile';
+            $returnMessageId = null;
+            $returnListId = null;
         }
 
         $rawToken = $this->randomToken();
@@ -101,34 +184,38 @@ HTML;
 
         try {
             $this->loginToken->reset();
-            $this->loginToken->email = $email;
-            $this->loginToken->token_hash = hash('sha256', $rawToken);
-            $this->loginToken->created_at = date('Y-m-d H:i:s', $now);
-            $this->loginToken->expires_at = date('Y-m-d H:i:s', $now + $this->magicLinkTtl);
-            $this->loginToken->used_at = null;
-            $this->loginToken->requested_ip = $this->clientIp();
-            $this->loginToken->user_agent = $this->userAgent();
+            $this->loginToken->alt_s_id = $subscriberId;
+            $this->loginToken->alt_email = $email;
+            $this->loginToken->alt_token_hash = hash('sha256', $rawToken);
+            $this->loginToken->alt_created_at = date('Y-m-d H:i:s', $now);
+            $this->loginToken->alt_expires_at = date('Y-m-d H:i:s', $now + $this->magicLinkTtl);
+            $this->loginToken->alt_used_at = null;
+            $this->loginToken->alt_requested_ip = $this->clientIp();
+            $this->loginToken->alt_user_agent = $this->userAgent();
+            $this->loginToken->alt_return_action = $returnAction;
+            $this->loginToken->alt_return_m_id = $returnMessageId;
+            $this->loginToken->alt_return_l_id = $returnListId;
             $this->loginToken->save();
 
-            $loginUrl = rtrim((string) $this->BaseURL, '/')
-                . '/auth/verify?token=' . rawurlencode($rawToken);
-
+            $loginUrl = rtrim($this->BaseURL, '/') . '/auth/verify?token=' . rawurlencode($rawToken);
             if (!$this->mailer->OpenSMTP()) {
                 $this->loginToken->erase();
                 return false;
             }
-
             try {
-                $sent = $this->mailer->SendMagicLink($email, $loginUrl, $this->magicLinkTtl);
+                $sent = $this->mailer->SendMagicLink(
+                    $email,
+                    (string) $this->user->s_uuid,
+                    $loginUrl,
+                    $this->magicLinkTtl
+                );
             } finally {
                 $this->mailer->CloseSMTP();
             }
-
             if ($sent < 1) {
                 $this->loginToken->erase();
                 return false;
             }
-
             return true;
         } catch (\Throwable $e) {
             error_log('ctnlist auth: failed to request magic link: ' . $e->getMessage());
@@ -136,95 +223,77 @@ HTML;
         }
     }
 
-    /**
-     * Verify a one-time token and create a secure revocable session.
-     *
-     * Returns 1 for a new user, 2 for an existing user and 0 for failure.
-     */
-    public function verifyMagicLink(string $rawToken): int
+    /** @return array{success:bool,new:bool,redirect:string} */
+    public function verifyMagicLink(string $rawToken): array
     {
+        $failure = ['success' => false, 'new' => false, 'redirect' => '/login'];
         $rawToken = trim($rawToken);
         if (!preg_match('/^[A-Za-z0-9_-]{43}$/', $rawToken)) {
-            return 0;
-        }
-
-        if (!$this->initialiseAuthMappers()) {
-            return 0;
+            return $failure;
         }
 
         try {
             $now = date('Y-m-d H:i:s');
-            $tokenHash = hash('sha256', $rawToken);
-
             $this->loginToken->load([
-                'token_hash = :hash AND used_at IS NULL AND expires_at > :now',
-                ':hash' => $tokenHash,
+                'alt_token_hash = :hash AND alt_used_at IS NULL AND alt_expires_at > :now',
+                ':hash' => hash('sha256', $rawToken),
                 ':now' => $now,
             ]);
-
             if ($this->loginToken->dry()) {
-                return 0;
+                return $failure;
             }
 
-            $email = strtolower(trim((string) $this->loginToken->email));
-            $this->user->load(['LOWER(u_email) = :email', ':email' => $email]);
-
+            $subscriberId = (int) $this->loginToken->alt_s_id;
+            $this->user->load(['s_id = :sid', ':sid' => $subscriberId]);
             if ($this->user->dry()) {
-                $loginStatus = 1;
-                $this->user->reset();
-                $this->user->u_uniqid = bin2hex(random_bytes(16));
-                $this->user->u_identifier = 'email:' . hash('sha256', $email);
-                $this->user->u_email = $email;
-                $this->user->u_provider = 'passwordless-email';
-                $this->user->u_admin = 0;
-            } else {
-                $loginStatus = 2;
+                return $failure;
             }
 
-            $this->user->u_last_login = $now;
-            $this->user->u_ip = $this->clientIp();
-            $this->user->u_xfwdfor = '';
+            $isNew = empty($this->user->s_last_login_at);
+            $this->user->s_last_login_at = $now;
+            $this->user->s_last_login_ip = $this->clientIp();
             $this->user->save();
 
-            $userId = (int) ($this->user->u_id ?: $this->user->_id);
-            if ($userId < 1) {
-                throw new \RuntimeException('Authenticated user does not have a valid ID.');
-            }
+            $this->acl->bootstrapInitialAdministrator($subscriberId, (string) $this->user->s_email);
 
-            // Mark the magic link as used before issuing a session so that a
-            // subsequent request cannot reuse it successfully.
-            $this->loginToken->used_at = $now;
+            $this->loginToken->alt_used_at = $now;
             $this->loginToken->save();
 
             $sessionToken = $this->randomToken();
             $this->authSession->reset();
-            $this->authSession->user_id = $userId;
-            $this->authSession->token_hash = hash('sha256', $sessionToken);
-            $this->authSession->created_at = $now;
-            $this->authSession->expires_at = date('Y-m-d H:i:s', time() + $this->sessionTtl);
-            $this->authSession->last_seen_at = $now;
-            $this->authSession->revoked_at = null;
-            $this->authSession->ip_address = $this->clientIp();
-            $this->authSession->user_agent = $this->userAgent();
+            $this->authSession->as_s_id = $subscriberId;
+            $this->authSession->as_token_hash = hash('sha256', $sessionToken);
+            $this->authSession->as_created_at = $now;
+            $this->authSession->as_expires_at = date('Y-m-d H:i:s', time() + $this->sessionTtl);
+            $this->authSession->as_last_seen_at = $now;
+            $this->authSession->as_revoked_at = null;
+            $this->authSession->as_ip_address = $this->clientIp();
+            $this->authSession->as_user_agent = $this->userAgent();
             $this->authSession->save();
+
+            $redirect = $this->returnPath(
+                (string) $this->loginToken->alt_return_action,
+                (int) $this->loginToken->alt_return_m_id,
+                (int) $this->loginToken->alt_return_l_id,
+                (string) $this->user->s_uuid
+            );
 
             $this->setAuthCookie($sessionToken);
             $this->setUserContext();
-            return $loginStatus;
+            return ['success' => true, 'new' => $isNew, 'redirect' => $redirect];
         } catch (\Throwable $e) {
             error_log('ctnlist auth: magic-link verification failed: ' . $e->getMessage());
-            return 0;
+            return $failure;
         }
     }
 
     public function check_auth_cookies(): bool
     {
-        $rawSessionToken = trim((string) $this->fat->get('COOKIE.' . $this->sessionCookieName));
-        if ($rawSessionToken === '') {
+        $raw = trim((string) $this->fat->get('COOKIE.' . $this->sessionCookieName));
+        if ($raw === '') {
             return false;
         }
-
-        if (!preg_match('/^[A-Za-z0-9_-]{43}$/', $rawSessionToken) || !$this->initialiseAuthMappers()) {
+        if (!preg_match('/^[A-Za-z0-9_-]{43}$/', $raw)) {
             $this->clearAuthCookie();
             return false;
         }
@@ -232,30 +301,28 @@ HTML;
         try {
             $now = date('Y-m-d H:i:s');
             $this->authSession->load([
-                'token_hash = :hash AND revoked_at IS NULL AND expires_at > :now',
-                ':hash' => hash('sha256', $rawSessionToken),
+                'as_token_hash = :hash AND as_revoked_at IS NULL AND as_expires_at > :now',
+                ':hash' => hash('sha256', $raw),
                 ':now' => $now,
             ]);
-
             if ($this->authSession->dry()) {
                 $this->clearAuthCookie();
                 return false;
             }
 
-            $this->user->load(['u_id = :uid', ':uid' => (int) $this->authSession->user_id]);
+            $this->user->load(['s_id = :sid', ':sid' => (int) $this->authSession->as_s_id]);
             if ($this->user->dry()) {
-                $this->authSession->revoked_at = $now;
+                $this->authSession->as_revoked_at = $now;
                 $this->authSession->save();
                 $this->clearAuthCookie();
                 return false;
             }
 
-            $lastSeen = strtotime((string) $this->authSession->last_seen_at) ?: 0;
+            $lastSeen = strtotime((string) $this->authSession->as_last_seen_at) ?: 0;
             if ($lastSeen < time() - 300) {
-                $this->authSession->last_seen_at = $now;
+                $this->authSession->as_last_seen_at = $now;
                 $this->authSession->save();
             }
-
             $this->setUserContext();
             return true;
         } catch (\Throwable $e) {
@@ -267,101 +334,288 @@ HTML;
 
     public function logout(): void
     {
-        $rawSessionToken = trim((string) $this->fat->get('COOKIE.' . $this->sessionCookieName));
-
-        if ($rawSessionToken !== '' && $this->initialiseAuthMappers()) {
-            try {
-                $this->authSession->load([
-                    'token_hash = :hash AND revoked_at IS NULL',
-                    ':hash' => hash('sha256', $rawSessionToken),
-                ]);
-                if (!$this->authSession->dry()) {
-                    $this->authSession->revoked_at = date('Y-m-d H:i:s');
-                    $this->authSession->save();
-                }
-            } catch (\Throwable $e) {
-                error_log('ctnlist auth: session revocation failed: ' . $e->getMessage());
+        $raw = trim((string) $this->fat->get('COOKIE.' . $this->sessionCookieName));
+        if ($raw !== '') {
+            $this->authSession->load([
+                'as_token_hash = :hash AND as_revoked_at IS NULL',
+                ':hash' => hash('sha256', $raw),
+            ]);
+            if (!$this->authSession->dry()) {
+                $this->authSession->as_revoked_at = date('Y-m-d H:i:s');
+                $this->authSession->save();
             }
         }
-
         $this->clearAuthCookie();
         $this->clearLegacyAuthCookies();
         $this->clearUserContext();
         $this->user->reset();
     }
 
-    private function initialiseAuthMappers(): bool
+    public function matchesSubscriberToken(string $token): bool
     {
-        if ($this->loginToken !== null && $this->authSession !== null) {
-            return true;
+        return $this->uloggedin
+            && $token !== ''
+            && hash_equals((string) $this->user->s_uuid, strtolower(trim($token)));
+    }
+
+    public function requireMatchingSubscriberToken(string $token): void
+    {
+        if (!$this->matchesSubscriberToken($token)) {
+            $this->fat->error(403);
+        }
+    }
+
+    public function can(string $permission): bool
+    {
+        return $this->uloggedin && $this->acl->can($this->uid, $permission);
+    }
+
+    public function CreateEditProfileHTMLform(): string
+    {
+        if (!$this->uloggedin) {
+            return '<p class="{{@pclass}}">Please login to edit your profile.</p>';
         }
 
-        try {
-            $this->loginToken = new AuthLoginTokenM($this->fat);
-            $this->authSession = new AuthSessionM($this->fat);
-            return true;
-        } catch (\Throwable $e) {
-            $this->loginToken = null;
-            $this->authSession = null;
-            error_log('ctnlist auth tables unavailable: ' . $e->getMessage());
-            return false;
+        $e = static fn(mixed $value): string => htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $csrf = Csrf::field($this->fat);
+        $gender = (new formfield())->CreateGenderHTMLDropDown((string) $this->user->s_gender);
+        $province = (new formfield())->CreateProvinceHTMLDropDown((string) $this->user->s_province);
+        $country = (new formfield())->CreateCountryHTMLDropDown((string) $this->user->s_country);
+
+        return <<<HTML
+<form action="{{@BaseURL}}edit-profile" method="post">
+  {$csrf}
+  <fieldset class="border rounded p-4">
+    <legend>Edit profile</legend>
+    <div class="row g-3">
+      <div class="col-md-6"><label class="form-label">First name</label><input class="form-control" name="s_fname" value="{$e($this->user->s_fname)}"></div>
+      <div class="col-md-6"><label class="form-label">Last name</label><input class="form-control" name="s_lname" value="{$e($this->user->s_lname)}"></div>
+      <div class="col-md-6"><label class="form-label">Email</label><input class="form-control" value="{$e($this->user->s_email)}" readonly></div>
+      <div class="col-md-6"><label class="form-label">Cell</label><input class="form-control" name="s_phone" value="{$e($this->user->s_phone)}"></div>
+      <div class="col-md-6"><label class="form-label">Birthdate</label><input class="form-control" type="date" name="s_birthday" value="{$e($this->user->s_birthday)}"></div>
+      <div class="col-md-6"><label class="form-label">Gender</label><select class="form-select" name="s_gender">{$gender}</select></div>
+      <div class="col-md-6"><label class="form-label">Province</label><select class="form-select" name="s_province">{$province}</select></div>
+      <div class="col-md-6"><label class="form-label">Country</label><select class="form-select" name="s_country">{$country}</select></div>
+      <div class="col-md-6"><label class="form-label">Company</label><input class="form-control" name="s_business" value="{$e($this->user->s_business)}"></div>
+      <div class="col-md-6"><label class="form-label">Website</label><input class="form-control" name="s_url" value="{$e($this->user->s_url)}"></div>
+      <div class="col-12"><label class="form-label">Photo URL</label><input class="form-control" name="s_photo" value="{$e($this->user->s_photo)}"></div>
+      <div class="col-12"><button class="btn btn-primary" type="submit">Save profile</button></div>
+    </div>
+  </fieldset>
+</form>
+HTML;
+    }
+
+    public function save(): string
+    {
+        if (!$this->uloggedin) {
+            return '<p class="{{@pclass}}">Access denied.</p>';
         }
+        Csrf::requireValid($this->fat);
+
+        $this->user->s_fname = mb_substr(trim((string) $this->fat->get('POST.s_fname')), 0, 100);
+        $this->user->s_lname = mb_substr(trim((string) $this->fat->get('POST.s_lname')), 0, 100);
+        $this->user->s_photo = mb_substr(trim((string) $this->fat->get('POST.s_photo')), 0, 253);
+        $this->user->s_gender = mb_substr(trim((string) $this->fat->get('POST.s_gender')), 0, 30);
+        $birthday = trim((string) $this->fat->get('POST.s_birthday'));
+        $this->user->s_birthday = preg_match('/^\d{4}-\d{2}-\d{2}$/', $birthday) ? $birthday : null;
+        $this->user->s_business = mb_substr(trim((string) $this->fat->get('POST.s_business')), 0, 100);
+        $this->user->s_province = mb_substr(trim((string) $this->fat->get('POST.s_province')), 0, 100);
+        $this->user->s_country = mb_substr(trim((string) $this->fat->get('POST.s_country')), 0, 100);
+        $this->user->s_phone = mb_substr(trim((string) $this->fat->get('POST.s_phone')), 0, 30);
+        $this->user->s_url = mb_substr(trim((string) $this->fat->get('POST.s_url')), 0, 253);
+        $this->user->save();
+        $this->setUserContext();
+
+        // Preserve the established ctnlist behaviour: every subscriber-initiated
+        // profile change generates a transactional notification and Send Log row.
+        $html = '<p class="{{@pclass}}">Your profile has been updated.</p>';
+        if ($this->mailer !== null && $this->mailer->OpenSMTP()) {
+            $name = trim((string) $this->user->s_fname . ' ' . (string) $this->user->s_lname);
+            $subject = $this->ListName . ' notification: ' . (string) $this->user->s_email
+                . ' has updated their user profile';
+            $notificationHtml = '<p>Profile for subscriber ' . htmlspecialchars(
+                (string) $this->user->s_uuid,
+                ENT_QUOTES | ENT_SUBSTITUTE,
+                'UTF-8'
+            ) . ' on ' . htmlspecialchars($this->ListName, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+                . ' has been updated.</p>';
+            $notificationText = 'Profile for subscriber ' . (string) $this->user->s_uuid
+                . ' on ' . $this->ListName . " has been updated.\n";
+            try {
+                $this->mailer->SendNotification(
+                    '',
+                    'UPDATE-USER',
+                    $this->FromAddress,
+                    (string) $this->user->s_email,
+                    $name,
+                    $subject,
+                    $notificationHtml,
+                    $notificationText,
+                    (string) $this->user->s_uuid,
+                    ''
+                );
+            } finally {
+                $this->mailer->CloseSMTP();
+            }
+        }
+        return $html;
+    }
+
+    public function DisplayProfileHTML(): string
+    {
+        if (!$this->uloggedin) {
+            return '<p class="{{@pclass}}">Please login to view your profile.</p>';
+        }
+
+        $e = static fn(mixed $value): string => htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $html = '<div class="card mb-4"><div class="card-body">';
+        $html .= '<h1 class="h4">Subscriber profile</h1>';
+        $html .= '<dl class="row mb-0">';
+        $html .= '<dt class="col-sm-3">Name</dt><dd class="col-sm-9">' . $e(trim((string) $this->user->s_fname . ' ' . (string) $this->user->s_lname)) . '</dd>';
+        $html .= '<dt class="col-sm-3">Email</dt><dd class="col-sm-9">' . $e($this->user->s_email) . '</dd>';
+        $html .= '<dt class="col-sm-3">Subscriber UUIDv7</dt><dd class="col-sm-9"><code>' . $e($this->user->s_uuid) . '</code></dd>';
+        $html .= '<dt class="col-sm-3">Record created</dt><dd class="col-sm-9">' . $e($this->user->s_created_at) . '</dd>';
+        $html .= '<dt class="col-sm-3">Company</dt><dd class="col-sm-9">' . $e($this->user->s_business) . '</dd>';
+        $html .= '</dl><a class="btn btn-outline-primary" href="{{@BaseURL}}edit-profile">Edit profile</a>';
+        $html .= '</div></div>';
+
+        $html .= '<h2 class="h4">List memberships</h2><div class="table-responsive"><table class="table table-striped">';
+        $html .= '<thead><tr><th>List</th><th>Membership provenance</th><th>Status</th><th>Action</th></tr></thead><tbody>';
+        foreach ($this->lists->memberships($this->uid) as $membership) {
+            $confirmed = filter_var($membership['ls_confirmed'] ?? false, FILTER_VALIDATE_BOOLEAN);
+            $unsubscribed = filter_var($membership['ls_unsubscribed'] ?? false, FILTER_VALIDATE_BOOLEAN);
+            $status = $confirmed && !$unsubscribed ? 'Confirmed' : ($unsubscribed ? 'Unsubscribed' : 'Awaiting confirmation');
+            $shortcode = rawurlencode((string) $membership['l_shortcode']);
+            $action = $confirmed && !$unsubscribed
+                ? '<a class="btn btn-sm btn-outline-danger" href="{{@BaseURL}}unsubscribe/' . $e($this->user->s_uuid) . '/' . $shortcode . '">Unsubscribe</a>'
+                : '<a class="btn btn-sm btn-outline-success" href="{{@BaseURL}}confirm/' . $e($this->user->s_uuid) . '/' . $shortcode . '">Confirm</a>';
+            $membershipUuid = (string) ($membership['ls_uuid'] ?? '');
+            $membershipSince = (string) ($membership['ls_subscribed_at'] ?? '');
+            $provenance = $membershipUuid === ''
+                ? 'Not joined'
+                : '<code>' . $e($membershipUuid) . '</code><br><small>Joined ' . $e($membershipSince) . '</small>';
+            $html .= '<tr><td>' . $e($membership['l_name']) . '</td><td>' . $provenance . '</td><td>' . $e($status) . '</td><td>' . $action . '</td></tr>';
+        }
+        $html .= '</tbody></table></div>';
+        $html .= '<p><a class="btn btn-primary" href="{{@BaseURL}}my/messages">Messages sent to me</a></p>';
+        return $html;
+    }
+
+    public function DisplayMessageHistoryHTML(): string
+    {
+        if (!$this->uloggedin) {
+            return '<p class="{{@pclass}}">Please login to view your messages.</p>';
+        }
+        // Keep SQL out of the controller. The Mapper model owns the one
+        // subscriber/message history query required by this joined report.
+        $activity = new SmlogM($this->fat);
+        $rows = $activity->messageHistory((string) $this->user->s_uuid);
+        $e = static fn(mixed $value): string => htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        if ($rows === []) {
+            return '<p class="{{@pclass}}">No messages have been recorded as sent to this account.</p>';
+        }
+        $html = '<div class="table-responsive"><table class="table table-striped align-middle"><thead><tr><th>Subject</th><th>Sent</th><th>Actions</th></tr></thead><tbody>';
+        foreach ($rows as $row) {
+            $muid = rawurlencode((string) $row['m_uniqid']);
+            $token = rawurlencode((string) $this->user->s_uuid);
+            $html .= '<tr><td>' . $e($row['m_subject']) . '</td><td>' . $e($row['sml_date_sent']) . '</td><td class="d-flex flex-wrap gap-1">';
+            $html .= '<a class="btn btn-sm btn-outline-primary" href="{{@BaseURL}}resend/' . $token . '/' . $muid . '">Send again</a>';
+            $html .= '<a class="btn btn-sm btn-outline-secondary" href="{{@BaseURL}}forward/' . $token . '/' . $muid . '">Forward</a>';
+            $html .= '<a class="btn btn-sm btn-outline-success" href="{{@BaseURL}}like/' . $token . '/' . $muid . '">Like</a>';
+            $html .= '<a class="btn btn-sm btn-outline-danger" href="{{@BaseURL}}dislike/' . $token . '/' . $muid . '">Dislike</a>';
+            $html .= '</td></tr>';
+        }
+        return $html . '</tbody></table></div>';
     }
 
     private function magicLinkRateLimited(string $email): bool
     {
         $emailLimit = max(1, $this->envInt('AUTH_MAGIC_LINK_MAX_PER_EMAIL', 5));
         $ipLimit = max(1, $this->envInt('AUTH_MAGIC_LINK_MAX_PER_IP', 20));
-        $emailSince = date('Y-m-d H:i:s', time() - 900);
-        $ipSince = date('Y-m-d H:i:s', time() - 3600);
+        $emailWindow = max(60, $this->envInt('AUTH_MAGIC_LINK_EMAIL_WINDOW', 900));
+        $ipWindow = max(60, $this->envInt('AUTH_MAGIC_LINK_IP_WINDOW', 3600));
         $ip = $this->clientIp();
 
         $emailCount = $this->loginToken->count([
-            'email = :email AND created_at >= :since',
+            'alt_email = :email AND alt_created_at >= :since',
             ':email' => $email,
-            ':since' => $emailSince,
+            ':since' => date('Y-m-d H:i:s', time() - $emailWindow),
         ]);
-
         if ((int) $emailCount >= $emailLimit) {
             return true;
         }
-
         if ($ip === '') {
             return false;
         }
-
         $ipCount = $this->loginToken->count([
-            'requested_ip = :ip AND created_at >= :since',
+            'alt_requested_ip = :ip AND alt_created_at >= :since',
             ':ip' => $ip,
-            ':since' => $ipSince,
+            ':since' => date('Y-m-d H:i:s', time() - $ipWindow),
         ]);
-
         return (int) $ipCount >= $ipLimit;
+    }
+
+    private function returnPath(string $action, int $messageId, int $listId, string $subscriberToken): string
+    {
+        $token = rawurlencode($subscriberToken);
+        $muid = '';
+        if ($messageId > 0) {
+            // Use the Mapper so authentication return routing follows the
+            // same data-access pattern as the rest of the message model.
+            $message = new MessagesM($this->fat);
+            if ($message->loadByMid($messageId)) {
+                $muid = rawurlencode((string) $message->m_uniqid);
+            }
+        }
+        $shortcode = '';
+        if ($listId > 0) {
+            $list = $this->lists->findById($listId);
+            $shortcode = rawurlencode((string) ($list['l_shortcode'] ?? ''));
+        }
+
+        return match ($action) {
+            'confirm' => $shortcode !== ''
+                ? "/confirm/{$token}/{$shortcode}" . ($muid !== '' ? "/{$muid}" : '')
+                : "/profile/subscriber/{$token}",
+            'unsubscribe' => $shortcode !== ''
+                ? "/unsubscribe/{$token}/{$shortcode}" . ($muid !== '' ? "/{$muid}" : '')
+                : "/profile/subscriber/{$token}",
+            'forward' => $muid !== '' ? "/forward/{$token}/{$muid}" : "/profile/subscriber/{$token}",
+            'like' => $muid !== '' ? "/like/{$token}/{$muid}" : "/profile/subscriber/{$token}",
+            'dislike' => $muid !== '' ? "/dislike/{$token}/{$muid}" : "/profile/subscriber/{$token}",
+            'resend' => $muid !== '' ? "/resend/{$token}/{$muid}" : "/profile/subscriber/{$token}",
+            'messages' => '/my/messages',
+            default => "/profile/subscriber/{$token}",
+        };
+    }
+
+    private function validReturnAction(string $action): bool
+    {
+        return in_array($action, ['profile', 'messages', 'confirm', 'unsubscribe', 'forward', 'like', 'dislike', 'resend'], true);
     }
 
     private function setUserContext(): void
     {
         $this->uloggedin = true;
-        $this->uadmin = (int) $this->user->u_admin;
-        $this->uid = (int) $this->user->u_id;
-
-        $firstName = trim((string) $this->user->u_fname);
-        $lastName = trim((string) $this->user->u_lname);
-        $displayName = trim($firstName . ' ' . $lastName);
-        $email = trim((string) $this->user->u_email);
-        $suid = trim((string) $this->user->u_suid);
-        if ($suid === '' && $email !== '') {
-            $suid = md5($email);
-        }
+        $this->uid = (int) $this->user->s_id;
+        $this->uadmin = $this->acl->isAdministrator($this->uid) ? 1 : 0;
+        $firstName = trim((string) $this->user->s_fname);
+        $lastName = trim((string) $this->user->s_lname);
+        $email = trim((string) $this->user->s_email);
+        $token = trim((string) $this->user->s_uuid);
 
         $this->fat->set('uloggedin', true);
         $this->fat->set('uadmin', $this->uadmin);
+        $this->fat->set('uid', $this->uid);
         $this->fat->set('ufname', $firstName);
         $this->fat->set('ulname', $lastName);
-        $this->fat->set('uname', $displayName);
+        $this->fat->set('uname', trim($firstName . ' ' . $lastName));
         $this->fat->set('SESSION.email', $email);
-        $this->fat->set('SESSION.suid', $suid);
+        $this->fat->set('SESSION.suid', $token);
+        $this->fat->set('SESSION.subscriber_id', $this->uid);
         $this->fat->set('Email', $email);
+        $this->fat->set('acl_permissions', $this->acl->permissions($this->uid));
     }
 
     private function clearUserContext(): void
@@ -371,12 +625,15 @@ HTML;
         $this->uid = 0;
         $this->fat->set('uloggedin', false);
         $this->fat->set('uadmin', 0);
+        $this->fat->set('uid', 0);
         $this->fat->set('ufname', '');
         $this->fat->set('ulname', '');
         $this->fat->set('uname', '');
         $this->fat->set('SESSION.email', '');
         $this->fat->set('SESSION.suid', '');
+        $this->fat->set('SESSION.subscriber_id', 0);
         $this->fat->set('Email', '');
+        $this->fat->set('acl_permissions', []);
     }
 
     private function setAuthCookie(string $rawToken): void
@@ -401,6 +658,7 @@ HTML;
         ]);
     }
 
+    /** Remove cookies used by the pre-passwordless authentication code. */
     private function clearLegacyAuthCookies(): void
     {
         foreach (['identifier', 'session_token'] as $name) {
@@ -421,32 +679,25 @@ HTML;
 
     private function clientIp(): string
     {
-        $ip = trim((string) $this->fat->get('IP'));
-        return substr($ip, 0, 45);
+        return mb_substr(trim((string) $this->fat->get('IP')), 0, 45);
     }
 
     private function userAgent(): string
     {
-        return substr(trim((string) $this->fat->get('AGENT')), 0, 500);
+        return mb_substr(trim((string) $this->fat->get('AGENT')), 0, 500);
     }
 
     private function isSecureRequest(): bool
     {
         $https = strtolower((string) ($_SERVER['HTTPS'] ?? ''));
-        if ($https !== '' && $https !== 'off') {
-            return true;
-        }
-
-        return strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
+        return ($https !== '' && $https !== 'off')
+            || strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
     }
 
     private function envString(string $name, string $default): string
     {
         $value = $_ENV[$name] ?? $_SERVER[$name] ?? getenv($name);
-        if (!is_string($value) || trim($value) === '') {
-            return $default;
-        }
-        return trim($value);
+        return is_string($value) && trim($value) !== '' ? trim($value) : $default;
     }
 
     private function envInt(string $name, int $default): int
@@ -454,211 +705,4 @@ HTML;
         $value = $this->envString($name, (string) $default);
         return filter_var($value, FILTER_VALIDATE_INT) !== false ? (int) $value : $default;
     }
-
-  public function CreateEditProfileHTMLform() {
-    $html = "";
-    if (!$this->uloggedin) {
-      $html .= "<p class=\"{{@pclass}\">Please login to edit your profile.</p>";
-      return $html;
-    }
-
-    $ff = new formfield;
-
-    $html .= $ff->FF_FormOpen("profileform","{{@BaseURL}}edit-profile","POST");
-    $html .= $ff->FF_FieldsetOpen("{{@fieldsetclass}}");
-    $html .= $ff->FF_Legend("Edit Profile");
-
-    // don't think this is needed anymore because email is not editable
-    $html .= $ff->FF_hidden("u_oemail",$this->user->u_email);
-
-    $html .= $ff->FF_DivOpen("{{@rowclass}}");
-
-    $html .= $ff->FF_DivOpen("{{@columnclass3}}");
-    $html .= $ff->FF_input("u_fname","text",$this->user->u_fname,"","{{@inputclass}}");
-    $html .= $ff->FF_Label("First Name","u_fname","{{@labelclass}}");
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen("{{@columnclass3}}");
-    $html .= $ff->FF_input("u_lname","text",$this->user->u_lname,"","{{@inputclass}}");
-    $html .= $ff->FF_Label("Last Name","u_lname","{{@labelclass}}");
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen("{{@columnclass3}}");
-    $html .= $ff->FF_input("u_email","email",$this->user->u_email,"","{{@inputclass}}");
-    $html .= $ff->FF_Label("Email","u_email","{{@labelclass}}");
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen("{{@columnclass3}}");
-    $html .= $ff->FF_input("u_phone","text",$this->user->u_phone,"","{{@inputclass}}");
-    $html .= $ff->FF_Label("Cell","u_phone","{{@labelclass}}");
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen("{{@columnclass3}}");
-    $html .= $ff->FF_input("u_birthday","date",$this->user->u_birthday,"","{{@inputclass}}");
-    $html .= $ff->FF_Label("Birthdate","u_birthday","{{@labelclass}}");
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen("{{@columnclass3}}");
-    $html .= $ff->FF_DropDown("u_gender",$ff->CreateGenderHTMLDropDown($this->user->u_gender),"{{@selectclass}}");
-    $html .= $ff->FF_Label("Gender","u_gender","{{@labelclass}}");
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen("{{@columnclass3}}");
-    $html .= $ff->FF_DropDown("u_province",$ff->CreateProvinceHTMLDropDown($this->user->u_province),"{{@selectclass}}");
-    $html .= $ff->FF_Label("Province","u_province","{{@labelclass}}");
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen("{{@columnclass3}}");
-    $html .= $ff->FF_DropDown("u_country",$ff->CreateCountryHTMLDropDown($this->user->u_country),"{{@selectclass}}");
-    $html .= $ff->FF_Label("Country","u_country","{{@labelclass}}");
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen("{{@columnclass6}}");
-    $html .= $ff->FF_input("u_business","text",$this->user->u_business,"","{{@inputclass}}");
-    $html .= $ff->FF_Label("Company","u_business","{{@labelclass}}");
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen("{{@columnclass6}}");
-    $html .= $ff->FF_input("u_url","text",$this->user->u_url,"","{{@inputclass}}");
-    $html .= $ff->FF_Label("Web site address","u_url","{{@labelclass}}");
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen("{{@columnclass12}}");
-    $html .= $ff->FF_input("u_photo","text",$this->user->u_photo,"","{{@inputclass}}");
-    $html .= $ff->FF_Label("Photo URL","u_photo","{{@labelclass}}");
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivOpen("{{@columnclass12}}");
-    $html .= $ff->FF_Button("submit","Save Profile","{{@buttonclass}}");
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_DivClose();
-
-    $html .= $ff->FF_FieldsetClose();
-    $html .= $ff->FF_FormClose();
-    return $html;
-  }
-
-  public function save() {
-    $html = "";
-    $this->user->u_fname = trim($this->fat->get('POST.u_fname'));
-    $this->user->u_lname = trim($this->fat->get('POST.u_lname'));
-    $this->user->u_photo = trim($this->fat->get('POST.u_photo'));
-    $this->user->u_gender = trim($this->fat->get('POST.u_gender'));
-    $this->user->u_birthday = trim($this->fat->get('POST.u_birthday'));
-    $this->user->u_business = trim($this->fat->get('POST.u_business'));
-    $this->user->u_province = trim($this->fat->get('POST.u_province'));
-    $this->user->u_country = trim($this->fat->get('POST.u_country'));
-    $this->user->u_phone = trim($this->fat->get('POST.u_phone'));
-    $this->user->u_email = trim($this->fat->get('POST.u_email'));
-    $this->user->u_url = trim($this->fat->get('POST.u_url'));
-
-    $u_oemail = trim($this->fat->get('POST.u_oemail'));
-    // $u_bemail = trim($this->fat->get('POST.u_bemail'));
-
-    $this->user->save();
-
-    // $subscriber = $this->fat->get('subscribers');
-    // Claims the primary email
-    // $content .= $subscriber->ClaimEmail($this->user->u_email,$user->uid);
-    // Claims the secondary emails
-    // $content .= $subscriber->ClaimEmail($u_bemail,$user->uid);
-
-    $html .= "<p class=\"{{@pclass}\">{$u_oemail} --> {$this->user->u_email} profile info updated.</p>";
-    // send profile update notification email to user and admin
-
-    $mtype = "UPDATE-USER";
-    $muid = '';
-    $mfrom = $this->FromAddress;
-    $toemail = $this->user->u_email;
-    $toname = $this->user->u_fname . " " . $this->user->u_lname;
-    $subject = "{$this->ListName} notification: {$toemail} has updated their user profile";
-    $mhtml = "<p>Profile for $this->uid on " . $this->ListName . " has been updated.</p>";
-    $mtext = "Profile for $this->uid on " . $this->ListName . " has been updated.\n";
-
-    if ($this->mailer->OpenSMTP()) {
-      $html .= "<p class=\"{{@pclass}\">SMTP server opened</p>";
-      $count = $this->mailer->SendNotification($muid,$mtype,$mfrom,$toemail,$toname,$subject,$mhtml,$mtext);
-      $html .= "<p class=\"{{@pclass}\">$count email sent to {$this->user->u_email}</p>";
-      $this->mailer->CloseSMTP();
-    } else {
-      $html .= "<p class=\"{{@pclass}\">SMTP server did not open</p>";
-    }
-    return $html;
-  }
-
-  public function DisplayProfileHTML() {
-    $html = "";
-    if (!$this->uloggedin) {
-      $html .= "<p class=\"{{@pclass}\">Please login to view your profile.</p>";
-      return $html;
-    }
-
-    $ff = new formfield;
-
-    $html .= $ff->FF_DivOpen("{{@tableresponsive}}");
-    $html .= $ff->FF_TableOpen("{{@tableclass}}");
-    $html .= $ff->FF_TheadOpen("{{@theadclass}}");
-    $html .= $ff->FF_TrOpen("{{@trclass}}");
-
-    $html .= $ff->FF_Th("Photo","{{@thclasscenter}}");
-    $html .= $ff->FF_Th("Personal Information","{{@thclasscenter}}"," colspan=4");
-    // $html .= $ff->FF_Th("Contact","{{@thclass}}"," colspan=2");
-
-    $html .= $ff->FF_TrClose();
-    $html .= $ff->FF_TheadClose();
-    $html .= $ff->FF_TbodyOpen("{{@tbodyclass}}");
-
-    $html .= $ff->FF_TrOpen("");
-    $photo = "";
-    if ($this->user->u_photo <> '') {
-      $photo .= "<a href=\"{$this->user->u_url}\"><img width='200' height='200' src=\"{$this->user->u_photo}\"></a>";
-    } else {
-      $photo .= "<a href=\"{$this->user->u_url}\"><img width='200' height='200' src='img/placeholder.jpg'></a>";
-    }
-    $html .= $ff->FF_Td($photo,"{{@tdclass}}"," rowspan=6");
-    $html .= $ff->FF_TrClose();
-
-    $html .= $ff->FF_TrOpen("");
-    $html .= $ff->FF_Td("First name:","");
-    $html .= $ff->FF_Td($this->user->u_fname,"");
-    $html .= $ff->FF_Td("Last name:","");
-    $html .= $ff->FF_Td($this->user->u_lname,"");
-    $html .= $ff->FF_TrClose();
-
-    $html .= $ff->FF_TrOpen("");
-    $html .= $ff->FF_Td("Email:","");
-    $html .= $ff->FF_Td($this->user->u_email,"");
-    $html .= $ff->FF_Td("Cell:","");
-    $html .= $ff->FF_Td($this->user->u_phone,"");
-    $html .= $ff->FF_TrClose();
-
-    $html .= $ff->FF_TrOpen("");
-    $html .= $ff->FF_Td("Birthday:","");
-    $html .= $ff->FF_Td($this->user->u_birthday,"");
-    $html .= $ff->FF_Td("Gender:","");
-    $html .= $ff->FF_Td($this->user->u_gender,"");
-    $html .= $ff->FF_TrClose();
-
-    $html .= $ff->FF_TrOpen("");
-    $html .= $ff->FF_Td("Province:","");
-    $html .= $ff->FF_Td($this->user->u_province,"");
-    $html .= $ff->FF_Td("Country:","");
-    $html .= $ff->FF_Td($this->user->u_country,"");
-    $html .= $ff->FF_TrClose();
-
-    $html .= $ff->FF_TrOpen("");
-    $html .= $ff->FF_Td("Company:","");
-    $html .= $ff->FF_Td($this->user->u_business,"");
-    $html .= $ff->FF_Td("Web site address:","");
-    $html .= $ff->FF_Td($this->user->u_url,"");
-    $html .= $ff->FF_TrClose();
-
-    $html .= $ff->FF_TbodyClose();
-    $html .= $ff->FF_TableClose();
-    $html .= $ff->FF_DivClose();
-
-    return $html;
-  }
-
 }

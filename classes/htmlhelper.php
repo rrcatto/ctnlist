@@ -38,7 +38,7 @@ class htmlhelper
     $html .= "<div class=\"p-2\"><button class=\"btn btn-primary\">{$pgbtn}</button></div>";
     $html .= "<div class=\"p-2\">";
     if ($lastpage == 1) {
-      $html .= "&nbsp;";
+      $html .= " ";
     } else {
       $html .= "<nav aria-label=\"Page navigation\"><ul class=\"pagination\">";
       $pprevpage = max($pageno - 2,1);
@@ -46,33 +46,33 @@ class htmlhelper
       $nextpage = $pageno + 1;
       $nnextpage = min($pageno + 2,$lastpage);
       if ($pageno == 1) {
-        $html .= "<li class=\"page-item disabled\"><a class=\"page-link\" href=\"#\">|&lt;</a></li>";
-        $html .= "<li class=\"page-item disabled\"><a class=\"page-link\" href=\"#\">&laquo;</a></li>";
+        $html .= "<li class=\"page-item disabled\"><a class=\"page-link\" href=\"#\">|<</a></li>";
+        $html .= "<li class=\"page-item disabled\"><a class=\"page-link\" href=\"#\">«</a></li>";
         $html .= "<li class=\"page-item active\"><a class=\"page-link\" href=\"{{@BaseURL}}{$action}/{$pageno}{$querystring}\">{$pageno}</a></li>";
         $html .= "<li class=\"page-item\"><a class=\"page-link\" href=\"{{@BaseURL}}{$action}/{$nextpage}{$querystring}\">{$nextpage}</a></li>";
         if ($nextpage <> $nnextpage) {
           $html .= "<li class=\"page-item\"><a class=\"page-link\" href=\"{{@BaseURL}}{$action}/{$nnextpage}{$querystring}\">{$nnextpage}</a></li>";
         }
-        $html .= "<li class=\"page-item\"><a class=\"page-link\" href=\"{{@BaseURL}}{$action}/{$nextpage}{$querystring}\">&raquo;</a></li>";
-        $html .= "<li class=\"page-item\"><a class=\"page-link\" href=\"{{@BaseURL}}{$action}/{$lastpage}{$querystring}\">&gt;|</a></li>";
+        $html .= "<li class=\"page-item\"><a class=\"page-link\" href=\"{{@BaseURL}}{$action}/{$nextpage}{$querystring}\">»</a></li>";
+        $html .= "<li class=\"page-item\"><a class=\"page-link\" href=\"{{@BaseURL}}{$action}/{$lastpage}{$querystring}\">>|</a></li>";
       } elseif ($pageno == $lastpage) {
-        $html .= "<li class=\"page-item\"><a class=\"page-link\" href=\"{{@BaseURL}}{$action}/1{$querystring}\">|&lt;</a></li>";
-        $html .= "<li class=\"page-item\"><a class=\"page-link\" href=\"{{@BaseURL}}{$action}/{$prevpage}{$querystring}\">&laquo;</a></li>";
+        $html .= "<li class=\"page-item\"><a class=\"page-link\" href=\"{{@BaseURL}}{$action}/1{$querystring}\">|<</a></li>";
+        $html .= "<li class=\"page-item\"><a class=\"page-link\" href=\"{{@BaseURL}}{$action}/{$prevpage}{$querystring}\">«</a></li>";
         if ($prevpage <> $pprevpage) {
           $html .= "<li class=\"page-item\"><a class=\"page-link\" href=\"{{@BaseURL}}{$action}/{$pprevpage}{$querystring}\">{$pprevpage}</a></li>";
         }
         $html .= "<li class=\"page-item\"><a class=\"page-link\" href=\"{{@BaseURL}}{$action}/{$prevpage}{$querystring}\">{$prevpage}</a></li>";
         $html .= "<li class=\"page-item active\"><a class=\"page-link\" href=\"{{@BaseURL}}{$action}/{$pageno}{$querystring}\">{$pageno}</a></li>";
-        $html .= "<li class=\"page-item disabled\"><a class=\"page-link\" href=\"#\">&raquo;</a></li>";
-        $html .= "<li class=\"page-item disabled\"><a class=\"page-link\" href=\"#\">&gt;|</a></li>";
+        $html .= "<li class=\"page-item disabled\"><a class=\"page-link\" href=\"#\">»</a></li>";
+        $html .= "<li class=\"page-item disabled\"><a class=\"page-link\" href=\"#\">>|</a></li>";
       } else {
-        $html .= "<li class=\"page-item\"><a class=\"page-link\" href=\"{{@BaseURL}}{$action}/1{$querystring}\">|&lt;</a></li>";
-        $html .= "<li class=\"page-item\"><a class=\"page-link\" href=\"{{@BaseURL}}{$action}/{$prevpage}{$querystring}\">&laquo;</a></li>";
+        $html .= "<li class=\"page-item\"><a class=\"page-link\" href=\"{{@BaseURL}}{$action}/1{$querystring}\">|<</a></li>";
+        $html .= "<li class=\"page-item\"><a class=\"page-link\" href=\"{{@BaseURL}}{$action}/{$prevpage}{$querystring}\">«</a></li>";
         $html .= "<li class=\"page-item\"><a class=\"page-link\" href=\"{{@BaseURL}}{$action}/{$prevpage}{$querystring}\">{$prevpage}</a></li>";
         $html .= "<li class=\"page-item active\"><a class=\"page-link\" href=\"{{@BaseURL}}{$action}/{$pageno}{$querystring}\">{$pageno}</a></li>";
         $html .= "<li class=\"page-item\"><a class=\"page-link\" href=\"{{@BaseURL}}{$action}/{$nextpage}{$querystring}\">{$nextpage}</a></li>";
-        $html .= "<li class=\"page-item\"><a class=\"page-link\" href=\"{{@BaseURL}}{$action}/{$nextpage}{$querystring}\">&raquo;</a></li>";
-        $html .= "<li class=\"page-item\"><a class=\"page-link\" href=\"{{@BaseURL}}{$action}/{$lastpage}{$querystring}\">&gt;|</a></li>";
+        $html .= "<li class=\"page-item\"><a class=\"page-link\" href=\"{{@BaseURL}}{$action}/{$nextpage}{$querystring}\">»</a></li>";
+        $html .= "<li class=\"page-item\"><a class=\"page-link\" href=\"{{@BaseURL}}{$action}/{$lastpage}{$querystring}\">>|</a></li>";
       }
       $html .= "</ul></nav>";
     }

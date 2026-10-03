@@ -1,6 +1,6 @@
 /**
  * This configuration was generated using the CKEditor 5 Builder. You can modify it anytime using this link:
- * https://ckeditor.com/ckeditor-5/builder/?redirect=portal#installation/NoRgLANARAzAdCOMrRCAbATgEwAYQzrbYwAcArOGGAOwa66XliljnbnnqeHY0yZM4TK1KkUUAKYA7FLgigIIJSuUgAuqjAAjAGbb0kqOqA==
+ * https://ckeditor.com/ckeditor-5/builder/#installation/NoRgLANARAzAdCOMrRCAbATgEwAYQzrbYwAcArLjuWKejCJjLrurjWWNuedqa1kxh0NdGBRQApgDsUuCKAgglEecpABdaN2wATXDABGUDUA=
  */
 
 const {
@@ -13,6 +13,8 @@ const {
 	Bold,
 	Table,
 	TableToolbar,
+	Emoji,
+	Mention,
 	FontBackgroundColor,
 	FontColor,
 	FontFamily,
@@ -42,10 +44,6 @@ const {
 	Alignment,
 	Underline,
 	Fullscreen,
-	Emoji,
-	Mention,
-	Markdown,
-	PasteFromMarkdownExperimental,
 	MediaEmbed,
 	MediaEmbedStyle,
 	MediaEmbedToolbar,
@@ -59,18 +57,18 @@ const {
 	ImageBlock,
 	LinkImage,
 	ImageCaption,
-	TodoList,
 	ShowBlocks,
 	SourceEditing,
 	HtmlComment,
-	TextPartLanguage,
-	Title,
+	TodoList,
 	BalloonToolbar,
 	BlockToolbar
 } = window.CKEDITOR;
 
-const LICENSE_KEY =
+const LICENSE_KEY = 'GPL';
+/*
 	'eyJhbGciOiJFUzI1NiJ9.eyJleHAiOjE3ODUyODMxOTksImp0aSI6ImIxMWE0MGRlLWY5ZDAtNGI1Yi05NTZhLTIxNjg4MWMwMWZjYSIsInVzYWdlRW5kcG9pbnQiOiJodHRwczovL3Byb3h5LWV2ZW50LmNrZWRpdG9yLmNvbSIsImRpc3RyaWJ1dGlvbkNoYW5uZWwiOlsiY2xvdWQiLCJkcnVwYWwiLCJzaCJdLCJ3aGl0ZUxhYmVsIjp0cnVlLCJsaWNlbnNlVHlwZSI6InRyaWFsIiwiZmVhdHVyZXMiOlsiKiJdLCJ2YyI6IjFmMTM4MDdmIn0.6c3QpoRcN4ptzB7DyRFKvQoWPEg-vypXsCVvevaCp2n7HgEOKZQx-n_IUdRa6vV8nlKTSDNMlSrGFvYJpz24XA';
+*/
 
 const editorConfig = {
 	attachTo: document.querySelector('#mt_html'),
@@ -88,7 +86,6 @@ const editorConfig = {
 			'|',
 			'sourceEditing',
 			'showBlocks',
-			'textPartLanguage',
 			'fullscreen',
 			'|',
 			'heading',
@@ -125,7 +122,7 @@ const editorConfig = {
 			'outdent',
 			'indent'
 		],
-		shouldNotGroupWhenFull: false
+		shouldNotGroupWhenFull: true
 	},
 	plugins: [
 		Alignment,
@@ -168,13 +165,11 @@ const editorConfig = {
 		Link,
 		LinkImage,
 		List,
-		Markdown,
 		MediaEmbed,
 		MediaEmbedStyle,
 		MediaEmbedToolbar,
 		Mention,
 		Paragraph,
-		PasteFromMarkdownExperimental,
 		PlainTableOutput,
 		ShowBlocks,
 		SourceEditing,
@@ -185,9 +180,7 @@ const editorConfig = {
 		Table,
 		TableCaption,
 		TableToolbar,
-		TextPartLanguage,
 		TextTransformation,
-		Title,
 		TodoList,
 		Underline
 	],

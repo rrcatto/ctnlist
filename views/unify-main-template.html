@@ -37,7 +37,7 @@
   <link rel="apple-touch-icon" type="image/png" href="https://ckeditor.com/assets/images/favicons/167x167.png" sizes="167x167">
   <link rel="apple-touch-icon" type="image/png" href="https://ckeditor.com/assets/images/favicons/180x180.png" sizes="180x180">
   <link rel="stylesheet" href="{{@BaseURL}}css/ck-style.css">
-  <link rel="stylesheet" href="https://cdn.ckeditor.com/ckeditor5/48.3.1/ckeditor5.css" crossorigin>
+  <link rel="stylesheet" href="{{@BaseURL}}css/ckeditor5.css">
 </head>
 
 <body>
@@ -71,11 +71,18 @@
                       <a class="dropdown-item" href="/stop-send"><i class="fa fa-hand-paper-o" aria-hidden="true"></i> Stop Sending</a>
                       <div class="dropdown-divider"></div>
                       <a class="dropdown-item" href="/sendlog"><i class="fa fa-clipboard" aria-hidden="true"></i> Send Log - {{@slcount}}</a>
+                      <a class="dropdown-item" href="/sitelog"><i class="fa fa-globe" aria-hidden="true"></i> Site Log</a>
                       <div class="dropdown-divider"></div>
                       <a class="dropdown-item" href="/subscribers"><i class="fa fa-users" aria-hidden="true"></i> Subscribers - {{@numsubscribers}}</a>
                       <a class="dropdown-item" href="/activesubscribers"><i class="fas fa-running"></i> Active - {{@activereaders}}</a>
                       <a class="dropdown-item" href="/bulk-subscribe"><i class="fa fa-user-plus" aria-hidden="true"></i> Bulk Subscribe</a>
                       <a class="dropdown-item" href="/bulk-unsubscribe"><i class="fa fa-user-times" aria-hidden="true"></i> Bulk Unsubscribe</a>
+                      <a class="dropdown-item" href="/import"><i class="fa fa-upload" aria-hidden="true"></i> Import</a>
+                      <a class="dropdown-item" href="/export"><i class="fa fa-download" aria-hidden="true"></i> Export</a>
+                      <a class="dropdown-item" href="/sync"><i class="fa fa-refresh" aria-hidden="true"></i> Synchronise</a>
+                      <div class="dropdown-divider"></div>
+                      <a class="dropdown-item" href="/lists"><i class="fa fa-list" aria-hidden="true"></i> Lists</a>
+                      <a class="dropdown-item" href="/roles"><i class="fa fa-shield" aria-hidden="true"></i> Roles & ACL</a>
                     </div>
                   </div>
                 </check>
@@ -100,6 +107,7 @@
                       <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="fa fa-user-circle-o" aria-hidden="true"></i> {{@ufname}} {{@ulname}}</a>
                       <div class="dropdown-menu" aria-labelledby="navbarDropdown">
                         <a class="dropdown-item" href="/profile"><i class="fa fa-user-o" aria-hidden="true"></i> My Profile</a>
+                        <a class="dropdown-item" href="/my/messages"><i class="fa fa-envelope-o" aria-hidden="true"></i> My Messages</a>
                         <a class="dropdown-item" href="/edit-profile"><i class="fa fa-pencil" aria-hidden="true"></i> Edit Profile</a>
                         <a class="dropdown-item" href="/logout"><i class="fa fa-sign-out" aria-hidden="true"></i> Logout</a>
                       </div>
@@ -141,6 +149,7 @@
 
                   <div class="btn-group my-2 g-mr-10" role="group" aria-label="stats buttons">
                     <a href="{{@BaseURL}}sendlog" class="btn u-btn-aqua">Sendlog <span class="badge badge-secondary">{{@slcount}}</span></a>
+                    <a href="{{@BaseURL}}sitelog" class="btn u-btn-cyan">Sitelog</a>
                   </div>
 
                   <div class="btn-group my-2 g-mr-10" role="group" aria-label="subscriber buttons">
@@ -148,6 +157,8 @@
                     <a href="{{@BaseURL}}activesubscribers" class="btn u-btn-lightred">Active <span class="badge badge-secondary">{{@activereaders}}</span></a>
                     <a href="{{@BaseURL}}bulk-subscribe" class="btn u-btn-purple text-white">B-Sub</a>
                     <a href="{{@BaseURL}}bulk-unsubscribe" class="btn u-btn-indigo">B-Unsub</a>
+                    <a href="{{@BaseURL}}import" class="btn u-btn-blue">Import</a>
+                    <a href="{{@BaseURL}}export" class="btn u-btn-teal">Export</a>
                   </div>
                 </div>
               </true>
@@ -180,7 +191,8 @@
 		  <div class="container">
         <div class="row">
           <div class="col">
-          {{@content}}
+          <!-- {{@content}} -->
+          {{ @content | raw }}
           </div>
         </div>
       </div>
@@ -189,7 +201,7 @@
     <section class="g-bg-primary">
       <div class="container g-py-50">
         <div class="d-flex justify-content-between">
-          <h3 class="h3 align-left g-color-white mb-0 mr-4">{{@today}}<br />Time: <span id="datetime">&nbsp;</span> </h3>
+          <h3 class="h3 align-left g-color-white mb-0 mr-4">{{@today}}<br />Time: <span id="datetime"> </span> </h3>
         </div>
       </div>
     </section>
@@ -288,7 +300,7 @@
         <div class="row">
           <div class="col-md-8 text-center text-md-left g-mb-10 g-mb-0--md">
             <div class="d-lg-flex">
-              <small class="d-block g-font-size-default g-mr-10 g-mb-10 g-mb-0--md">2009-2026 &copy; All Rights Reserved.</small>
+              <small class="d-block g-font-size-default g-mr-10 g-mb-10 g-mb-0--md">2009-2026 © All Rights Reserved.</small>
               <ul class="u-list-inline">
                 <li class="list-inline-item">
                   <a class="g-color-white-opacity-0_8 g-color-white--hover" href="/">Home</a>
@@ -327,7 +339,7 @@
 <!-- Placed at the end of the document so the pages load faster -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
-<script src="https://cdn.ckeditor.com/ckeditor5/48.3.1/ckeditor5.umd.js" crossorigin></script>
+<script src="{{@BaseURL}}js/ckeditor5.umd.js"></script>
 <script src="{{@BaseURL}}js/ck-main.js"></script>
 
 <script>
