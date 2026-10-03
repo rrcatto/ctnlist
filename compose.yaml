@@ -1,0 +1,59 @@
+# Local development environment. Use bin/dev rather than calling this directly.
+#   web      http://localhost:8180   (nginx -> app PHP-FPM, Fat-Free legacy front controller)
+#   mailpit  http://localhost:8125   (captures all outgoing mail)
+#   db       localhost:5434          (PostgreSQL 16, ctnlist/ctnlist)
+# Port 8181 is reserved for the Symfony application.
+name: ctnlist
+
+services:
+  db:
+    image: docker.io/library/postgres:16
+    environment:
+      POSTGRES_DB: ctnlist
+      POSTGRES_USER: ctnlist
+      POSTGRES_PASSWORD: ctnlist
+    ports:
+      - "127.0.0.1:5434:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ctnlist -d ctnlist"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mailpit:
+    image: docker.io/axllent/mailpit:v1.31.0
+    ports:
+      - "127.0.0.1:8125:8025"
+
+  app:
+    build:
+      context: .
+      dockerfile: dev/podman/Containerfile
+    image: localhost/ctnlist-php:dev
+    depends_on:
+      - db
+      - mailpit
+    volumes:
+      # Shared code at the path index.php hard-codes (CTNLIST_SHARED_DIRECTORY).
+      - ./:/usr/local/lib/php/ctnlist/5.0.1
+      # Per-installation public_html and .env, as on a deployed instance.
+      - ./index.php:/var/www/ctnlist/public_html/index.php:ro
+      - ./dev/podman/ctnlist.env:/var/www/ctnlist/.env:ro
+      - logs:/var/www/ctnlist/logs
+
+  web:
+    image: docker.io/library/nginx:1.30-alpine
+    depends_on:
+      - app
+    ports:
+      - "127.0.0.1:8180:80"
+    volumes:
+      - ./dev/podman/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./css:/var/www/ctnlist/public_html/css:ro
+      - ./js:/var/www/ctnlist/public_html/js:ro
+
+volumes:
+  pgdata:
+  logs:

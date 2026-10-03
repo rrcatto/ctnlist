@@ -15,20 +15,31 @@ class GlobalDomainUnsubscribeController extends Controller
 
   function __construct(Base $fat) {
     $this->fat = $fat;
-    $this->gdu = new GlobalDomainUnsubscribeM($fat);
+    // Null when SUPPRESSION_PROVIDER=none (development only).
+    $this->gdu = $fat->get('gdbPDO') instanceof \DB\SQL ? new GlobalDomainUnsubscribeM($fat) : null;
   }
 
   public function readGDU($domain) {
+    if ($this->gdu === null) {
+      return false;
+    }
     $this->gdu->load(array('gdu_domain_name = :domain', ':domain' => $domain));
     return $this->gdu->valid();
   }
 
   public function IsUnsubscribed($domain) {
+    if ($this->gdu === null) {
+      return false;
+    }
     $count = $this->gdu->count(array('gdu_domain_name = :domain and gdu_active = :active', ':domain' => $domain, ':active' => 1));
     return (bool) ($count == 1);
   }
 
   public function save($domain_name,$gdutype) {
+    if ($this->gdu === null) {
+      error_log('Global domain unsubscribe not recorded: no suppression provider is configured.');
+      return false;
+    }
     $valid = $this->readGDU($domain_name);
     if (!$valid) {
       $this->gdu->reset();

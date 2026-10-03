@@ -1,0 +1,24 @@
+# ctnlist development image: PHP 8.5 FPM, PostgreSQL drivers, Composer.
+# nginx runs in its own container and passes PHP requests to this one.
+# Mirrors the production layout: shared code at CTNLIST_SHARED_DIRECTORY,
+# per-installation public_html and .env under /var/www/ctnlist.
+FROM docker.io/library/php:8.5-fpm
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        git unzip libpq-dev libicu-dev libzip-dev postgresql-client \
+    && docker-php-ext-install -j"$(nproc)" pdo_pgsql pgsql intl bcmath pcntl zip \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=docker.io/library/composer:2 /usr/bin/composer /usr/bin/composer
+
+COPY dev/podman/php.ini /usr/local/etc/php/conf.d/zz-ctnlist-dev.ini
+
+# F3 compiles templates into TEMP ('tmp/' relative to public_html).
+RUN mkdir -p /usr/local/lib/php/ctnlist/5.0.1 /var/www/ctnlist/public_html/tmp /var/www/ctnlist/logs \
+    && chown www-data:www-data /var/www/ctnlist/public_html/tmp /var/www/ctnlist/logs
+
+ENV COMPOSER_ALLOW_SUPERUSER=1 \
+    INSTANCE_ENV_DIR=/var/www/ctnlist
+
+WORKDIR /usr/local/lib/php/ctnlist/5.0.1

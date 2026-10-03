@@ -20,3 +20,5 @@
 /.vscode/
 .DS_Store
 Thumbs.db
+# Generated podman dev instance config (contains random secrets)
+/dev/podman/ctnlist.env

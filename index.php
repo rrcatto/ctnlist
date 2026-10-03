@@ -123,35 +123,49 @@ $fat->set('dbPDO', $dbPDO);
 // The global suppression database is intentionally separate and shared. Its
 // configuration may live anywhere outside the source tree; the old shared
 // phinx directory remains only as a backwards-compatible default.
-$banEnvDirectory = rtrim(
-    (string) $envOr('GDB_ENV_DIRECTORY', CTNLIST_SHARED_DIRECTORY . 'phinx'),
-    DIRECTORY_SEPARATOR
-);
-$banEnvName = basename((string) $envOr('GDB_ENV_FILE', 'ban.env'));
-$banEnvFile = $banEnvDirectory . DIRECTORY_SEPARATOR . $banEnvName;
-if (!is_file($banEnvFile)) {
-    throw new RuntimeException('Global suppression database configuration file not found: ' . $banEnvFile);
+//
+// SUPPRESSION_PROVIDER=none disables the global suppression lookup. It is
+// only accepted in development, pending the catto-mail smarthost replacing
+// the banlist database as the suppression source.
+$suppressionProvider = strtolower((string) $envOr('SUPPRESSION_PROVIDER', 'banlist'));
+if ($suppressionProvider === 'none') {
+    if ((string) $envOr('APP_ENV', 'production') !== 'development') {
+        throw new RuntimeException('SUPPRESSION_PROVIDER=none is only permitted when APP_ENV=development.');
+    }
+    $fat->set('gdbPDO', null);
+} elseif ($suppressionProvider === 'banlist') {
+    $banEnvDirectory = rtrim(
+        (string) $envOr('GDB_ENV_DIRECTORY', CTNLIST_SHARED_DIRECTORY . 'phinx'),
+        DIRECTORY_SEPARATOR
+    );
+    $banEnvName = basename((string) $envOr('GDB_ENV_FILE', 'ban.env'));
+    $banEnvFile = $banEnvDirectory . DIRECTORY_SEPARATOR . $banEnvName;
+    if (!is_file($banEnvFile)) {
+        throw new RuntimeException('Global suppression database configuration file not found: ' . $banEnvFile);
+    }
+    \Dotenv\Dotenv::createImmutable($banEnvDirectory, $banEnvName)->safeLoad();
+    $gdbDriver = strtolower((string) $envOr('GDB_DRIVER', 'pgsql'));
+    if ($gdbDriver !== 'pgsql') {
+        throw new RuntimeException('The global suppression database must use PostgreSQL.');
+    }
+    $gdbDsn = sprintf(
+        'pgsql:host=%s;port=%d;dbname=%s;sslmode=%s',
+        (string) $envOr('GDB_HOST', '127.0.0.1'),
+        (int) $envOr('GDB_PORT', 5432),
+        (string) $envOr('GDB_NAME', 'banlist'),
+        (string) $envOr('GDB_SSLMODE', 'prefer')
+    );
+    $gdbPDO = new \DB\SQL(
+        $gdbDsn,
+        (string) $envOr('GDB_USER'),
+        (string) $envOr('GDB_PASS'),
+        $dbOptions
+    );
+    $fat->set('gdbdriver', 'pgsql');
+    $fat->set('gdbPDO', $gdbPDO);
+} else {
+    throw new RuntimeException('Unknown SUPPRESSION_PROVIDER: ' . $suppressionProvider);
 }
-\Dotenv\Dotenv::createImmutable($banEnvDirectory, $banEnvName)->safeLoad();
-$gdbDriver = strtolower((string) $envOr('GDB_DRIVER', 'pgsql'));
-if ($gdbDriver !== 'pgsql') {
-    throw new RuntimeException('The global suppression database must use PostgreSQL.');
-}
-$gdbDsn = sprintf(
-    'pgsql:host=%s;port=%d;dbname=%s;sslmode=%s',
-    (string) $envOr('GDB_HOST', '127.0.0.1'),
-    (int) $envOr('GDB_PORT', 5432),
-    (string) $envOr('GDB_NAME', 'banlist'),
-    (string) $envOr('GDB_SSLMODE', 'prefer')
-);
-$gdbPDO = new \DB\SQL(
-    $gdbDsn,
-    (string) $envOr('GDB_USER'),
-    (string) $envOr('GDB_PASS'),
-    $dbOptions
-);
-$fat->set('gdbdriver', 'pgsql');
-$fat->set('gdbPDO', $gdbPDO);
 
 // Application-owned database sessions. The table is managed by Phinx.
 $secureRequest = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
@@ -233,16 +247,16 @@ $actionForm = static function (string $title, string $action, string $button, st
         . '<button class="btn ' . htmlspecialchars($class) . '" type="submit">' . htmlspecialchars($button) . '</button></form>';
 };
 
+// Base::error() has already sent the HTTP status line; calling
+// http_response_code() again raises a warning on PHP 8.5.
 $fat->set('ONERROR', static function (Base $fat) use ($render): void {
     $code = (int) $fat->get('ERROR.code');
     if ($code === 404) {
-        http_response_code(404);
         header('Content-Type: text/html; charset=UTF-8');
         echo '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>404 Not Found</title></head>'
             . '<body><h1>Not Found</h1><p>The requested resource was not found.</p></body></html>';
         return;
     }
-    http_response_code($code > 0 ? $code : 500);
     $message = $code === 403 ? 'Access denied.' : 'The request could not be completed.';
     $render('Error', '<h1 class="h3">Error</h1><p>' . htmlspecialchars($message) . '</p>');
 });

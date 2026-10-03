@@ -14,12 +14,27 @@ ctnlist (v5.0.1-restored) is a web-based mailing-list application. v5.0 is the *
 - PHP v8.5.11 (`composer.json` declares `>=8.4 <9.0`, platform pinned to 8.4.0)
 - PostgreSQL v16.15
 - Currently using the FatFreeFramework v3.9.2
-- Would like to migrate off F3 to Symfony v8.2
+- Migrating off F3 to Symfony 8.1 (8.1.8 is current)
 - Other dependencies: Phinx (migrations), Symfony Mailer, vlucas/phpdotenv; PHPStan and PHPUnit for dev
+
+## Local development environment (podman)
+
+`bin/dev` drives a podman-compose stack (`compose.yaml`, files in `dev/podman/`): nginx 1.30 → PHP 8.5-FPM, PostgreSQL 16 and Mailpit. Containers mirror the production layout (repo mounted at `CTNLIST_SHARED_DIRECTORY`, `index.php` in `/var/www/ctnlist/public_html`, `.env` one level up).
+
+```bash
+bin/dev up            # build, start, composer install (first run), run migrations
+bin/dev seed-admin    # create admin@ctnlist.test with the administrator role
+bin/dev help          # all commands: down, logs, migrate, status, psql, shell, composer, php, lint, analyse, test, reset-db
+```
+
+- App http://localhost:8180, Mailpit http://localhost:8125 (all mail is captured there; log in via the magic link it receives), PostgreSQL `localhost:5434` (ctnlist/ctnlist). Port 8181 is reserved for the Symfony app.
+- First `bin/dev up` generates `dev/podman/ctnlist.env` (gitignored) from `ctnlist.env.dist` with random `APP_SECRET`/`APP_INSTANCE_ID`. Never commit generated secrets or use placeholder values.
+- The dev stack has no banlist database: it runs with `SUPPRESSION_PROVIDER=none`, which `index.php` only accepts when `APP_ENV=development`. The catto-mail smarthost is planned to replace the banlist as the suppression source.
+- Run PHP tooling inside the container (`bin/dev composer …`, `bin/dev analyse`); there is no host PHP.
 
 ## Commands
 
-`vendor/` is not committed; run `composer install` first.
+`vendor/` is not committed; run `composer install` first (or `bin/dev up`).
 
 ```bash
 composer analyse            # PHPStan, level 5, over classes/ and index.php
@@ -57,9 +72,9 @@ No live PostgreSQL/SMTP is available in the build environment; migration, delive
 - `ListService`, `AclService` — raw-SQL services for lists/membership and role permissions.
 - State shared via the F3 hive: `dbPDO` (main DB), `gdbPDO` (suppression DB), `uloggedin`, `uadmin`, `uid`, `acl_permissions`, plus the non-secret config keys set in `index.php`.
 
-**Two PostgreSQL databases.** Main DB (`DB_*`) and a separate, shared global suppression DB (`GDB_*`, accessed only by `GlobalUnsubscribeM` / `GlobalDomainUnsubscribeM`). Each has its own migration directory and Phinx config.
+**Two PostgreSQL databases.** Main DB (`DB_*`) and a separate, shared global suppression DB (`GDB_*`, accessed only by `GlobalUnsubscribeM` / `GlobalDomainUnsubscribeM` via `GlobalUnsubscribeController` / `GlobalDomainUnsubscribeController`). Each has its own migration directory and Phinx config. `SUPPRESSION_PROVIDER` (`banlist` default, `none` dev-only) selects whether the suppression DB is used; those two controllers are the seam for swapping in catto-mail.
 
-**Identity and consent.** `subscribers` is the canonical identity table, keyed publicly by a permanent UUIDv7 (`s_uuid`, see `UuidV7`); URLs use it as `@token`. Auth is passwordless magic-link (`UsersController`, `AuthLoginTokenM`, `AuthSessionM`) with `DatabaseSessionHandler`. A subscriber is eligible for a list only when `list_subscribers.ls_confirmed = TRUE AND ls_unsubscribed = FALSE`. `ALL00` (`ListsM::ALL_SHORTCODE`) is an immutable system list that is optional and must **never** be attached to a message automatically.
+**Identity and consent.** `subscribers` is the canonical identity table, keyed publicly by a permanent UUIDv7 (`s_uuid`, see `UuidV7`); URLs use it as `@token`. Auth is passwordless magic-link (`UsersController`, `AuthLoginTokenM`, `AuthSessionM`) with `DatabaseSessionHandler`. A subscriber is eligible for a list only when `list_subscribers.ls_confirmed = TRUE AND ls_unsubscribed = FALSE`. The `ALL` system list is immutable, optional, and must **never** be attached to a message automatically. Migration `20260729` renamed its shortcode from `ALL00` to `ALL`, but `ListsM::ALL_SHORTCODE` is still `'ALL00'` (known mismatch, unresolved).
 
 **Mail delivery.** All email goes through the `mailer` class (wrapping Symfony Mailer with batching, throttling, retry and multi-server failover from `MAIL_SMTP_SERVERS_JSON`). Messages are queued per subscriber/message (`QueueController`, union of selected lists, deduplicated, engagement-priority ordered) and sent by `ProcessQueue`.
 
