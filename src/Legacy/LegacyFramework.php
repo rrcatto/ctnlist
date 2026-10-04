@@ -148,8 +148,8 @@ final class LegacyFramework
         // the banlist database as the suppression source.
         $suppressionProvider = strtolower((string) $envOr('SUPPRESSION_PROVIDER', 'banlist'));
         if ($suppressionProvider === 'none') {
-            if ($this->environment !== 'dev') {
-                throw new RuntimeException('SUPPRESSION_PROVIDER=none is only permitted when APP_ENV=dev.');
+            if (!in_array($this->environment, ['dev', 'test'], true)) {
+                throw new RuntimeException('SUPPRESSION_PROVIDER=none is only permitted when APP_ENV is dev or test.');
             }
             $fat->set('gdbPDO', null);
         } elseif ($suppressionProvider === 'banlist') {

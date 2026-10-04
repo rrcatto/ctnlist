@@ -33,6 +33,7 @@ services:
             - '../src/**/*NotFound.php'
             - '../src/Mail/SmtpServer.php'
             - '../src/Mail/CampaignDelivery.php'
+            - '../src/Campaign/RenderedMessage.php'
 
     App\Config\SiteConfig:
         factory: '@App\Config\SiteConfigFactory'

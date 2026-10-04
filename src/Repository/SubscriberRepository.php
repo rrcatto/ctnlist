@@ -12,6 +12,8 @@ use Doctrine\DBAL\Connection;
  * list consent lives in `list_subscribers`.
  *
  * @phpstan-type Identity array{s_id: int, s_uuid: string, s_email: string, s_fname: string, s_lname: string}
+ * @phpstan-type Recipient array{s_id: int, s_uuid: string, s_email: string, s_fname: string, s_lname: string,
+ *     s_emailsleft: int, s_priority: int, s_last_interacted: ?string}
  */
 final class SubscriberRepository
 {
@@ -71,6 +73,19 @@ final class SubscriberRepository
         ) === 1;
     }
 
+    /** @return Recipient|null */
+    public function findRecipientByUuid(string $uuid): ?array
+    {
+        $uuid = strtolower(trim($uuid));
+        return preg_match(self::UUID_PATTERN, $uuid) ? $this->recipient('s_uuid = ?', $uuid) : null;
+    }
+
+    /** @return Recipient|null the subscriber with this address after the v5 cleanup rules */
+    public function findRecipientByEmail(string $email): ?array
+    {
+        return $this->recipient('LOWER(s_email) = ?', EmailNormaliser::correct($email));
+    }
+
     public function exists(int $id): bool
     {
         return $this->db->fetchOne('SELECT 1 FROM subscribers WHERE s_id = ?', [$id]) !== false;
@@ -91,6 +106,28 @@ final class SubscriberRepository
             'UPDATE subscribers SET s_last_login_at = ?, s_last_login_ip = ? WHERE s_id = ?',
             [$at, mb_substr($ip, 0, 45), $id]
         );
+    }
+
+    /** @return Recipient|null */
+    private function recipient(string $condition, string $value): ?array
+    {
+        $row = $this->db->fetchAssociative(
+            'SELECT s_id, s_uuid, s_email, s_fname, s_lname, s_emailsleft, s_priority, s_last_interacted FROM subscribers WHERE ' . $condition,
+            [$value]
+        );
+        if ($row === false) {
+            return null;
+        }
+        return [
+            's_id' => (int) $row['s_id'],
+            's_uuid' => (string) $row['s_uuid'],
+            's_email' => (string) $row['s_email'],
+            's_fname' => trim((string) $row['s_fname']),
+            's_lname' => trim((string) $row['s_lname']),
+            's_emailsleft' => (int) $row['s_emailsleft'],
+            's_priority' => (int) $row['s_priority'],
+            's_last_interacted' => $row['s_last_interacted'] === null ? null : (string) $row['s_last_interacted'],
+        ];
     }
 
     /**
