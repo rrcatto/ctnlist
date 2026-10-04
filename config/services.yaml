@@ -23,6 +23,9 @@ services:
         exclude:
             - '../src/Kernel.php'
             - '../src/Legacy/'
+            # Value objects and exceptions, not services.
+            - '../src/Security/SubscriberUser.php'
+            - '../src/**/*NotFound.php'
 
     App\Config\SiteConfig:
         factory: '@App\Config\SiteConfigFactory'

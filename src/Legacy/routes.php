@@ -26,8 +26,6 @@ return static function (
     mailer $mailer,
     QueueController $queue,
     ListService $listService,
-    ListsController $listsController,
-    RolesController $rolesController,
     SiteLogController $sitelog,
     LegacyPage $page,
 ): void {
@@ -379,15 +377,6 @@ return static function (
         $admin('templates.manage');
         $render('Template saved', $template->save() . $template->CreateTemplatesHTMLList(1, 25, true));
     });
-
-    // Multiple lists, roles and ACL retained from v5.0.1.
-    $fat->route('GET /lists', static function () use ($admin, $listsController, $render): void { $admin('lists.manage'); $render('Lists', $listsController->index()); });
-    $fat->route('POST /lists', static function () use ($admin, $listsController, $render): void { $admin('lists.manage'); $render('Lists', $listsController->create() . $listsController->index()); });
-    $fat->route('POST /lists/delete', static function () use ($admin, $listsController, $render): void { $admin('lists.manage'); $render('Lists', $listsController->delete() . $listsController->index()); });
-    $fat->route('GET /roles', static function () use ($admin, $rolesController, $render): void { $admin('roles.manage'); $render('Roles and ACL', $rolesController->index()); });
-    $fat->route('POST /roles', static function () use ($admin, $rolesController, $render): void { $admin('roles.manage'); $render('Roles and ACL', $rolesController->create() . $rolesController->index()); });
-    $fat->route('POST /roles/permissions', static function () use ($admin, $rolesController, $render): void { $admin('acl.manage'); $render('Roles and ACL', $rolesController->savePermissions() . $rolesController->index()); });
-    $fat->route('POST /roles/assign', static function () use ($admin, $rolesController, $render): void { $admin('roles.manage'); $render('Roles and ACL', $rolesController->assign() . $rolesController->index()); });
 
     // Queue construction and delivery.
     $fat->route('GET /advanced-queue', static function () use ($admin, $message, $render): void { $admin('messages.queue'); $render('Queue multiple messages', $message->CreateAdvancedQueueHTMLform()); });

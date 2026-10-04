@@ -1,0 +1,55 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Lists{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+  <div class="col-lg-7">
+    <h1 class="h4">Lists</h1>
+    <div class="table-responsive">
+      <table class="table table-striped">
+        <thead><tr><th>Shortcode</th><th>Name</th><th>Type</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+        {% for list in lists %}
+          <tr>
+            <td>{{ list.l_shortcode }}</td>
+            <td>{{ list.l_name }}</td>
+            <td>{{ list.l_system ? 'System' : 'Custom' }}</td>
+            <td>{{ list.l_active ? 'Active' : 'Inactive' }}</td>
+            <td>
+              {% if not list.l_system %}
+                <form action="{{ path('admin_lists_delete') }}" method="post" onsubmit="return confirm('Delete this list?')">
+                  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+                  <input type="hidden" name="list_id" value="{{ list.l_id }}">
+                  <button class="btn btn-sm btn-outline-danger">Delete</button>
+                </form>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <form action="{{ path('admin_lists_create') }}" method="post" class="card card-body">
+      <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+      <h2 class="h5">Create a topic list</h2>
+      <div class="mb-3">
+        <label class="form-label" for="list-shortcode">Shortcode</label>
+        <input class="form-control" id="list-shortcode" name="shortcode" minlength="3" maxlength="6" pattern="[A-Za-z0-9]{3,6}" required>
+        <div class="form-text">3–6 letters or numbers.</div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label" for="list-name">Name</label>
+        <input class="form-control" id="list-name" name="name" maxlength="100" required>
+      </div>
+      <div class="mb-3">
+        <label class="form-label" for="list-description">Description</label>
+        <textarea class="form-control" id="list-description" name="description" rows="5"></textarea>
+      </div>
+      <button class="btn btn-primary" type="submit">Create list</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -9,6 +9,7 @@ security:
         main:
             stateless: true
             provider: subscribers
+            entry_point: App\Security\AccessDeniedEntryPoint
             custom_authenticators:
                 - App\Security\MagicLinkAuthenticator
                 - App\Security\AuthSessionAuthenticator

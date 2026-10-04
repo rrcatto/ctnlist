@@ -34,7 +34,7 @@ final class LegacyBridge
      */
     private const SERVICES = [
         'options', 'user', 'sendlog', 'smlog', 'subscriber', 'message', 'template', 'archive',
-        'mailer', 'queue', 'listService', 'listsController', 'rolesController', 'sitelog',
+        'mailer', 'queue', 'listService', 'sitelog',
     ];
 
     public function __construct(
@@ -51,8 +51,6 @@ final class LegacyBridge
             'mailer' => mailer::class,
             'queue' => QueueController::class,
             'listService' => ListService::class,
-            'listsController' => ListsController::class,
-            'rolesController' => RolesController::class,
             'sitelog' => SiteLogController::class,
         ])]
         private readonly ContainerInterface $legacy,

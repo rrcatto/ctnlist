@@ -1,0 +1,64 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Roles and ACL{% endblock %}
+
+{% block content %}
+<h1 class="h4">Roles and access control</h1>
+
+{% for role in roles %}
+  <form action="{{ path('admin_roles_permissions') }}" method="post" class="card card-body mb-3">
+    <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+    <input type="hidden" name="role_id" value="{{ role.r_id }}">
+    <h2 class="h5">{{ role.r_name }}{% if role.r_system %} <span class="badge text-bg-secondary">System</span>{% endif %}</h2>
+    <p>{{ role.r_description }}</p>
+    <div class="row">
+      {% for permission in permissions %}
+        {% set id = 'rp-' ~ role.r_id ~ '-' ~ permission.ap_id %}
+        <div class="col-md-6">
+          <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="permission_ids[]" value="{{ permission.ap_id }}" id="{{ id }}"
+              {{- permission.ap_id in (granted[role.r_id] ?? []) ? ' checked' }}{{ role.r_system ? ' disabled' }}>
+            <label class="form-check-label" for="{{ id }}">{{ permission.ap_key }}</label>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+    {% if not role.r_system %}
+      <button class="btn btn-primary mt-3" type="submit">Save permissions</button>
+    {% endif %}
+  </form>
+{% endfor %}
+
+<form action="{{ path('admin_roles_create') }}" method="post" class="card card-body mb-4">
+  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+  <h2 class="h5">Create custom role</h2>
+  <div class="row g-3">
+    <div class="col-md-4"><label class="form-label" for="role-key">Key</label><input class="form-control" id="role-key" name="key" pattern="[a-z0-9._-]+" maxlength="64" required></div>
+    <div class="col-md-4"><label class="form-label" for="role-name">Name</label><input class="form-control" id="role-name" name="name" maxlength="100" required></div>
+    <div class="col-md-4"><label class="form-label" for="role-description">Description</label><input class="form-control" id="role-description" name="description"></div>
+    <div class="col-12"><button class="btn btn-primary">Create role</button></div>
+  </div>
+</form>
+
+<form action="{{ path('admin_roles_assign') }}" method="post" class="card card-body">
+  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+  <h2 class="h5">Assign role to subscriber</h2>
+  <div class="row g-3">
+    <div class="col-md-6">
+      <select class="form-select" name="subscriber_id" aria-label="Subscriber">
+        {% for subscriber in subscribers %}
+          <option value="{{ subscriber.s_id }}">{{ subscriber.s_email }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-4">
+      <select class="form-select" name="role_key" aria-label="Role">
+        {% for role in roles %}
+          <option value="{{ role.r_key }}">{{ role.r_name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2"><button class="btn btn-primary">Assign</button></div>
+  </div>
+</form>
+{% endblock %}
