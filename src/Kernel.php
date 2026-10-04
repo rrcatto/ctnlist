@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace App;
 
 use Symfony\Bundle\FrameworkBundle\Kernel\MicroKernelTrait;
+use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
+use Symfony\Component\DependencyInjection\Compiler\PassConfig;
+use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\HttpKernel\Kernel as BaseKernel;
 
 /**
@@ -45,6 +48,24 @@ final class Kernel extends BaseKernel
     public function getLogDir(): string
     {
         return $this->instanceDir . '/var/log';
+    }
+
+    protected function build(ContainerBuilder $container): void
+    {
+        if ($this->environment === 'test') {
+            // Integration tests fetch services that nothing uses yet; keep them
+            // (and make them public) instead of letting the container prune them.
+            $container->addCompilerPass(new class implements CompilerPassInterface {
+                public function process(ContainerBuilder $container): void
+                {
+                    foreach ($container->getDefinitions() as $id => $definition) {
+                        if (str_starts_with($id, 'App\\') && !$definition->isAbstract()) {
+                            $definition->setPublic(true);
+                        }
+                    }
+                }
+            }, PassConfig::TYPE_BEFORE_REMOVING);
+        }
     }
 
     public function boot(): void

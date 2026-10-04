@@ -6,6 +6,9 @@ parameters:
     env(APP_ADMIN_EMAIL): ''
     env(AUTH_SESSION_COOKIE): 'ctnlist_session'
     env(AUTH_SESSION_TTL): '86400'
+    env(SUPPRESSION_PROVIDER): 'banlist'
+    env(GDB_ENV_DIRECTORY): ''
+    env(GDB_ENV_FILE): ''
     env(TRUSTED_PROXIES): '127.0.0.1'
     env(PHP_SESSION_COOKIE): 'ctnlist_php_session'
     env(MAILER_DSN): 'null://null'
@@ -29,6 +32,9 @@ services:
 
     App\Config\SiteConfig:
         factory: '@App\Config\SiteConfigFactory'
+
+    App\Suppression\SuppressionChecker:
+        factory: ['@App\Suppression\SuppressionCheckerFactory', 'create']
 
     # ------------------------------------------------------------------
     # Legacy Fat-Free objects, wired by the container until each area is
