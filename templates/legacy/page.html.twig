@@ -1,0 +1,6 @@
+{# Wraps HTML produced by the Fat-Free routes (see LegacyBridge) in the site layout. #}
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}{{ content|raw }}{% endblock %}

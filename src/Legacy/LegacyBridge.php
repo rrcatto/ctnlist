@@ -14,6 +14,7 @@ use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\AsController;
+use Twig\Environment;
 
 /**
  * Catch-all controller that serves the routes not yet ported to Symfony by
@@ -56,6 +57,7 @@ final class LegacyBridge
         ])]
         private readonly ContainerInterface $legacy,
         private readonly Security $security,
+        private readonly Environment $twig,
     ) {
     }
 
@@ -66,7 +68,7 @@ final class LegacyBridge
         $session = $request->getSession();
         $session->start();
 
-        $renderError = null;
+        $page = new LegacyPage();
         ob_start();
         try {
             $fat = $this->legacy->get('fat');
@@ -79,18 +81,23 @@ final class LegacyBridge
                 }
             }
             $routes = require __DIR__ . '/routes.php';
-            $renderError = $routes($fat, ...$services);
+            $routes($fat, ...$services, page: $page);
             $fat->run();
-            $response = new Response((string) ob_get_clean(), http_response_code() ?: Response::HTTP_OK);
+            $output = (string) ob_get_clean();
+            // A page rendered through $render gets the site layout; anything
+            // echoed directly (images, JSON) is sent as it is.
+            $response = new Response(
+                $page->isRendered()
+                    ? $this->twig->render('legacy/page.html.twig', ['title' => $page->title(), 'content' => $output . $page->content()])
+                    : $output,
+                http_response_code() ?: Response::HTTP_OK
+            );
         } catch (LegacyRedirect $redirect) {
             ob_end_clean();
             $response = new RedirectResponse($redirect->url, $redirect->permanent ? 301 : 302);
         } catch (LegacyHttpError $error) {
-            ob_clean();
-            if ($renderError !== null) {
-                $renderError($error->statusCode);
-            }
-            $response = new Response((string) ob_get_clean(), $error->statusCode);
+            ob_end_clean();
+            $response = new Response($this->errorPage($error->statusCode), $error->statusCode);
         } catch (\Throwable $e) {
             ob_end_clean();
             throw $e;
@@ -98,6 +105,16 @@ final class LegacyBridge
 
         $this->moveNativeHeaders($response, $session->getName());
         return $response;
+    }
+
+    /** The error pages Symfony itself renders (templates/bundles/TwigBundle/Exception). */
+    private function errorPage(int $statusCode): string
+    {
+        $template = "@Twig/Exception/error{$statusCode}.html.twig";
+        if (!$this->twig->getLoader()->exists($template)) {
+            $template = '@Twig/Exception/error.html.twig';
+        }
+        return $this->twig->render($template, ['status_code' => $statusCode]);
     }
 
     /** Transfer headers sent with header()/setcookie() to the response. */

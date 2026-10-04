@@ -1,3 +1,9 @@
+controllers:
+    resource:
+        path: ../src/Controller/
+        namespace: App\Controller
+    type: attribute
+
 # Handled by the security firewall (logout listener, MagicLinkAuthenticator);
 # these routes never reach a controller.
 app_logout:

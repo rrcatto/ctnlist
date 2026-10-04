@@ -10,9 +10,8 @@ use Base;
  * The Fat-Free routes that have not been ported to Symfony controllers yet,
  * moved unchanged from the old front controller. LegacyBridge calls this with
  * the container-built legacy services; each migration phase deletes the routes
- * it ports.
- *
- * @return \Closure(int): void renders the error page for an HTTP status code
+ * it ports. Pages go through $render, which hands the title and content to
+ * LegacyPage; the bridge wraps them in the Twig layout.
  */
 return static function (
     Base $fat,
@@ -30,24 +29,17 @@ return static function (
     ListsController $listsController,
     RolesController $rolesController,
     SiteLogController $sitelog,
-): \Closure {
+    LegacyPage $page,
+): void {
     $options->SetOption('version', (string) $fat->get('version'));
 
-    $fat->set('numsubscribers', $subscriber->NumSubscribers());
-    $fat->set('activereaders', $subscriber->ActiveReaders());
-    $fat->set('qcount', $queue->QueueCount());
-    $fat->set('slcount', $sendlog->SendlogCount());
-    $fat->set('msgcount', $message->MessageCount());
-    $fat->set('templatecount', $template->TemplateCount());
     $fat->set('r', max(1, min(200, (int) ($fat->get('GET.r') ?: 10))));
 
-    $render = static function (string $title, string $content, string $layout = LegacyFramework::DESIGN_MAIN) use ($fat): void {
-        $fat->set('title', $title);
-        $parsed_content = \Template::instance()->parse($content);
-        $resolved_content = \Template::instance()->resolve($parsed_content);
-        // $fat->set('content', $parsed_content);
-        $fat->set('content', $resolved_content);
-        echo \Template::instance()->render($layout);
+    // Content strings may contain F3 tokens ({{@BaseURL}}, design.ini
+    // classes such as {{@pclass}}), resolved here before Twig wraps them.
+    $render = static function (string $title, string $content) use ($page): void {
+        $template = \Template::instance();
+        $page->set($title, $template->resolve($template->parse($content)));
     };
     $admin = static function (?string $permission = null) use ($fat, $user): void {
         if ($permission !== null && $user->can($permission)) {
@@ -68,25 +60,6 @@ return static function (
             . '<button class="btn ' . htmlspecialchars($class) . '" type="submit">' . htmlspecialchars($button) . '</button></form>';
     };
 
-    // Base::error() has already sent the HTTP status line; calling
-
-    // Error page for the status codes LegacyFramework turns into exceptions.
-    $renderError = static function (int $code) use ($render): void {
-        if ($code === 404) {
-            echo '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>404 Not Found</title></head>'
-                . '<body><h1>Not Found</h1><p>The requested resource was not found.</p></body></html>';
-            return;
-        }
-        $message = $code === 403 ? 'Access denied.' : 'The request could not be completed.';
-        $render('Error', '<h1 class="h3">Error</h1><p>' . htmlspecialchars($message) . '</p>');
-    };
-
-    $fat->route(['GET @home: /', 'GET /index', 'GET /index.php', 'GET /home'], static function () use ($render): void {
-        $render('Home', '<h1 class="h3">Welcome to {{@ListName}}</h1><p>Manage subscriptions, campaigns and account activity from this site.</p>');
-    });
-    $fat->route('GET /privacy', static function () use ($render): void {
-        $render('Privacy policy', \Template::instance()->render('privacy-policy.html'));
-    });
 
     // Passwordless authentication and profile management.
     $fat->route('GET /login', static fn() => $render('Login', $user->CreateLoginHTMLform()));
@@ -551,8 +524,5 @@ return static function (
         $customer = new customers($fat, $mailer);
         $render('Contact', $customer->save($form));
     });
-    $fat->route('GET /store', static function (): void { echo \Template::instance()->render(LegacyFramework::DESIGN_STORE); });
 
-
-    return $renderError;
 };

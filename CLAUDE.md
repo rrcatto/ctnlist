@@ -8,7 +8,7 @@ ctnlist (v5.0.2) is a web-based mailing-list application. v5.0 is the **behaviou
 
 ## Development software
 
-- PHP v8.5.11 (`composer.json` declares `>=8.4 <9.0`, platform pinned to 8.4.0)
+- PHP v8.5.11 (`composer.json` declares `>=8.4.1 <9.0`, platform pinned to 8.4.1, the Symfony 8.1 minimum)
 - PostgreSQL v16.15
 - Symfony 8.1 (framework-bundle 8.1.8, runtime, dotenv, twig-bundle, mailer) with Doctrine DBAL 4 / DoctrineBundle 3; Fat-Free Framework 3.9.2 still runs the unported routes
 - Other dependencies: Phinx (migrations); PHPStan and PHPUnit for dev
@@ -56,9 +56,9 @@ The podman stack covers the main DB, mail capture and browser workflows. There i
 
 ## Migration to Symfony (in progress)
 
-ctnlist is being migrated from F3 to Symfony 8.1 in phases; each phase leaves a working app on :8180 with lint, PHPStan and the smoke suite green. Decisions: one app (no side-by-side), Doctrine DBAL repositories replace the F3 Mappers, Twig replaces string-built HTML area by area, constructor-injection DI via Symfony autowiring, and the shared-code/per-instance deployment model is kept. Done: phase 0 (smoke suite), phase 1 (directory layout), phase 2 (Symfony kernel as the front controller, with a temporary F3 bridge), phase 3 (Symfony Security: authentication, logout, ACL voter, CSRF). Next: phase 4, Twig layout and simple pages (introduce `SiteConfig` for the hive config keys).
+ctnlist is being migrated from F3 to Symfony 8.1 in phases; each phase leaves a working app on :8180 with lint, PHPStan and the smoke suite green. Decisions: one app (no side-by-side), Doctrine DBAL repositories replace the F3 Mappers, Twig replaces string-built HTML area by area, constructor-injection DI via Symfony autowiring, and the shared-code/per-instance deployment model is kept. Done: phase 0 (smoke suite), phase 1 (directory layout), phase 2 (Symfony kernel as the front controller, with a temporary F3 bridge), phase 3 (Symfony Security: authentication, logout, ACL voter, CSRF), phase 4 (Twig layout for every page, `SiteConfig`, home/privacy/store controllers, error pages). Next: phase 5, lists, roles and ACL administration.
 
-Unported code lives in `src/Legacy/` (namespace `App\Legacy`), `templates/legacy/` (F3 templates) and `config/legacy/design.ini`; each phase moves what it ports into its final home (`src/Controller`, `src/Repository`, domain folders, `templates/`) and deletes it from Legacy.
+Unported code lives in `src/Legacy/` (namespace `App\Legacy`) and `config/legacy/design.ini` (CSS classes for legacy HTML strings); each phase moves what it ports into its final home (`src/Controller`, `src/Repository`, domain folders, `templates/`) and deletes it from Legacy.
 
 ## Deployment layout
 
@@ -76,10 +76,10 @@ The suppression DB config (`ban.env`) lives outside the source tree; `config/phi
 **Request flow.** `public_html/index.php` → Symfony runtime → `App\Kernel`. Symfony owns the session (`App\Session\DatabaseSessionHandler`, DBAL, `sessions` table), error handling and the response. Ported routes will be Symfony controllers; everything else hits the catch-all `legacy` route in `config/routes.yaml` (keep it last), served by `App\Legacy\LegacyBridge`:
 - it starts the Symfony session first (legacy code uses top-level `$_SESSION` keys; Symfony keeps its own under `_sf2_attributes`, both in the same session);
 - `LegacyFramework::create()` builds the F3 hive (config from env, `\DB\SQL` connections, suppression provider), removes F3's error/exception handlers, sets `HALT=false` and makes `ONREROUTE`/`ONERROR` throw `LegacyRedirect`/`LegacyHttpError`. The bridge turns those into a `RedirectResponse` or the legacy error page. Never let F3 `die`;
-- `src/Legacy/routes.php` holds the F3 route closures (about 90), called with the container-built legacy services; output is buffered, and headers sent with `header()`/`setcookie()` are moved onto the Symfony response (except the session cookie, which Symfony's session listener sets).
+- `src/Legacy/routes.php` holds the F3 route closures (about 85), called with the container-built legacy services and a `LegacyPage`; output is buffered, and headers sent with `header()`/`setcookie()` are moved onto the Symfony response (except the session cookie, which Symfony's session listener sets).
 
 Helpers defined in `routes.php`:
-- `$render($title, $html, $layout)` — controllers return HTML **strings**; `$render` runs them through F3 `Template::parse/resolve` (so `{{@BaseURL}}` etc. work inside controller output) and wraps them in `templates/legacy/unify-main-template.html`.
+- `$render($title, $html)` — legacy controllers return HTML **strings**; `$render` resolves F3 tokens in them (`{{@BaseURL}}`, design.ini classes like `{{@pclass}}`) with `Template::parse/resolve` and stores the result in `LegacyPage`. The bridge then renders `templates/legacy/page.html.twig`, i.e. the Twig layout. Output echoed without `$render` (images, JSON) is sent unchanged. Legacy HTTP errors render the same Twig error templates as Symfony (`templates/bundles/TwigBundle/Exception/`).
 - `$admin('perm.key')` — allows if the user has the ACL permission, otherwise requires `uadmin === 1`, else 403.
 - `$loggedIn()` — redirects to `/login`.
 
@@ -88,7 +88,9 @@ Helpers defined in `routes.php`:
 - `*M.php` — F3 `\DB\SQL\Mapper` subclasses, one per table.
 - Legacy controllers are Symfony services (`config/services.yaml`): autowired constructors (`Base` and `DB\SQL` come from factories on `LegacyFramework`) plus `calls:` for the setter injection (`SetMailer`, `SetQueue`, …) that breaks their circular dependencies. Mappers and helpers are still created with `new` inside the legacy code. Resolution order in `LegacyBridge::SERVICES` matters: right after building UsersController the bridge calls `UsersController::authenticateAs(SubscriberUser)`, which fills the hive user context, and SiteLogController logs the request in its constructor.
 - `ListService`, `AclService` — raw-SQL services for lists/membership and role management (legacy `AclService` remains for RolesController until phase 5).
-- State shared via the F3 hive: `dbPDO` (main DB), `gdbPDO` (suppression DB), `uloggedin`, `uadmin`, `uid`, `acl_permissions`, plus the non-secret config keys set in `LegacyFramework`.
+- State shared via the F3 hive: `dbPDO` (main DB), `gdbPDO` (suppression DB), `uloggedin`, `uadmin`, `uid`, `acl_permissions`, plus the site settings `LegacyFramework` copies from `SiteConfig` under their old hive names (`BaseURL`, `ListName`, `OrderEmail`, …).
+
+**Symfony pages.** Controllers live in `src/Controller/` (attribute routes, imported before the catch-all). Every page extends `templates/base.html.twig`, which uses `app.user`, `is_granted('ROLE_ADMINISTRATOR')` and two globals from `App\Twig\AppExtension`: `site` (`App\Config\SiteConfig`, the non-secret installation settings built from env with the v5 defaults and fallbacks) and `counters` (`AdminCounters`, lazily queried admin menu counts).
 
 **Two PostgreSQL databases.** Main DB (`DB_*`) and a separate, shared global suppression DB (`GDB_*`, accessed only by `GlobalUnsubscribeM` / `GlobalDomainUnsubscribeM` via `GlobalUnsubscribeController` / `GlobalDomainUnsubscribeController`). Each has its own migration directory and Phinx config. `SUPPRESSION_PROVIDER` (`banlist` default, `none` dev-only) selects whether the suppression DB is used; those two controllers are the seam for swapping in catto-mail.
 

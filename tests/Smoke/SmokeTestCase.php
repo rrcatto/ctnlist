@@ -116,12 +116,14 @@ abstract class SmokeTestCase extends TestCase
         ];
     }
 
-    protected static function assertNoPhpErrors(string $route, string $body): void
+    /** No PHP error output and no unresolved Fat-Free template tokens. */
+    protected static function assertCleanPage(string $route, string $body): void
     {
         self::assertDoesNotMatchRegularExpression(
             '/<b>(Fatal error|Warning|Notice|Deprecated)<\/b>|Uncaught |Stack trace:/',
             $body,
             "PHP error output on {$route}"
         );
+        self::assertStringNotContainsString('{{@', $body, "unresolved F3 token on {$route}");
     }
 }

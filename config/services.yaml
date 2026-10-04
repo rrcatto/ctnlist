@@ -24,6 +24,9 @@ services:
             - '../src/Kernel.php'
             - '../src/Legacy/'
 
+    App\Config\SiteConfig:
+        factory: '@App\Config\SiteConfigFactory'
+
     # ------------------------------------------------------------------
     # Legacy Fat-Free objects, wired by the container until each area is
     # ported. Mappers (*M) and helpers are still created by the legacy code.

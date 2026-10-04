@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Legacy;
 
+use App\Config\SiteConfig;
 use Base;
 use RuntimeException;
 use Symfony\Component\Dotenv\Dotenv;
@@ -20,14 +21,12 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  */
 final class LegacyFramework
 {
-    public const DESIGN_MAIN = 'unify-main-template.html';
-    public const DESIGN_STORE = 'unify-custom-store.html';
-
     public function __construct(
         #[Autowire('%kernel.project_dir%')] private readonly string $projectDir,
         #[Autowire('%kernel.instance_dir%')] private readonly string $instanceDir,
         #[Autowire('%kernel.environment%')] private readonly string $environment,
         private readonly CsrfTokenManagerInterface $csrfTokenManager,
+        private readonly SiteConfig $site,
     ) {
     }
 
@@ -61,10 +60,9 @@ final class LegacyFramework
 
         $fat->set('CACHE', false);
         $fat->set('DEBUG', $envBool('APP_DEBUG') ? 3 : 0);
-        $fat->set('UI', $this->projectDir . '/templates/legacy/');
         $fat->set('LOGS', $this->instanceDir . '/logs/');
-        // Compiled templates go in the instance's writable var/ directory, so
-        // public_html can stay read-only.
+        // Content strings are compiled by F3's Template class into the
+        // instance's writable var/ directory; public_html stays read-only.
         $fat->set('TEMP', $this->instanceDir . '/var/tmp/');
         $fat->set('TZ', (string) $envOr('APP_TIMEZONE', 'Africa/Johannesburg'));
         $fat->set('ESCAPE', false);
@@ -75,56 +73,52 @@ final class LegacyFramework
         }
         $fat->config($designConfig, true);
 
-        // Safe, non-secret values made available to F3 templates and legacy controllers.
+        // Site settings under the hive keys the legacy controllers and content use.
+        $site = $this->site;
         $hive = [
-            'BaseURL' => rtrim((string) $envOr('APP_BASE_URL', 'http://localhost/'), '/') . '/',
-            'ListName' => (string) $envOr('APP_LIST_NAME', 'ctnlist'),
-            'Domain' => (string) $envOr('APP_DOMAIN', 'localhost'),
-            'Organisation' => (string) $envOr('APP_ORGANISATION', ''),
-            'Telephone' => (string) $envOr('APP_TELEPHONE', ''),
-            'WhatsApp' => (string) $envOr('APP_WHATSAPP', ''),
-            'WhatsAppURL' => (string) $envOr('APP_WHATSAPP_URL', ''),
-            'StreetAddress' => (string) $envOr('APP_STREET_ADDRESS', ''),
-            'AboutUs' => (string) $envOr('APP_ABOUT_US', ''),
-            'AdvertiseURL' => (string) $envOr('APP_ADVERTISE_URL', ''),
-            'FacebookPageURL' => (string) $envOr('APP_FACEBOOK_URL', ''),
-            'TwitterURL' => (string) $envOr('APP_X_URL', ''),
-            'StoreURL' => (string) $envOr('APP_STORE_URL', ''),
-            'BookingURL' => (string) $envOr('APP_BOOKING_URL', ''),
-            'ContactURL' => (string) $envOr('APP_CONTACT_URL', '{BaseURL}contact-form/{suid}/{muid}'),
-            'API' => (string) $envOr('APP_INSTANCE_ID', ''),
-            'AdminEmail' => (string) $envOr('MAIL_ADMIN_ADDRESS', $envOr('APP_ADMIN_EMAIL', '')),
-            'AdminName' => (string) $envOr('MAIL_ADMIN_NAME', 'Administrator'),
-            'FromAddress' => (string) $envOr('MAIL_FROM_ADDRESS', ''),
-            'FromName' => (string) $envOr('MAIL_FROM_NAME', ''),
-            'BounceAddress' => (string) $envOr('MAIL_BOUNCE_ADDRESS', ''),
-            'UnsubscribeAddress' => (string) $envOr('MAIL_UNSUBSCRIBE_ADDRESS', ''),
-            'OrderEmail' => (string) $envOr('CONTACT_MAIL_ADDRESS', $envOr('MAIL_ADMIN_ADDRESS', '')),
-            'OrderFormName' => (string) $envOr('CONTACT_MAIL_NAME', $envOr('APP_ORGANISATION', 'ctnlist')),
-            'OrderFormSubject' => (string) $envOr('CONTACT_MAIL_SUBJECT', 'Your message has been received'),
-            'OrderLogFilename' => (string) $envOr('CONTACT_LOG_FILE', $this->instanceDir . '/logs/contact.log'),
-            'SubscriptionMessage' => (string) $envOr('SUBSCRIPTION_MESSAGE', 'Manage your list subscriptions: {preferences}'),
-            'SubscriptionConfirmMessage' => (string) $envOr('SUBSCRIPTION_CONFIRM_MESSAGE', 'Confirm your list subscription: {confirm}'),
-            'SubscriptionConfirmLevel' => (int) $envOr('SUBSCRIPTION_CONFIRM_LEVEL', 0),
-            'SubscriptionConfirmAmount' => (int) $envOr('SUBSCRIPTION_CONFIRM_AMOUNT', 0),
-            'BounceLimit' => (int) $envOr('MAIL_BOUNCE_LIMIT', 2),
-            'EmailsPerMinute' => (int) $envOr('MAIL_RATE_PER_MINUTE', 13),
-            'TestEmail' => (string) $envOr('MAIL_TEST_ADDRESS', $envOr('APP_ADMIN_EMAIL', '')),
-            'archive' => $envBool('APP_ARCHIVE_ENABLED') ? 1 : 0,
+            'BaseURL' => $site->baseUrl,
+            'ListName' => $site->listName,
+            'Domain' => $site->domain,
+            'Organisation' => $site->organisation,
+            'Telephone' => $site->telephone,
+            'WhatsApp' => $site->whatsApp,
+            'WhatsAppURL' => $site->whatsAppUrl,
+            'StreetAddress' => $site->streetAddress,
+            'AboutUs' => $site->aboutUs,
+            'AdvertiseURL' => $site->advertiseUrl,
+            'FacebookPageURL' => $site->facebookUrl,
+            'TwitterURL' => $site->xUrl,
+            'StoreURL' => $site->storeUrl,
+            'BookingURL' => $site->bookingUrl,
+            'ContactURL' => $site->contactUrl,
+            'API' => $site->instanceId,
+            'AdminEmail' => $site->adminEmail,
+            'AdminName' => $site->adminName,
+            'FromAddress' => $site->fromAddress,
+            'FromName' => $site->fromName,
+            'BounceAddress' => $site->bounceAddress,
+            'UnsubscribeAddress' => $site->unsubscribeAddress,
+            'OrderEmail' => $site->contactEmail,
+            'OrderFormName' => $site->contactName,
+            'OrderFormSubject' => $site->contactSubject,
+            'OrderLogFilename' => $site->contactLogFile,
+            'SubscriptionMessage' => $site->subscriptionMessage,
+            'SubscriptionConfirmMessage' => $site->subscriptionConfirmMessage,
+            'SubscriptionConfirmLevel' => $site->subscriptionConfirmLevel,
+            'SubscriptionConfirmAmount' => $site->subscriptionConfirmAmount,
+            'BounceLimit' => $site->bounceLimit,
+            'EmailsPerMinute' => $site->emailsPerMinute,
+            'TestEmail' => $site->testEmail,
+            'archive' => $site->archiveEnabled ? 1 : 0,
+            'smtp_servers' => $site->smtpServers,
+            'default_smtp_server' => $site->smtpServers[0] ?? [],
+            'dbservers' => $site->syncDatabases,
+            'today' => date('Y.m.d H:i:s'),
+            'version' => SiteConfig::VERSION,
         ];
         foreach ($hive as $key => $value) {
             $fat->set($key, $value);
         }
-        $smtpServers = json_decode((string) $envOr('MAIL_SMTP_SERVERS_JSON', '[]'), true);
-        if (!is_array($smtpServers)) {
-            $smtpServers = [];
-        }
-        $fat->set('smtp_servers', $smtpServers);
-        $fat->set('default_smtp_server', $smtpServers[0] ?? []);
-        $syncServers = json_decode((string) $envOr('SYNC_DATABASES_JSON', '[]'), true);
-        $fat->set('dbservers', is_array($syncServers) ? $syncServers : []);
-        $fat->set('today', date('Y.m.d H:i:s'));
-        $fat->set('version', '5.0.2');
 
         $dbDriver = strtolower((string) $envOr('DB_DRIVER', 'pgsql'));
         if ($dbDriver !== 'pgsql') {

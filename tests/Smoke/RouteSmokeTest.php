@@ -133,7 +133,7 @@ final class RouteSmokeTest extends SmokeTestCase
     {
         $response = self::request(self::client(), 'GET', self::path($route));
         self::assertSame(200, $response['status'], $route);
-        self::assertNoPhpErrors($route, $response['body']);
+        self::assertCleanPage($route, $response['body']);
     }
 
     #[DataProvider('loginRequiredRoutes')]
@@ -149,7 +149,7 @@ final class RouteSmokeTest extends SmokeTestCase
     {
         $response = self::request(self::client(), 'GET', self::path($route));
         self::assertSame(403, $response['status'], $route);
-        self::assertNoPhpErrors($route, $response['body']);
+        self::assertCleanPage($route, $response['body']);
     }
 
     #[DataProvider('allRoutes')]
@@ -161,7 +161,7 @@ final class RouteSmokeTest extends SmokeTestCase
         if ($response['status'] === 302) {
             self::assertStringNotContainsString('/login', $response['location'], $route);
         }
-        self::assertNoPhpErrors($route, $response['body']);
+        self::assertCleanPage($route, $response['body']);
     }
 
     public function testUnknownRouteIsNotFound(): void

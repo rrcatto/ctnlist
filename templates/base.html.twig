@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <title>{{@ListName}} | {{@title}}</title>
+  <title>{{ site.listName }} | {% block title %}{% endblock %}</title>
   <meta charset="utf-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
@@ -20,12 +20,12 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.5.0/font/bootstrap-icons.css">
 
   <!-- CSS Unify -->
-  <link rel="stylesheet" type="text/css" href="{{@BaseURL}}css/unify-core.css">
-  <link rel="stylesheet" type="text/css" href="{{@BaseURL}}css/unify-components.css">
-  <link rel="stylesheet" type="text/css" href="{{@BaseURL}}css/unify-globals.css">
+  <link rel="stylesheet" type="text/css" href="{{ site.baseUrl }}css/unify-core.css">
+  <link rel="stylesheet" type="text/css" href="{{ site.baseUrl }}css/unify-components.css">
+  <link rel="stylesheet" type="text/css" href="{{ site.baseUrl }}css/unify-globals.css">
 
   <!-- CSS Customization -->
-  <link rel="stylesheet" href="{{@BaseURL}}css/unify-custom-a.css">
+  <link rel="stylesheet" href="{{ site.baseUrl }}css/unify-custom-a.css">
 
   <script src="https://kit.fontawesome.com/5385ffda53.js" crossorigin="anonymous"></script>
 
@@ -36,8 +36,8 @@
   <link rel="apple-touch-icon" type="image/png" href="https://ckeditor.com/assets/images/favicons/152x152.png" sizes="152x152">
   <link rel="apple-touch-icon" type="image/png" href="https://ckeditor.com/assets/images/favicons/167x167.png" sizes="167x167">
   <link rel="apple-touch-icon" type="image/png" href="https://ckeditor.com/assets/images/favicons/180x180.png" sizes="180x180">
-  <link rel="stylesheet" href="{{@BaseURL}}css/ck-style.css">
-  <link rel="stylesheet" href="{{@BaseURL}}css/ckeditor5.css">
+  <link rel="stylesheet" href="{{ site.baseUrl }}css/ck-style.css">
+  <link rel="stylesheet" href="{{ site.baseUrl }}css/ckeditor5.css">
 </head>
 
 <body>
@@ -56,7 +56,7 @@
                   <a class="nav-link" active aria-current="page" href="/"><i class="fa fa-home" aria-hidden="true"></i> Home</a>
                 </div>
 
-                <check if="{{@uadmin == 1}}">
+                {% if is_granted('ROLE_ADMINISTRATOR') %}
                   <div class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle" href="#" id="navbarDropdownAdminMenu" role="button" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false"><i class="fa fa-key" aria-hidden="true"></i> Admin</a>
                     <div class="dropdown-menu" aria-labelledby="navbarDropdownAdminMenu">
@@ -65,16 +65,16 @@
                       <a class="dropdown-item" href="/templates"><i class="fa fa-pencil-square" aria-hidden="true"></i> Templates</a>
                       <a class="dropdown-item" href="/template"><i class="fa fa-file-text" aria-hidden="true"></i> New Template</a>
                       <div class="dropdown-divider"></div>
-                      <a class="dropdown-item" href="/queue"><i class="fa fa-th-list" aria-hidden="true"></i> Queue - {{@qcount}}</a>
+                      <a class="dropdown-item" href="/queue"><i class="fa fa-th-list" aria-hidden="true"></i> Queue - {{ counters.queue }}</a>
                       <a class="dropdown-item" href="/advanced-queue"><i class="fa fa-arrows-alt" aria-hidden="true"></i> Queue 4 Msgs</a>
                       <a class="dropdown-item" href="/processqueue"><i class="fa fa-cogs" aria-hidden="true"></i> Start Sending</a>
                       <a class="dropdown-item" href="/stop-send"><i class="fa fa-hand-paper-o" aria-hidden="true"></i> Stop Sending</a>
                       <div class="dropdown-divider"></div>
-                      <a class="dropdown-item" href="/sendlog"><i class="fa fa-clipboard" aria-hidden="true"></i> Send Log - {{@slcount}}</a>
+                      <a class="dropdown-item" href="/sendlog"><i class="fa fa-clipboard" aria-hidden="true"></i> Send Log - {{ counters.sendlog }}</a>
                       <a class="dropdown-item" href="/sitelog"><i class="fa fa-globe" aria-hidden="true"></i> Site Log</a>
                       <div class="dropdown-divider"></div>
-                      <a class="dropdown-item" href="/subscribers"><i class="fa fa-users" aria-hidden="true"></i> Subscribers - {{@numsubscribers}}</a>
-                      <a class="dropdown-item" href="/activesubscribers"><i class="fas fa-running"></i> Active - {{@activereaders}}</a>
+                      <a class="dropdown-item" href="/subscribers"><i class="fa fa-users" aria-hidden="true"></i> Subscribers - {{ counters.subscribers }}</a>
+                      <a class="dropdown-item" href="/activesubscribers"><i class="fas fa-running"></i> Active - {{ counters.activeReaders }}</a>
                       <a class="dropdown-item" href="/bulk-subscribe"><i class="fa fa-user-plus" aria-hidden="true"></i> Bulk Subscribe</a>
                       <a class="dropdown-item" href="/bulk-unsubscribe"><i class="fa fa-user-times" aria-hidden="true"></i> Bulk Unsubscribe</a>
                       <a class="dropdown-item" href="/import"><i class="fa fa-upload" aria-hidden="true"></i> Import</a>
@@ -85,26 +85,26 @@
                       <a class="dropdown-item" href="/roles"><i class="fa fa-shield" aria-hidden="true"></i> Roles & ACL</a>
                     </div>
                   </div>
-                </check>
+                {% endif %}
 
                 <div class="nav-item">
                   <a class="nav-link" href="/subscribe"><i class="fas fa-clipboard"></i> Subscribe</a>
                 </div>
-                <check if="{{@archive == 1}}">
+                {% if site.archiveEnabled %}
                   <div class="nav-item">
                     <a class="nav-link" href="/archives"><i class="fa fa-archive" aria-hidden="true"></i> Archives</a>
                   </div>
-                </check>
+                {% endif %}
                 <div class="nav-item">
                   <a class="nav-link" href="/contact-form"><i class="fa fa-phone" aria-hidden="true"></i> Contact</a>
                 </div>
                 <div class="nav-item">
                   <a class="nav-link" href="/store"><i class="fas fa-shopping-cart"></i> Store</a>
                 </div>
-                <check if="{{@uloggedin}}">
-                  <true>
+                {% if app.user %}
+                  
                     <div class="nav-item dropdown">
-                      <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="fa fa-user-circle-o" aria-hidden="true"></i> {{@ufname}} {{@ulname}}</a>
+                      <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false"><i class="fa fa-user-circle-o" aria-hidden="true"></i> {{ app.user.firstName }} {{ app.user.lastName }}</a>
                       <div class="dropdown-menu" aria-labelledby="navbarDropdown">
                         <a class="dropdown-item" href="/profile"><i class="fa fa-user-o" aria-hidden="true"></i> My Profile</a>
                         <a class="dropdown-item" href="/my/messages"><i class="fa fa-envelope-o" aria-hidden="true"></i> My Messages</a>
@@ -112,13 +112,13 @@
                         <a class="dropdown-item" href="/logout"><i class="fa fa-sign-out" aria-hidden="true"></i> Logout</a>
                       </div>
                     </div>
-                  </true>
-                  <false>
+                  
+                  {% else %}
                     <div class="nav-item">
                       <a class="nav-link" href="/login"><i class="fa fa-sign-in" aria-hidden="true"></i> login</a>
                     </div>
-                  </false>
-                </check>
+                  
+                {% endif %}
               </div>
             </div>
           </div>
@@ -130,39 +130,39 @@
     <section class="g-bg-gray-light-v4 g-py-10">
       <div class="container">
         <div class="d-sm-flex align-self-center text-center">
-            <check if="{{@uadmin > 0 }}">
-              <true>
+            {% if is_granted('ROLE_ADMINISTRATOR') %}
+              
                 <div class="btn-toolbar" role="toolbar" aria-label="button bar">
                   <div class="btn-group my-2 g-mr-10" role="group" aria-label="message buttons">
-                    <a href="{{@BaseURL}}messages" class="btn u-btn-cyan">Msgs <span class="badge badge-secondary">{{@msgcount}}</span></a>
-                    <a href="{{@BaseURL}}message" class="btn u-btn-blue">New Msg</a>
-                    <a href="{{@BaseURL}}templates" class="btn u-btn-teal">Templates <span class="badge badge-secondary">{{@templatecount}}</span></a>
-                    <a href="{{@BaseURL}}template" class="btn u-btn-blue">New Temp</a>
+                    <a href="{{ site.baseUrl }}messages" class="btn u-btn-cyan">Msgs <span class="badge badge-secondary">{{ counters.messages }}</span></a>
+                    <a href="{{ site.baseUrl }}message" class="btn u-btn-blue">New Msg</a>
+                    <a href="{{ site.baseUrl }}templates" class="btn u-btn-teal">Templates <span class="badge badge-secondary">{{ counters.templates }}</span></a>
+                    <a href="{{ site.baseUrl }}template" class="btn u-btn-blue">New Temp</a>
                   </div>
 
                   <div class="btn-group my-2 g-mr-10" role="group" aria-label="queue buttons">
-                    <a href="{{@BaseURL}}queue" class="btn u-btn-deeporange">Queue <span class="badge badge-secondary">{{@qcount}}</span></a>
-                    <a href="{{@BaseURL}}advanced-queue" class="btn u-btn-blue">Q4Msgs</a>
-                    <a href="{{@BaseURL}}processqueue" class="btn u-btn-yellow" target="_blank">Start</a>
-                    <a href="{{@BaseURL}}stop-send" class="btn u-btn-brown">Stop</a>
+                    <a href="{{ site.baseUrl }}queue" class="btn u-btn-deeporange">Queue <span class="badge badge-secondary">{{ counters.queue }}</span></a>
+                    <a href="{{ site.baseUrl }}advanced-queue" class="btn u-btn-blue">Q4Msgs</a>
+                    <a href="{{ site.baseUrl }}processqueue" class="btn u-btn-yellow" target="_blank">Start</a>
+                    <a href="{{ site.baseUrl }}stop-send" class="btn u-btn-brown">Stop</a>
                   </div>
 
                   <div class="btn-group my-2 g-mr-10" role="group" aria-label="stats buttons">
-                    <a href="{{@BaseURL}}sendlog" class="btn u-btn-aqua">Sendlog <span class="badge badge-secondary">{{@slcount}}</span></a>
-                    <a href="{{@BaseURL}}sitelog" class="btn u-btn-cyan">Sitelog</a>
+                    <a href="{{ site.baseUrl }}sendlog" class="btn u-btn-aqua">Sendlog <span class="badge badge-secondary">{{ counters.sendlog }}</span></a>
+                    <a href="{{ site.baseUrl }}sitelog" class="btn u-btn-cyan">Sitelog</a>
                   </div>
 
                   <div class="btn-group my-2 g-mr-10" role="group" aria-label="subscriber buttons">
-                    <a href="{{@BaseURL}}subscribers" class="btn u-btn-orange text-white">Subs <span class="badge badge-secondary">{{@numsubscribers}}</span></a>
-                    <a href="{{@BaseURL}}activesubscribers" class="btn u-btn-lightred">Active <span class="badge badge-secondary">{{@activereaders}}</span></a>
-                    <a href="{{@BaseURL}}bulk-subscribe" class="btn u-btn-purple text-white">B-Sub</a>
-                    <a href="{{@BaseURL}}bulk-unsubscribe" class="btn u-btn-indigo">B-Unsub</a>
-                    <a href="{{@BaseURL}}import" class="btn u-btn-blue">Import</a>
-                    <a href="{{@BaseURL}}export" class="btn u-btn-teal">Export</a>
+                    <a href="{{ site.baseUrl }}subscribers" class="btn u-btn-orange text-white">Subs <span class="badge badge-secondary">{{ counters.subscribers }}</span></a>
+                    <a href="{{ site.baseUrl }}activesubscribers" class="btn u-btn-lightred">Active <span class="badge badge-secondary">{{ counters.activeReaders }}</span></a>
+                    <a href="{{ site.baseUrl }}bulk-subscribe" class="btn u-btn-purple text-white">B-Sub</a>
+                    <a href="{{ site.baseUrl }}bulk-unsubscribe" class="btn u-btn-indigo">B-Unsub</a>
+                    <a href="{{ site.baseUrl }}import" class="btn u-btn-blue">Import</a>
+                    <a href="{{ site.baseUrl }}export" class="btn u-btn-teal">Export</a>
                   </div>
                 </div>
-              </true>
-              <false>
+              
+              {% else %}
                 <div class="col-md-1"></div>
                 <div class="col-md-2">
                   <a href="/" class="btn btn-primary" role="button"><i class="bi bi-house"></i> Home</a>
@@ -179,8 +179,8 @@
                 <div class="col-md-2">
                   <a href="/login" class="btn u-btn-lightred" role="button"><i class="bi bi-key"></i> Login</a>
                 </div>
-              </false>
-            </check>
+              
+            {% endif %}
         </div>
       </div>
     </section>
@@ -191,8 +191,7 @@
 		  <div class="container">
         <div class="row">
           <div class="col">
-          <!-- {{@content}} -->
-          {{ @content | raw }}
+          {% block content %}{% endblock %}
           </div>
         </div>
       </div>
@@ -201,7 +200,7 @@
     <section class="g-bg-primary">
       <div class="container g-py-50">
         <div class="d-flex justify-content-between">
-          <h3 class="h3 align-left g-color-white mb-0 mr-4">{{@today}}<br />Time: <span id="datetime"> </span> </h3>
+          <h3 class="h3 align-left g-color-white mb-0 mr-4">{{ 'now'|date('Y.m.d H:i:s') }}<br />Time: <span id="datetime"> </span> </h3>
         </div>
       </div>
     </section>
@@ -216,7 +215,7 @@
               <h2 class="u-heading-v2__title h6 text-uppercase mb-0">About Us</h2>
             </div>
 
-            <p>{{@AboutUs}}</p>
+            <p>{{ site.aboutUs }}</p>
           </div>
           <!-- End Footer Content -->
 
@@ -250,7 +249,7 @@
             <div class="u-heading-v2-3--bottom g-brd-white-opacity-0_8 g-mb-20">
               <h2 class="u-heading-v2__title h6 text-uppercase mb-0">Our Contact Info</h2>
             </div>
-            <address class="g-bg-no-repeat g-font-size-12 mb-0" style="background-image: url({{@BaseURL}}img/map2.png);">
+            <address class="g-bg-no-repeat g-font-size-12 mb-0" style="background-image: url({{ site.baseUrl }}img/map2.png);">
           <!-- Location -->
           <div class="d-flex g-mb-20">
             <div class="g-mr-10">
@@ -259,7 +258,7 @@
               </span>
             </div>
 
-            <p class="mb-0">{{@StreetAddress}}</p>
+            <p class="mb-0">{{ site.streetAddress }}</p>
           </div>
           <!-- End Location -->
 
@@ -270,7 +269,7 @@
                 <i class="fab fa-whatsapp"></i>
               </span>
             </div>
-            <p class="mb-0"><a href="{{@WhatsAppURL}}" target="_blank">{{@WhatsApp}}</a></p>
+            <p class="mb-0"><a href="{{ site.whatsAppUrl }}" target="_blank">{{ site.whatsApp }}</a></p>
           </div>
           <!-- End Phone -->
 
@@ -282,7 +281,7 @@
               </span>
             </div>
             <p class="mb-0">
-              <a class="g-color-white-opacity-0_8 g-color-white--hover" href="mailto:{{@AdminEmail}}">{{@AdminName}}</a>
+              <a class="g-color-white-opacity-0_8 g-color-white--hover" href="mailto:{{ site.adminEmail }}">{{ site.adminName }}</a>
             </p>
           </div>
           <!-- End Email -->
@@ -318,7 +317,7 @@
           <div class="col-md-4 align-self-center">
             <ul class="list-inline text-center text-md-right mb-0">
               <li class="list-inline-item g-mx-10" data-toggle="tooltip" data-placement="top" title="Facebook">
-                <a href="{{@FacebookPageURL}}" class="g-color-white-opacity-0_5 g-color-white--hover">
+                <a href="{{ site.facebookUrl }}" class="g-color-white-opacity-0_5 g-color-white--hover">
                   <i class="fa fa-facebook"></i>
                 </a>
               </li>
@@ -339,8 +338,8 @@
 <!-- Placed at the end of the document so the pages load faster -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
-<script src="{{@BaseURL}}js/ckeditor5.umd.js"></script>
-<script src="{{@BaseURL}}js/ck-main.js"></script>
+<script src="{{ site.baseUrl }}js/ckeditor5.umd.js"></script>
+<script src="{{ site.baseUrl }}js/ck-main.js"></script>
 
 <script>
 (function() {
