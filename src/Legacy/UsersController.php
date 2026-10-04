@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Legacy;
 
+use App\Security\SubscriberUser;
 use Base;
 
 /**
@@ -23,12 +24,11 @@ class UsersController extends Controller
     protected string $AdminName;
 
     protected AuthLoginTokenM $loginToken;
-    protected AuthSessionM $authSession;
-    protected AclService $acl;
     protected ListService $lists;
     protected int $magicLinkTtl;
-    protected int $sessionTtl;
-    protected string $sessionCookieName;
+    protected bool $administrator = false;
+    /** @var list<string> */
+    protected array $permissions = [];
 
     public SubscribersM $user;
     public bool $uloggedin = false;
@@ -47,17 +47,27 @@ class UsersController extends Controller
         $this->AdminName = (string) $fat->get('AdminName');
 
         $this->magicLinkTtl = $this->envInt('AUTH_MAGIC_LINK_TTL', 1800);
-        $this->sessionTtl = $this->envInt('AUTH_SESSION_TTL', 86400);
-        $this->sessionCookieName = $this->envString('AUTH_SESSION_COOKIE', 'ctnlist_session');
 
         $this->user = new SubscribersM($fat);
         $this->loginToken = new AuthLoginTokenM($fat);
-        $this->authSession = new AuthSessionM($fat);
-        $this->acl = new AclService($this->dbPDO);
         $this->lists = new ListService($fat, $this->dbPDO);
 
         $this->clearUserContext();
-        $this->check_auth_cookies();
+    }
+
+    /**
+     * Adopt the subscriber authenticated by Symfony Security. LegacyBridge
+     * calls this before any other legacy object reads the user context.
+     */
+    public function authenticateAs(SubscriberUser $subscriber): void
+    {
+        $this->user->load(['s_id = :sid', ':sid' => $subscriber->id]);
+        if ($this->user->dry()) {
+            return;
+        }
+        $this->administrator = $subscriber->isAdministrator();
+        $this->permissions = $subscriber->permissions;
+        $this->setUserContext();
     }
 
     public function SetMailer(mailer $mailer): void
@@ -227,133 +237,8 @@ HTML;
         }
     }
 
-    /** @return array{success:bool,new:bool,redirect:string} */
-    public function verifyMagicLink(string $rawToken): array
-    {
-        $failure = ['success' => false, 'new' => false, 'redirect' => '/login'];
-        $rawToken = trim($rawToken);
-        if (!preg_match('/^[A-Za-z0-9_-]{43}$/', $rawToken)) {
-            return $failure;
-        }
 
-        try {
-            $now = date('Y-m-d H:i:s');
-            $this->loginToken->load([
-                'alt_token_hash = :hash AND alt_used_at IS NULL AND alt_expires_at > :now',
-                ':hash' => hash('sha256', $rawToken),
-                ':now' => $now,
-            ]);
-            if ($this->loginToken->dry()) {
-                return $failure;
-            }
 
-            $subscriberId = (int) $this->loginToken->alt_s_id;
-            $this->user->load(['s_id = :sid', ':sid' => $subscriberId]);
-            if ($this->user->dry()) {
-                return $failure;
-            }
-
-            $isNew = empty($this->user->s_last_login_at);
-            $this->user->s_last_login_at = $now;
-            $this->user->s_last_login_ip = $this->clientIp();
-            $this->user->save();
-
-            $this->acl->bootstrapInitialAdministrator($subscriberId, (string) $this->user->s_email);
-
-            $this->loginToken->alt_used_at = $now;
-            $this->loginToken->save();
-
-            $sessionToken = $this->randomToken();
-            $this->authSession->reset();
-            $this->authSession->as_s_id = $subscriberId;
-            $this->authSession->as_token_hash = hash('sha256', $sessionToken);
-            $this->authSession->as_created_at = $now;
-            $this->authSession->as_expires_at = date('Y-m-d H:i:s', time() + $this->sessionTtl);
-            $this->authSession->as_last_seen_at = $now;
-            $this->authSession->as_revoked_at = null;
-            $this->authSession->as_ip_address = $this->clientIp();
-            $this->authSession->as_user_agent = $this->userAgent();
-            $this->authSession->save();
-
-            $redirect = $this->returnPath(
-                (string) $this->loginToken->alt_return_action,
-                (int) $this->loginToken->alt_return_m_id,
-                (int) $this->loginToken->alt_return_l_id,
-                (string) $this->user->s_uuid
-            );
-
-            $this->setAuthCookie($sessionToken);
-            $this->setUserContext();
-            return ['success' => true, 'new' => $isNew, 'redirect' => $redirect];
-        } catch (\Throwable $e) {
-            error_log('ctnlist auth: magic-link verification failed: ' . $e->getMessage());
-            return $failure;
-        }
-    }
-
-    public function check_auth_cookies(): bool
-    {
-        $raw = trim((string) $this->fat->get('COOKIE.' . $this->sessionCookieName));
-        if ($raw === '') {
-            return false;
-        }
-        if (!preg_match('/^[A-Za-z0-9_-]{43}$/', $raw)) {
-            $this->clearAuthCookie();
-            return false;
-        }
-
-        try {
-            $now = date('Y-m-d H:i:s');
-            $this->authSession->load([
-                'as_token_hash = :hash AND as_revoked_at IS NULL AND as_expires_at > :now',
-                ':hash' => hash('sha256', $raw),
-                ':now' => $now,
-            ]);
-            if ($this->authSession->dry()) {
-                $this->clearAuthCookie();
-                return false;
-            }
-
-            $this->user->load(['s_id = :sid', ':sid' => (int) $this->authSession->as_s_id]);
-            if ($this->user->dry()) {
-                $this->authSession->as_revoked_at = $now;
-                $this->authSession->save();
-                $this->clearAuthCookie();
-                return false;
-            }
-
-            $lastSeen = strtotime((string) $this->authSession->as_last_seen_at) ?: 0;
-            if ($lastSeen < time() - 300) {
-                $this->authSession->as_last_seen_at = $now;
-                $this->authSession->save();
-            }
-            $this->setUserContext();
-            return true;
-        } catch (\Throwable $e) {
-            error_log('ctnlist auth: session lookup failed: ' . $e->getMessage());
-            $this->clearAuthCookie();
-            return false;
-        }
-    }
-
-    public function logout(): void
-    {
-        $raw = trim((string) $this->fat->get('COOKIE.' . $this->sessionCookieName));
-        if ($raw !== '') {
-            $this->authSession->load([
-                'as_token_hash = :hash AND as_revoked_at IS NULL',
-                ':hash' => hash('sha256', $raw),
-            ]);
-            if (!$this->authSession->dry()) {
-                $this->authSession->as_revoked_at = date('Y-m-d H:i:s');
-                $this->authSession->save();
-            }
-        }
-        $this->clearAuthCookie();
-        $this->clearLegacyAuthCookies();
-        $this->clearUserContext();
-        $this->user->reset();
-    }
 
     public function matchesSubscriberToken(string $token): bool
     {
@@ -371,7 +256,7 @@ HTML;
 
     public function can(string $permission): bool
     {
-        return $this->uloggedin && $this->acl->can($this->uid, $permission);
+        return $this->uloggedin && in_array($permission, $this->permissions, true);
     }
 
     public function CreateEditProfileHTMLform(): string
@@ -560,39 +445,6 @@ HTML;
         return (int) $ipCount >= $ipLimit;
     }
 
-    private function returnPath(string $action, int $messageId, int $listId, string $subscriberToken): string
-    {
-        $token = rawurlencode($subscriberToken);
-        $muid = '';
-        if ($messageId > 0) {
-            // Use the Mapper so authentication return routing follows the
-            // same data-access pattern as the rest of the message model.
-            $message = new MessagesM($this->fat);
-            if ($message->loadByMid($messageId)) {
-                $muid = rawurlencode((string) $message->m_uniqid);
-            }
-        }
-        $shortcode = '';
-        if ($listId > 0) {
-            $list = $this->lists->findById($listId);
-            $shortcode = rawurlencode((string) ($list['l_shortcode'] ?? ''));
-        }
-
-        return match ($action) {
-            'confirm' => $shortcode !== ''
-                ? "/confirm/{$token}/{$shortcode}" . ($muid !== '' ? "/{$muid}" : '')
-                : "/profile/subscriber/{$token}",
-            'unsubscribe' => $shortcode !== ''
-                ? "/unsubscribe/{$token}/{$shortcode}" . ($muid !== '' ? "/{$muid}" : '')
-                : "/profile/subscriber/{$token}",
-            'forward' => $muid !== '' ? "/forward/{$token}/{$muid}" : "/profile/subscriber/{$token}",
-            'like' => $muid !== '' ? "/like/{$token}/{$muid}" : "/profile/subscriber/{$token}",
-            'dislike' => $muid !== '' ? "/dislike/{$token}/{$muid}" : "/profile/subscriber/{$token}",
-            'resend' => $muid !== '' ? "/resend/{$token}/{$muid}" : "/profile/subscriber/{$token}",
-            'messages' => '/my/messages',
-            default => "/profile/subscriber/{$token}",
-        };
-    }
 
     private function validReturnAction(string $action): bool
     {
@@ -603,7 +455,7 @@ HTML;
     {
         $this->uloggedin = true;
         $this->uid = (int) $this->user->s_id;
-        $this->uadmin = $this->acl->isAdministrator($this->uid) ? 1 : 0;
+        $this->uadmin = $this->administrator ? 1 : 0;
         $firstName = trim((string) $this->user->s_fname);
         $lastName = trim((string) $this->user->s_lname);
         $email = trim((string) $this->user->s_email);
@@ -619,7 +471,7 @@ HTML;
         $this->fat->set('SESSION.suid', $token);
         $this->fat->set('SESSION.subscriber_id', $this->uid);
         $this->fat->set('Email', $email);
-        $this->fat->set('acl_permissions', $this->acl->permissions($this->uid));
+        $this->fat->set('acl_permissions', $this->permissions);
     }
 
     private function clearUserContext(): void
@@ -640,41 +492,8 @@ HTML;
         $this->fat->set('acl_permissions', []);
     }
 
-    private function setAuthCookie(string $rawToken): void
-    {
-        setcookie($this->sessionCookieName, $rawToken, [
-            'expires' => time() + $this->sessionTtl,
-            'path' => '/',
-            'secure' => $this->isSecureRequest(),
-            'httponly' => true,
-            'samesite' => 'Lax',
-        ]);
-    }
 
-    private function clearAuthCookie(): void
-    {
-        setcookie($this->sessionCookieName, '', [
-            'expires' => time() - 3600,
-            'path' => '/',
-            'secure' => $this->isSecureRequest(),
-            'httponly' => true,
-            'samesite' => 'Lax',
-        ]);
-    }
 
-    /** Remove cookies used by the pre-passwordless authentication code. */
-    private function clearLegacyAuthCookies(): void
-    {
-        foreach (['identifier', 'session_token'] as $name) {
-            setcookie($name, '', [
-                'expires' => time() - 3600,
-                'path' => '/',
-                'secure' => $this->isSecureRequest(),
-                'httponly' => true,
-                'samesite' => 'Lax',
-            ]);
-        }
-    }
 
     private function randomToken(): string
     {
@@ -691,12 +510,6 @@ HTML;
         return mb_substr(trim((string) $this->fat->get('AGENT')), 0, 500);
     }
 
-    private function isSecureRequest(): bool
-    {
-        $https = strtolower((string) ($_SERVER['HTTPS'] ?? ''));
-        return ($https !== '' && $https !== 'off')
-            || strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
-    }
 
     private function envString(string $name, string $default): string
     {

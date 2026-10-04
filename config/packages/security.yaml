@@ -1,0 +1,17 @@
+security:
+    providers:
+        subscribers:
+            id: App\Security\SubscriberUserProvider
+
+    firewalls:
+        # Authentication state lives in the auth cookie / auth_sessions table,
+        # not the PHP session, so the firewall re-authenticates every request.
+        main:
+            stateless: true
+            provider: subscribers
+            custom_authenticators:
+                - App\Security\MagicLinkAuthenticator
+                - App\Security\AuthSessionAuthenticator
+            logout:
+                path: app_logout
+                target: /

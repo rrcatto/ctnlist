@@ -47,6 +47,14 @@ final class Kernel extends BaseKernel
         return $this->instanceDir . '/var/log';
     }
 
+    public function boot(): void
+    {
+        parent::boot();
+        // Timestamps are written in PHP's timezone (the database runs in UTC),
+        // so set it from the installation before any request is handled.
+        date_default_timezone_set((string) $this->getContainer()->getParameter('app.timezone'));
+    }
+
     /** @return array<string, mixed> */
     protected function getKernelParameters(): array
     {

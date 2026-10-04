@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace App\Legacy;
 
+use App\Security\SubscriberUser;
 use Base;
 use Psr\Container\ContainerInterface;
+use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\DependencyInjection\Attribute\AutowireLocator;
 use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -25,9 +27,9 @@ use Symfony\Component\HttpKernel\Attribute\AsController;
 final class LegacyBridge
 {
     /**
-     * Resolution order matters: UsersController authenticates from the
-     * request cookie in its constructor, and SiteLogController records the
-     * request (including the user) in its constructor.
+     * Resolution order matters: UsersController must adopt the authenticated
+     * user before anything reads the user context, and SiteLogController
+     * records the request (including the user) in its constructor.
      */
     private const SERVICES = [
         'options', 'user', 'sendlog', 'smlog', 'subscriber', 'message', 'template', 'archive',
@@ -53,6 +55,7 @@ final class LegacyBridge
             'sitelog' => SiteLogController::class,
         ])]
         private readonly ContainerInterface $legacy,
+        private readonly Security $security,
     ) {
     }
 
@@ -67,7 +70,14 @@ final class LegacyBridge
         ob_start();
         try {
             $fat = $this->legacy->get('fat');
-            $services = array_map($this->legacy->get(...), self::SERVICES);
+            $subscriber = $this->security->getUser();
+            $services = [];
+            foreach (self::SERVICES as $id) {
+                $services[] = $service = $this->legacy->get($id);
+                if ($service instanceof UsersController && $subscriber instanceof SubscriberUser) {
+                    $service->authenticateAs($subscriber);
+                }
+            }
             $routes = require __DIR__ . '/routes.php';
             $renderError = $routes($fat, ...$services);
             $fat->run();

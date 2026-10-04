@@ -117,14 +117,6 @@ return static function (
         );
         $render('Check your email', '<p>If the request is valid, a secure sign-in link has been sent.</p>');
     });
-    $fat->route('GET /auth/verify', static function (Base $fat) use ($user): void {
-        $result = $user->verifyMagicLink((string) $fat->get('GET.token'));
-        $fat->reroute($result['success'] ? (string) $result['redirect'] : '/login');
-    });
-    $fat->route('GET /logout', static function (Base $fat) use ($user): void {
-        $user->logout();
-        $fat->reroute('/');
-    });
     $fat->route('GET /profile', static function (Base $fat) use ($user, $loggedIn): void {
         $loggedIn();
         $fat->reroute('/profile/subscriber/' . rawurlencode((string) $user->user->s_uuid));

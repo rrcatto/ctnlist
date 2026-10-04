@@ -1,3 +1,13 @@
+# Handled by the security firewall (logout listener, MagicLinkAuthenticator);
+# these routes never reach a controller.
+app_logout:
+    path: /logout
+    methods: [GET]
+
+auth_verify:
+    path: /auth/verify
+    methods: [GET]
+
 # Routes not yet ported to Symfony controllers fall through to Fat-Free. This
 # catch-all must stay the last route.
 legacy:

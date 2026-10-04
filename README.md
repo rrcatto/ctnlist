@@ -176,7 +176,7 @@ bin/dev analyse     # PHPStan
 bin/dev test        # PHPUnit
 ```
 
-`tests/Smoke/RouteSmokeTest` requests every GET route of the running stack over HTTP, anonymously and as the development administrator, and checks status codes, login redirects, access control and PHP error output. It is the route-parity check for the Symfony migration.
+`tests/Smoke/RouteSmokeTest` requests every GET route of the running stack over HTTP, anonymously and as the development administrator, and checks status codes, login redirects, access control and PHP error output. It is the route-parity check for the Symfony migration. `tests/Smoke/AuthFlowTest` covers sign-in links, auth cookies, logout and CSRF; `tests/Unit` holds unit tests.
 
 The banlist suppression database and real SMTP delivery are not part of the development stack and must be tested on a target installation.
 
@@ -189,8 +189,8 @@ The move from Fat-Free to Symfony proceeds in phases; each leaves a working appl
 | 0. Route smoke suite and PHPStan baseline | done |
 | 1. Directory layout (`public_html/`, `src/`, `templates/`, `config/`) | done |
 | 2. Symfony kernel as front controller, Fat-Free bridge, container-built legacy services | done |
-| 3. Authentication and security (Symfony Security, magic-link authenticator, ACL voter, CSRF) | next |
-| 4. Twig layout and simple pages | |
+| 3. Authentication and security (Symfony Security, magic-link authenticator, ACL voter, CSRF) | done |
+| 4. Twig layout and simple pages | next |
 | 5. Lists, roles and ACL administration | |
 | 6. Campaign core services on DBAL repositories | |
 | 7. Subscriber-facing routes | |

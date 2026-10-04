@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Smoke;
 
-use PDO;
 use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\TestCase;
 
 /**
  * Requests every GET route of the running application over HTTP, anonymously
@@ -17,33 +15,15 @@ use PHPUnit\Framework\TestCase;
  * Fixtures (a message, template and archive) are created in the development
  * database and removed afterwards. Run with: bin/dev test --testsuite smoke
  */
-final class RouteSmokeTest extends TestCase
+final class RouteSmokeTest extends SmokeTestCase
 {
-    private static PDO $db;
-    private static string $baseUrl;
     /** @var array<string, string> */
     private static array $fixture = [];
     private static ?\CurlHandle $adminClient = null;
-    private static string $startedAt;
 
     public static function setUpBeforeClass(): void
     {
-        self::$baseUrl = rtrim((string) getenv('SMOKE_BASE_URL'), '/');
-        self::$db = new PDO(
-            (string) getenv('SMOKE_DB_DSN'),
-            (string) getenv('SMOKE_DB_USER'),
-            (string) getenv('SMOKE_DB_PASS'),
-            [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-        );
-        // The application writes timestamps in PHP's timezone, not the database's.
-        self::$startedAt = date('Y-m-d H:i:s');
-
-        $admin = self::$db->prepare('SELECT s_id, s_uuid FROM subscribers WHERE LOWER(s_email) = LOWER(?)');
-        $admin->execute([(string) getenv('SMOKE_ADMIN_EMAIL')]);
-        $row = $admin->fetch(PDO::FETCH_ASSOC);
-        if ($row === false) {
-            self::fail('Development administrator not found; run bin/dev seed-admin.');
-        }
+        parent::setUpBeforeClass();
 
         $archiveId = (int) self::$db->query(
             "INSERT INTO archives (a_subject, a_html) VALUES ('Smoke fixture', '<p>Smoke fixture</p>') RETURNING a_id"
@@ -61,11 +41,10 @@ final class RouteSmokeTest extends TestCase
         self::$db->prepare(
             "INSERT INTO smlog (sml_s_uuid, sml_email, sml_muid, sml_list_shortcode, sml_date_sent)
              SELECT s_uuid, s_email, ?, 'ALL', LOCALTIMESTAMP FROM subscribers WHERE s_id = ?"
-        )->execute([$muid, (int) $row['s_id']]);
+        )->execute([$muid, self::$admin['s_id']]);
 
         self::$fixture = [
-            'subscriberId' => (string) $row['s_id'],
-            'token' => (string) $row['s_uuid'],
+            'token' => self::$admin['s_uuid'],
             'shortcode' => 'ALL',
             'muid' => $muid,
             'tid' => (string) $templateId,
@@ -75,17 +54,13 @@ final class RouteSmokeTest extends TestCase
 
     public static function tearDownAfterClass(): void
     {
-        if (self::$fixture === []) {
-            return;
+        if (self::$fixture !== []) {
+            self::$db->prepare('DELETE FROM smlog WHERE sml_muid = ?')->execute([self::$fixture['muid']]);
+            self::$db->prepare('DELETE FROM messages WHERE m_uniqid = ?')->execute([self::$fixture['muid']]);
+            self::$db->prepare('DELETE FROM templates WHERE t_id = ?')->execute([(int) self::$fixture['tid']]);
+            self::$db->prepare('DELETE FROM archives WHERE a_id = ?')->execute([(int) self::$fixture['aid']]);
         }
-        self::$db->prepare('DELETE FROM smlog WHERE sml_muid = ?')->execute([self::$fixture['muid']]);
-        self::$db->prepare('DELETE FROM messages WHERE m_uniqid = ?')->execute([self::$fixture['muid']]);
-        self::$db->prepare('DELETE FROM templates WHERE t_id = ?')->execute([(int) self::$fixture['tid']]);
-        self::$db->prepare('DELETE FROM archives WHERE a_id = ?')->execute([(int) self::$fixture['aid']]);
-        self::$db->prepare('DELETE FROM auth_sessions WHERE as_s_id = ? AND as_created_at >= ?')
-            ->execute([(int) self::$fixture['subscriberId'], self::$startedAt]);
-        self::$db->prepare('DELETE FROM auth_login_tokens WHERE alt_s_id = ? AND alt_created_at >= ?')
-            ->execute([(int) self::$fixture['subscriberId'], self::$startedAt]);
+        parent::tearDownAfterClass();
     }
 
     /** Routes open to everyone. */
@@ -156,101 +131,62 @@ final class RouteSmokeTest extends TestCase
     #[DataProvider('publicRoutes')]
     public function testPublicRouteRendersAnonymously(string $route): void
     {
-        [$status, $body] = self::request(curl_init(), $route);
-        self::assertSame(200, $status, $route);
-        self::assertNoPhpErrors($route, $body);
+        $response = self::request(self::client(), 'GET', self::path($route));
+        self::assertSame(200, $response['status'], $route);
+        self::assertNoPhpErrors($route, $response['body']);
     }
 
     #[DataProvider('loginRequiredRoutes')]
     public function testLoginRequiredRouteRedirectsAnonymous(string $route): void
     {
-        [$status, , $location] = self::request(curl_init(), $route);
-        self::assertSame(302, $status, $route);
-        self::assertStringEndsWith('/login', $location, $route);
+        $response = self::request(self::client(), 'GET', self::path($route));
+        self::assertSame(302, $response['status'], $route);
+        self::assertStringEndsWith('/login', $response['location'], $route);
     }
 
     #[DataProvider('adminRoutes')]
     public function testAdminRouteIsForbiddenAnonymously(string $route): void
     {
-        [$status, $body] = self::request(curl_init(), $route);
-        self::assertSame(403, $status, $route);
-        self::assertNoPhpErrors($route, $body);
+        $response = self::request(self::client(), 'GET', self::path($route));
+        self::assertSame(403, $response['status'], $route);
+        self::assertNoPhpErrors($route, $response['body']);
     }
 
     #[DataProvider('allRoutes')]
     public function testRouteRendersForAdministrator(string $route): void
     {
-        [$status, $body, $location] = self::request(self::adminClient(), $route);
+        $response = self::request(self::adminClient(), 'GET', self::path($route));
         // /profile hands the administrator on to their own profile page.
-        self::assertContains($status, [200, 302], $route);
-        if ($status === 302) {
-            self::assertStringNotContainsString('/login', $location, $route);
+        self::assertContains($response['status'], [200, 302], $route);
+        if ($response['status'] === 302) {
+            self::assertStringNotContainsString('/login', $response['location'], $route);
         }
-        self::assertNoPhpErrors($route, $body);
+        self::assertNoPhpErrors($route, $response['body']);
     }
 
     public function testUnknownRouteIsNotFound(): void
     {
-        [$status] = self::request(curl_init(), '/no-such-route-' . bin2hex(random_bytes(4)));
-        self::assertSame(404, $status);
+        $response = self::request(self::client(), 'GET', '/no-such-route-' . bin2hex(random_bytes(4)));
+        self::assertSame(404, $response['status']);
     }
 
-    /** One curl handle keeps the administrator's cookies across requests. */
+    /** One client keeps the administrator's cookies across requests. */
     private static function adminClient(): \CurlHandle
     {
-        if (self::$adminClient !== null) {
-            return self::$adminClient;
+        if (self::$adminClient === null) {
+            self::$adminClient = self::client();
+            self::loginAsAdmin(self::$adminClient);
         }
-        $rawToken = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
-        self::$db->prepare(
-            "INSERT INTO auth_login_tokens (alt_s_id, alt_email, alt_token_hash, alt_expires_at)
-             SELECT s_id, s_email, ?, ? FROM subscribers WHERE s_id = ?"
-        )->execute([hash('sha256', $rawToken), date('Y-m-d H:i:s', time() + 600), (int) self::$fixture['subscriberId']]);
-
-        $client = curl_init();
-        curl_setopt($client, CURLOPT_COOKIEFILE, '');
-        [$status, , $location] = self::request($client, '/auth/verify?token=' . $rawToken);
-        if ($status !== 302 || str_ends_with($location, '/login')) {
-            self::fail("Administrator magic-link login failed (HTTP {$status}, Location {$location}).");
-        }
-        return self::$adminClient = $client;
+        return self::$adminClient;
     }
 
-    /** @return array{int, string, string} status, body, Location header */
-    private static function request(\CurlHandle $client, string $route): array
+    /** Fill {placeholders} in a route with the fixture values. */
+    private static function path(string $route): string
     {
-        $path = preg_replace_callback(
+        return (string) preg_replace_callback(
             '/\{(\w+)\}/',
             static fn(array $m): string => rawurlencode(self::$fixture[$m[1]]),
             $route
-        );
-        $location = '';
-        curl_setopt_array($client, [
-            CURLOPT_URL => self::$baseUrl . $path,
-            CURLOPT_HTTPGET => true,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_FOLLOWLOCATION => false,
-            CURLOPT_TIMEOUT => 60,
-            CURLOPT_HEADERFUNCTION => static function ($ch, string $header) use (&$location): int {
-                if (stripos($header, 'Location:') === 0) {
-                    $location = trim(substr($header, 9));
-                }
-                return strlen($header);
-            },
-        ]);
-        $body = curl_exec($client);
-        if ($body === false) {
-            self::fail("Request to {$path} failed: " . curl_error($client));
-        }
-        return [(int) curl_getinfo($client, CURLINFO_HTTP_CODE), (string) $body, $location];
-    }
-
-    private static function assertNoPhpErrors(string $route, string $body): void
-    {
-        self::assertDoesNotMatchRegularExpression(
-            '/<b>(Fatal error|Warning|Notice|Deprecated)<\/b>|Uncaught |Stack trace:/',
-            $body,
-            "PHP error output on {$route}"
         );
     }
 }

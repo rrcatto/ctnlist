@@ -7,6 +7,7 @@ namespace App\Legacy;
 use Base;
 use RuntimeException;
 use Symfony\Component\Dotenv\Dotenv;
+use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
@@ -26,6 +27,7 @@ final class LegacyFramework
         #[Autowire('%kernel.project_dir%')] private readonly string $projectDir,
         #[Autowire('%kernel.instance_dir%')] private readonly string $instanceDir,
         #[Autowire('%kernel.environment%')] private readonly string $environment,
+        private readonly CsrfTokenManagerInterface $csrfTokenManager,
     ) {
     }
 
@@ -43,6 +45,7 @@ final class LegacyFramework
         $fat->set('ONERROR', static function (Base $fat): never {
             throw new LegacyHttpError((int) $fat->get('ERROR.code'), (string) $fat->get('ERROR.text'));
         });
+        $fat->set(Csrf::MANAGER, $this->csrfTokenManager);
         $fat->set('ONREROUTE', static function (string $url, bool $permanent = false): never {
             throw new LegacyRedirect($url, $permanent);
         });

@@ -4,32 +4,36 @@ declare(strict_types=1);
 
 namespace App\Legacy;
 
+use App\Security\Csrf as CsrfTokenId;
 use Base;
+use Symfony\Component\Security\Csrf\CsrfToken;
+use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 
+/**
+ * Legacy CSRF helper, backed by Symfony's session-stored token manager
+ * (LegacyFramework puts it in the hive), so legacy and Symfony forms share
+ * one token.
+ */
 final class Csrf
 {
+    public const MANAGER = 'CSRF_TOKEN_MANAGER';
+
     public static function token(Base $fat): string
     {
-        $token = (string) $fat->get('SESSION.csrf');
-        if (!preg_match('/^[0-9a-f]{64}$/', $token)) {
-            $token = bin2hex(random_bytes(32));
-            $fat->set('SESSION.csrf', $token);
-        }
-        return $token;
+        return self::manager($fat)->getToken(CsrfTokenId::TOKEN_ID)->getValue();
     }
 
     public static function field(Base $fat): string
     {
-        return '<input type="hidden" name="csrf" value="'
+        return '<input type="hidden" name="' . CsrfTokenId::FIELD . '" value="'
             . htmlspecialchars(self::token($fat), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
             . '">';
     }
 
     public static function validate(Base $fat): bool
     {
-        $expected = (string) $fat->get('SESSION.csrf');
-        $actual = trim((string) $fat->get('POST.csrf'));
-        return $expected !== '' && $actual !== '' && hash_equals($expected, $actual);
+        $actual = trim((string) $fat->get('POST.' . CsrfTokenId::FIELD));
+        return $actual !== '' && self::manager($fat)->isTokenValid(new CsrfToken(CsrfTokenId::TOKEN_ID, $actual));
     }
 
     public static function requireValid(Base $fat): void
@@ -37,5 +41,10 @@ final class Csrf
         if (!self::validate($fat)) {
             $fat->error(403, 'Invalid request token.');
         }
+    }
+
+    private static function manager(Base $fat): CsrfTokenManagerInterface
+    {
+        return $fat->get(self::MANAGER);
     }
 }

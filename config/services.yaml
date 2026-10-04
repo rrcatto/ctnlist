@@ -1,5 +1,11 @@
 parameters:
+    app.timezone: '%env(APP_TIMEZONE)%'
+
     # Defaults for optional instance .env settings.
+    env(APP_TIMEZONE): 'Africa/Johannesburg'
+    env(APP_ADMIN_EMAIL): ''
+    env(AUTH_SESSION_COOKIE): 'ctnlist_session'
+    env(AUTH_SESSION_TTL): '86400'
     env(TRUSTED_PROXIES): '127.0.0.1'
     env(PHP_SESSION_COOKIE): 'ctnlist_php_session'
     env(MAILER_DSN): 'null://null'
