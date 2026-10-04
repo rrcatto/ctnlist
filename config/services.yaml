@@ -9,6 +9,8 @@ parameters:
     env(SUPPRESSION_PROVIDER): 'banlist'
     env(GDB_ENV_DIRECTORY): ''
     env(GDB_ENV_FILE): ''
+    env(MAIL_BATCH_SIZE): '600'
+    env(MAIL_BATCH_DELAY): '0'
     env(TRUSTED_PROXIES): '127.0.0.1'
     env(PHP_SESSION_COOKIE): 'ctnlist_php_session'
     env(MAILER_DSN): 'null://null'
@@ -29,9 +31,15 @@ services:
             # Value objects and exceptions, not services.
             - '../src/Security/SubscriberUser.php'
             - '../src/**/*NotFound.php'
+            - '../src/Mail/SmtpServer.php'
+            - '../src/Mail/CampaignDelivery.php'
 
     App\Config\SiteConfig:
         factory: '@App\Config\SiteConfigFactory'
+
+    # One open transport per use (queue run, single send); never shared.
+    App\Mail\MailConnection:
+        shared: false
 
     App\Suppression\SuppressionChecker:
         factory: ['@App\Suppression\SuppressionCheckerFactory', 'create']

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Repository;
 
+use App\Subscriber\EmailNormaliser;
 use Doctrine\DBAL\Connection;
 
 /**
@@ -40,6 +41,34 @@ final class SubscriberRepository
             'SELECT s_id, s_uuid, s_email, s_fname, s_lname FROM subscribers WHERE s_uuid = ?',
             [$uuid]
         ));
+    }
+
+    /** @return Identity|null the subscriber with this address after the v5 cleanup rules */
+    public function findIdentityByEmail(string $email): ?array
+    {
+        return $this->identity($this->db->fetchAssociative(
+            'SELECT s_id, s_uuid, s_email, s_fname, s_lname FROM subscribers WHERE LOWER(s_email) = ?',
+            [EmailNormaliser::correct($email)]
+        ));
+    }
+
+    /**
+     * Update engagement fields: bounces reset, emails-left set, priority set
+     * or (with $increment) raised, last interaction set (null clears it).
+     */
+    public function updateEngagement(string $uuid, int $priority, bool $increment, int $emailsLeft, ?string $lastInteracted): bool
+    {
+        $uuid = strtolower(trim($uuid));
+        if (!preg_match(self::UUID_PATTERN, $uuid)) {
+            return false;
+        }
+        return $this->db->executeStatement(
+            'UPDATE subscribers
+             SET s_priority = ' . ($increment ? 's_priority + :priority' : ':priority') . ',
+                 s_bounces = 0, s_emailsleft = :left, s_last_interacted = :interacted
+             WHERE s_uuid = :uuid',
+            ['priority' => $priority, 'left' => $emailsLeft, 'interacted' => $lastInteracted, 'uuid' => $uuid]
+        ) === 1;
     }
 
     public function exists(int $id): bool
