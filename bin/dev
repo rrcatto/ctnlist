@@ -54,6 +54,7 @@ Usage: bin/dev <command> [args]
   seed-admin [email] Create/promote an administrator (default admin@ctnlist.test)
   composer <args>    Run Composer in the app container
   php <args>         Run PHP in the app container
+  console <args>     Run bin/console (as www-data) for the dev installation
   analyse            Run PHPStan (composer analyse)
   test [args]        Run PHPUnit
   lint               php -l over public_html/index.php, src/ and tests/
@@ -94,6 +95,7 @@ case "$cmd" in
         ;;
     composer) in_app_tty composer "$@" ;;
     php) in_app_tty php "$@" ;;
+    console) if [ -t 0 ]; then podman exec -it -u www-data "$APP" bin/console "$@"; else podman exec -i -u www-data "$APP" bin/console "$@"; fi ;;
     analyse) in_app composer analyse ;;
     test) in_app vendor/bin/phpunit "$@" ;;
     lint)

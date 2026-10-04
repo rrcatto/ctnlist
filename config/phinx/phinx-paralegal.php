@@ -2,22 +2,17 @@
 
 declare(strict_types=1);
 
-use Dotenv\Dotenv;
+use Symfony\Component\Dotenv\Dotenv;
 
 $projectRoot = dirname(__DIR__, 2);
 require $projectRoot . '/vendor/autoload.php';
 
-$instanceEnvDirectory = (string) (
-    $_ENV['INSTANCE_ENV_DIR']
-    ?? $_SERVER['INSTANCE_ENV_DIR']
-    ?? getenv('INSTANCE_ENV_DIR')
-    ?: '/home/paralegal'
-);
-
-if (!is_dir($instanceEnvDirectory)) {
-    throw new RuntimeException('Instance environment directory not found: ' . $instanceEnvDirectory);
+// Migrations run against one installation: the directory holding its .env.
+$instanceDirectory = (string) getenv('CTNLIST_INSTANCE_DIR');
+if ($instanceDirectory === '' || !is_file($instanceDirectory . '/.env')) {
+    throw new RuntimeException('Set CTNLIST_INSTANCE_DIR to the installation directory (the one containing .env).');
 }
-Dotenv::createImmutable($instanceEnvDirectory)->safeLoad();
+(new Dotenv())->load($instanceDirectory . '/.env');
 
 $env = static function (string $name, string $default = ''): string {
     $value = $_ENV[$name] ?? $_SERVER[$name] ?? getenv($name);

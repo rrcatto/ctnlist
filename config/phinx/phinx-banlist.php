@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Dotenv\Dotenv;
+use Symfony\Component\Dotenv\Dotenv;
 
 $projectRoot = dirname(__DIR__, 2);
 
@@ -22,7 +22,7 @@ $banEnvPath = $banEnvDirectory . DIRECTORY_SEPARATOR . $banEnvName;
 if (!is_file($banEnvPath)) {
     throw new RuntimeException('Global suppression database configuration file not found: ' . $banEnvPath);
 }
-Dotenv::createImmutable($banEnvDirectory, $banEnvName)->safeLoad();
+(new Dotenv())->load($banEnvPath);
 
 $env = static function (string $name, string $default = ''): string {
     $value = $_ENV[$name] ?? $_SERVER[$name] ?? getenv($name);

@@ -1,0 +1,30 @@
+framework:
+    secret: '%env(APP_SECRET)%'
+    http_method_override: false
+    handle_all_throwables: true
+
+    # Comma-separated proxy addresses whose X-Forwarded-For/-Proto are trusted
+    # (client IP, HTTPS detection for secure cookies).
+    trusted_proxies: '%env(TRUSTED_PROXIES)%'
+    trusted_headers: ['x-forwarded-for', 'x-forwarded-proto', 'x-forwarded-port']
+
+    session:
+        handler_id: App\Session\DatabaseSessionHandler
+        name: '%env(PHP_SESSION_COOKIE)%'
+        cookie_lifetime: 0
+        cookie_path: /
+        cookie_secure: auto
+        cookie_httponly: true
+        cookie_samesite: lax
+
+    mailer:
+        dsn: '%env(MAILER_DSN)%'
+
+    php_errors:
+        log: true
+
+when@test:
+    framework:
+        test: true
+        session:
+            storage_factory_id: session.storage.factory.mock_file

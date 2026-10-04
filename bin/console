@@ -1,0 +1,23 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use App\Kernel;
+use Symfony\Bundle\FrameworkBundle\Console\Application;
+
+// Console commands act on one installation: the directory holding its .env
+// and var/ (the parent of its public_html).
+$instanceDirectory = getenv('CTNLIST_INSTANCE_DIR');
+if ($instanceDirectory === false || $instanceDirectory === '') {
+    fwrite(STDERR, "Set CTNLIST_INSTANCE_DIR to the installation directory (the one containing .env).\n");
+    exit(1);
+}
+
+$_SERVER['APP_RUNTIME_OPTIONS'] = ['project_dir' => $instanceDirectory];
+
+require_once dirname(__DIR__) . '/vendor/autoload_runtime.php';
+
+return static fn(array $context): Application => new Application(
+    new Kernel((string) $context['APP_ENV'], (bool) $context['APP_DEBUG'], $instanceDirectory)
+);

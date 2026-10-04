@@ -1,8 +1,7 @@
 # Local development environment. Use bin/dev rather than calling this directly.
-#   web      http://localhost:8180   (nginx -> app PHP-FPM, Fat-Free legacy front controller)
+#   web      http://localhost:8180   (nginx -> app PHP-FPM, Symfony front controller)
 #   mailpit  http://localhost:8125   (captures all outgoing mail)
 #   db       localhost:5434          (PostgreSQL 16, ctnlist/ctnlist)
-# Port 8181 is reserved for the Symfony application.
 name: ctnlist
 
 services:
@@ -36,7 +35,7 @@ services:
       - db
       - mailpit
     volumes:
-      # Shared code at the path index.php hard-codes (CTNLIST_SHARED_DIRECTORY).
+      # Shared code at the path public_html/index.php hard-codes.
       - ./:/usr/local/lib/php/ctnlist/5.0.1
       # Per-installation public_html, .env and writable var/, as on a
       # deployed instance.

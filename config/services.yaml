@@ -1,0 +1,56 @@
+parameters:
+    # Defaults for optional instance .env settings.
+    env(TRUSTED_PROXIES): '127.0.0.1'
+    env(PHP_SESSION_COOKIE): 'ctnlist_php_session'
+    env(MAILER_DSN): 'null://null'
+    env(DB_HOST): '127.0.0.1'
+    env(DB_PORT): '5432'
+    env(DB_SSLMODE): 'prefer'
+
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+
+    App\:
+        resource: '../src/'
+        exclude:
+            - '../src/Kernel.php'
+            - '../src/Legacy/'
+
+    # ------------------------------------------------------------------
+    # Legacy Fat-Free objects, wired by the container until each area is
+    # ported. Mappers (*M) and helpers are still created by the legacy code.
+    # ------------------------------------------------------------------
+    App\Legacy\:
+        resource: '../src/Legacy/'
+        exclude:
+            - '../src/Legacy/routes.php'
+            - '../src/Legacy/*M.php'
+            - '../src/Legacy/{Controller,Csrf,UuidV7,LegacyRedirect,LegacyHttpError}.php'
+            - '../src/Legacy/{formfield,htmlhelper,customers}.php'
+            - '../src/Legacy/Global*.php'
+
+    Base:
+        class: Base
+        factory: ['@App\Legacy\LegacyFramework', 'create']
+
+    DB\SQL:
+        class: DB\SQL
+        factory: ['@Base', 'get']
+        arguments: ['dbPDO']
+
+    App\Legacy\UsersController:
+        calls:
+            - [SetMailer, ['@App\Legacy\mailer']]
+
+    App\Legacy\SubscribersController:
+        calls:
+            - [SetMailer, ['@App\Legacy\mailer']]
+
+    App\Legacy\MessagesController:
+        calls:
+            - [SetTemplate, ['@App\Legacy\TemplatesController']]
+            - [SetQueue, ['@App\Legacy\QueueController']]
+            - [SetArchive, ['@App\Legacy\ArchivesController']]
+            - [SetMailer, ['@App\Legacy\mailer']]

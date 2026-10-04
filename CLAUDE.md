@@ -10,23 +10,23 @@ ctnlist (v5.0.1-restored) is a web-based mailing-list application. v5.0 is the *
 
 - PHP v8.5.11 (`composer.json` declares `>=8.4 <9.0`, platform pinned to 8.4.0)
 - PostgreSQL v16.15
-- Currently using the FatFreeFramework v3.9.2
-- Migrating off F3 to Symfony 8.1 (8.1.8 is current)
-- Other dependencies: Phinx (migrations), Symfony Mailer, vlucas/phpdotenv; PHPStan and PHPUnit for dev
+- Symfony 8.1 (framework-bundle 8.1.8, runtime, dotenv, twig-bundle, mailer) with Doctrine DBAL 4 / DoctrineBundle 3; Fat-Free Framework 3.9.2 still runs the unported routes
+- Other dependencies: Phinx (migrations); PHPStan and PHPUnit for dev
 
 ## Local development environment (podman)
 
-`bin/dev` drives a podman-compose stack (`compose.yaml`, files in `dev/podman/`): nginx 1.30 → PHP 8.5-FPM, PostgreSQL 16 and Mailpit. Containers mirror the production layout (repo mounted at `CTNLIST_SHARED_DIRECTORY`, the repo's `public_html/` mounted read-only at `/var/www/ctnlist/public_html`, `.env` one level up, writable `var/` volume).
+`bin/dev` drives a podman-compose stack (`compose.yaml`, files in `dev/podman/`): nginx 1.30 → PHP 8.5-FPM, PostgreSQL 16 and Mailpit. Containers mirror the production layout (repo mounted at the shared-code path `/usr/local/lib/php/ctnlist/5.0.1`, the repo's `public_html/` mounted read-only at `/var/www/ctnlist/public_html`, `.env` one level up, writable `var/` volume).
 
 ```bash
 bin/dev up                  # build, start, composer install (first run), run migrations, seed admin@ctnlist.test
 bin/dev seed-admin [email]  # create/promote another administrator
-bin/dev help                # all commands: down, restart, ps, logs, migrate, status, psql, shell, composer, php, reset-db
+bin/dev console <args>      # bin/console as www-data for the dev installation (e.g. bin/dev console debug:router)
+bin/dev help                # all commands: down, restart, ps, logs (follows; never pipe it), migrate, status, psql, shell, composer, php, reset-db
 ```
 
-- App http://localhost:8180, Mailpit http://localhost:8125 (all mail is captured there; log in via the magic link it receives), PostgreSQL `localhost:5434` (ctnlist/ctnlist). Port 8181 is reserved for the Symfony app.
+- App http://localhost:8180, Mailpit http://localhost:8125 (all mail is captured there; log in via the magic link it receives), PostgreSQL `localhost:5434` (ctnlist/ctnlist).
 - First `bin/dev up` generates `dev/podman/ctnlist.env` (gitignored) from `ctnlist.env.dist` with random `APP_SECRET`/`APP_INSTANCE_ID`. Never commit generated secrets or use placeholder values.
-- The dev stack has no banlist database: it runs with `SUPPRESSION_PROVIDER=none`, which `public_html/index.php` only accepts when `APP_ENV=development`. The catto-mail smarthost is planned to replace the banlist as the suppression source.
+- The dev stack has no banlist database: it runs with `SUPPRESSION_PROVIDER=none`, which `LegacyFramework` only accepts when `APP_ENV=dev`. The catto-mail smarthost is planned to replace the banlist as the suppression source.
 - Run PHP tooling inside the container (`bin/dev composer …`, `bin/dev analyse`); there is no host PHP.
 - `bin/dev reset-db` deletes the `ctnlist_pgdata` volume and re-runs `up`. It prompts for the word `reset`, so a non-interactive run needs `echo reset | bin/dev reset-db`.
 
@@ -48,7 +48,7 @@ composer status-banlist
 
 `tests/Smoke/RouteSmokeTest` requests every GET route of the running stack over HTTP (from the app container to `http://web`), anonymously and as `admin@ctnlist.test` (logged in by inserting a magic-link token). It creates and deletes its own message/template/archive fixtures in the dev DB. It is the route-parity check for the Symfony migration: add new GET routes to it. The app writes timestamps in PHP's timezone (Africa/Johannesburg) while PostgreSQL runs in UTC, so compute timestamps in PHP when inserting rows the app compares against `date()`.
 
-Phinx configs live in `config/phinx/`. `phinx-paralegal.php` loads `.env` from `INSTANCE_ENV_DIR` (default `/home/paralegal`; the dev container sets `/var/www/ctnlist`); `phinx-banlist.php` loads `ban.env` from `GDB_ENV_DIRECTORY`/`GDB_ENV_FILE`. Export those before running migrations against another installation.
+Phinx configs live in `config/phinx/`. `phinx-paralegal.php` loads `.env` from `CTNLIST_INSTANCE_DIR` (required; the dev container sets `/var/www/ctnlist`); `phinx-banlist.php` loads `ban.env` from `GDB_ENV_DIRECTORY`/`GDB_ENV_FILE`. Export those before running migrations against another installation.
 
 `database/reset-development.sql` and `database/reset-banlist-development.sql` are **destructive** and only for disposable dev databases.
 
@@ -56,38 +56,45 @@ The podman stack covers the main DB, mail capture and browser workflows. There i
 
 ## Migration to Symfony (in progress)
 
-ctnlist is being migrated from F3 to Symfony 8.1 in phases; each phase leaves a working app on :8180 with lint, PHPStan and the smoke suite green. Decisions: one app (no side-by-side), Doctrine DBAL repositories replace the F3 Mappers, Twig replaces string-built HTML area by area, constructor-injection DI via Symfony autowiring, and the shared-code/per-instance deployment model is kept. Done: phase 0 (smoke suite) and phase 1 (directory layout). Next: phase 2, Symfony kernel as front controller with a temporary F3 bridge for unported routes.
+ctnlist is being migrated from F3 to Symfony 8.1 in phases; each phase leaves a working app on :8180 with lint, PHPStan and the smoke suite green. Decisions: one app (no side-by-side), Doctrine DBAL repositories replace the F3 Mappers, Twig replaces string-built HTML area by area, constructor-injection DI via Symfony autowiring, and the shared-code/per-instance deployment model is kept. Done: phase 0 (smoke suite), phase 1 (directory layout), phase 2 (Symfony kernel as the front controller, with a temporary F3 bridge). Next: phase 3, authentication and security (Symfony Security with a magic-link authenticator, ACL voter, Symfony CSRF).
 
 Unported code lives in `src/Legacy/` (namespace `App\Legacy`), `templates/legacy/` (F3 templates) and `config/legacy/design.ini`; each phase moves what it ports into its final home (`src/Controller`, `src/Repository`, domain folders, `templates/`) and deletes it from Legacy.
 
 ## Deployment layout
 
-The repository is the shared code tree, installed at `CTNLIST_SHARED_DIRECTORY = /usr/local/lib/php/ctnlist/5.0.1/` (hard-coded in `public_html/index.php`). Each installation has its own directory containing:
+The repository is the shared code tree, installed at `/usr/local/lib/php/ctnlist/5.0.1/` (hard-coded as `$sharedDirectory` in `public_html/index.php`). Each installation has its own directory containing:
 - `public_html/`: a copy of the repo's `public_html/` (`index.php`, `css/`, `js/`), used as the web root;
-- `.env` one directory **above** `public_html` (start from `.env.example`);
-- a writable `var/` (F3 compiles templates into `var/tmp/`) and `logs/`.
+- `.env` one directory **above** `public_html` (start from `.env.example`; `APP_ENV` is `prod`, `dev` or `test`). The Symfony runtime loads it (runtime option `project_dir` = the installation directory);
+- a writable `var/` (Symfony cache and logs, F3 compiled templates in `var/tmp/`) and `logs/`.
+
+`App\Kernel` takes the installation directory as a third constructor argument: `getProjectDir()` is the shared tree, `getCacheDir()`/`getLogDir()` are under the installation's `var/`, and `%kernel.instance_dir%` is available to services. `bin/console` needs `CTNLIST_INSTANCE_DIR`.
 
 The suppression DB config (`ban.env`) lives outside the source tree; `config/phinx/` is its default directory.
 
 ## Architecture
 
-**Single front controller.** All routing lives in `public_html/index.php` as F3 closures (`$fat->route(...)`), about 90 routes. The file bootstraps env → F3 hive → two PDO connections → DB session handler → controllers, then defines routes. Shared helpers defined there:
+**Request flow.** `public_html/index.php` → Symfony runtime → `App\Kernel`. Symfony owns the session (`App\Session\DatabaseSessionHandler`, DBAL, `sessions` table), error handling and the response. Ported routes will be Symfony controllers; everything else hits the catch-all `legacy` route in `config/routes.yaml` (keep it last), served by `App\Legacy\LegacyBridge`:
+- it starts the Symfony session first (legacy code uses top-level `$_SESSION` keys; Symfony keeps its own under `_sf2_attributes`, both in the same session);
+- `LegacyFramework::create()` builds the F3 hive (config from env, `\DB\SQL` connections, suppression provider), removes F3's error/exception handlers, sets `HALT=false` and makes `ONREROUTE`/`ONERROR` throw `LegacyRedirect`/`LegacyHttpError`. The bridge turns those into a `RedirectResponse` or the legacy error page. Never let F3 `die`;
+- `src/Legacy/routes.php` holds the F3 route closures (about 90), called with the container-built legacy services; output is buffered, and headers sent with `header()`/`setcookie()` are moved onto the Symfony response (except the session cookie, which Symfony's session listener sets).
+
+Helpers defined in `routes.php`:
 - `$render($title, $html, $layout)` — controllers return HTML **strings**; `$render` runs them through F3 `Template::parse/resolve` (so `{{@BaseURL}}` etc. work inside controller output) and wraps them in `templates/legacy/unify-main-template.html`.
 - `$admin('perm.key')` — allows if the user has the ACL permission, otherwise requires `uadmin === 1`, else 403.
 - `$loggedIn()` — redirects to `/login`.
 
-**Controllers / models (`src/Legacy/`, PSR-4 `App\` → `src/`).**
+**Legacy controllers / models (`src/Legacy/`, PSR-4 `App\` → `src/`).**
 - `*Controller.php` — business logic plus HTML generation (forms/tables built as strings, using `formfield`/`htmlhelper` and CSS classes from `config/legacy/design.ini`, which is loaded into the F3 hive).
 - `*M.php` — F3 `\DB\SQL\Mapper` subclasses, one per table.
-- Controllers are wired manually in `public_html/index.php` with constructor injection plus setter injection (`SetMailer`, `SetQueue`, …) to break circular dependencies. Add new dependencies there.
+- Legacy controllers are Symfony services (`config/services.yaml`): autowired constructors (`Base` and `DB\SQL` come from factories on `LegacyFramework`) plus `calls:` for the setter injection (`SetMailer`, `SetQueue`, …) that breaks their circular dependencies. Mappers and helpers are still created with `new` inside the legacy code. Resolution order in `LegacyBridge::SERVICES` matters (UsersController authenticates and SiteLogController logs in their constructors).
 - `ListService`, `AclService` — raw-SQL services for lists/membership and role permissions.
-- State shared via the F3 hive: `dbPDO` (main DB), `gdbPDO` (suppression DB), `uloggedin`, `uadmin`, `uid`, `acl_permissions`, plus the non-secret config keys set in `public_html/index.php`.
+- State shared via the F3 hive: `dbPDO` (main DB), `gdbPDO` (suppression DB), `uloggedin`, `uadmin`, `uid`, `acl_permissions`, plus the non-secret config keys set in `LegacyFramework`.
 
 **Two PostgreSQL databases.** Main DB (`DB_*`) and a separate, shared global suppression DB (`GDB_*`, accessed only by `GlobalUnsubscribeM` / `GlobalDomainUnsubscribeM` via `GlobalUnsubscribeController` / `GlobalDomainUnsubscribeController`). Each has its own migration directory and Phinx config. `SUPPRESSION_PROVIDER` (`banlist` default, `none` dev-only) selects whether the suppression DB is used; those two controllers are the seam for swapping in catto-mail.
 
-**Identity and consent.** `subscribers` is the canonical identity table, keyed publicly by a permanent UUIDv7 (`s_uuid`, see `UuidV7`); URLs use it as `@token`. Auth is passwordless magic-link (`UsersController`, `AuthLoginTokenM`, `AuthSessionM`) with `DatabaseSessionHandler`. A subscriber is eligible for a list only when `list_subscribers.ls_confirmed = TRUE AND ls_unsubscribed = FALSE`. The `ALL` system list is immutable, optional, and must **never** be attached to a message automatically. Its shortcode is `ALL` (`ListsM::ALL_SHORTCODE`); list shortcodes are 3–6 uppercase letters/digits.
+**Identity and consent.** `subscribers` is the canonical identity table, keyed publicly by a permanent UUIDv7 (`s_uuid`, see `UuidV7`); URLs use it as `@token`. Auth is passwordless magic-link (`UsersController`, `AuthLoginTokenM`, `AuthSessionM`); the auth cookie (`AUTH_SESSION_COOKIE`) is separate from the PHP session cookie. A subscriber is eligible for a list only when `list_subscribers.ls_confirmed = TRUE AND ls_unsubscribed = FALSE`. The `ALL` system list is immutable, optional, and must **never** be attached to a message automatically. Its shortcode is `ALL` (`ListsM::ALL_SHORTCODE`); list shortcodes are 3–6 uppercase letters/digits.
 
-**Mail delivery.** All email goes through the `mailer` class (wrapping Symfony Mailer with batching, throttling, retry and multi-server failover from `MAIL_SMTP_SERVERS_JSON`). Messages are queued per subscriber/message (`QueueController`, union of selected lists, deduplicated, engagement-priority ordered) and sent by `QueueController::ProcessQueue()`, which is triggered from a POST route in `public_html/index.php`.
+**Mail delivery.** All email goes through the `mailer` class (wrapping Symfony Mailer with batching, throttling, retry and multi-server failover from `MAIL_SMTP_SERVERS_JSON`). Messages are queued per subscriber/message (`QueueController`, union of selected lists, deduplicated, engagement-priority ordered) and sent by `QueueController::ProcessQueue()`, which is triggered from a POST route in `src/Legacy/routes.php`.
 
 ## Invariants to preserve
 

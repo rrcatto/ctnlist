@@ -24,10 +24,6 @@ class SmlogController extends Controller
         $this->smlog = new SmlogM($fat);
     }
 
-    // Kept for compatibility with the established controller wiring.
-    public function SetSubscriber(SubscribersController $subscriber): void {}
-    public function SetMessage(MessagesController $message): void {}
-
     /**
      * Paginated message activity report, restored from v5.0.
      */

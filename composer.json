@@ -4,13 +4,20 @@
   "type": "project",
   "license": "MIT",
   "require": {
-    "php": ">=8.4 <9.0",
+    "php": ">=8.4.1 <9.0",
     "ext-json": "*",
     "ext-pdo": "*",
     "bcosca/fatfree-core": "^3.9.2",
+    "doctrine/dbal": "^4.4",
+    "doctrine/doctrine-bundle": "^3.3",
     "robmorgan/phinx": "^0.16.12",
-    "symfony/mailer": "^7.4",
-    "vlucas/phpdotenv": "^5.6"
+    "symfony/console": "8.1.*",
+    "symfony/dotenv": "8.1.*",
+    "symfony/framework-bundle": "8.1.*",
+    "symfony/mailer": "8.1.*",
+    "symfony/runtime": "8.1.*",
+    "symfony/twig-bundle": "8.1.*",
+    "symfony/yaml": "8.1.*"
   },
   "require-dev": {
     "phpstan/phpstan": "^2.1",
@@ -30,7 +37,10 @@
     "optimize-autoloader": true,
     "sort-packages": true,
     "platform": {
-      "php": "8.4.0"
+      "php": "8.4.1"
+    },
+    "allow-plugins": {
+      "symfony/runtime": true
     }
   },
   "scripts": {
