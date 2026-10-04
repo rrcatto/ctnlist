@@ -13,7 +13,7 @@ declare(strict_types=1);
 
 use App\Kernel;
 
-$sharedDirectory = '/usr/local/lib/php/ctnlist/5.0.1/';
+$sharedDirectory = '/usr/local/lib/php/ctnlist/5.0.2/';
 $instanceDirectory = dirname(__DIR__);
 
 // The runtime loads <installation>/.env (plus any .env.local / .env.<env>).

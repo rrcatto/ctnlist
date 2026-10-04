@@ -76,6 +76,8 @@ case "$cmd" in
         if [ ! -f vendor/autoload.php ]; then
             in_app composer install --no-interaction
         fi
+        # The compiled container embeds absolute paths; rebuild it on every up.
+        in_app rm -rf /var/www/ctnlist/var/cache /var/www/ctnlist/var/tmp
         wait_for_db
         in_app composer migrate-paralegal
         psql_db -q -v email="$ADMIN_EMAIL_DEFAULT" < dev/podman/seed-admin.sql >/dev/null

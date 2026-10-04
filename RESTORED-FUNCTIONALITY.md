@@ -1,6 +1,6 @@
-# ctnlist 5.0.1 restored functionality
+# ctnlist restored functionality
 
-This source tree uses the working v5.0 application as its behavioural baseline while retaining the approved v5.0.1 technical and data-model upgrades.
+This source tree uses the working v5.0 application as its behavioural baseline while retaining the approved v5.0.1 technical and data-model upgrades. Version 5.0.2 preserves this behaviour while moving the application to Symfony; the workflows and invariants below are the acceptance criteria for that migration.
 
 ## Administrator authority
 
@@ -75,7 +75,7 @@ Transactional notification email and Send Log recording are restored for:
 ## Retained v5.0.1 upgrades
 
 - PostgreSQL and Phinx
-- Symfony Mailer
+- Symfony Mailer (Symfony 8.1 framework from v5.0.2)
 - UUIDv7 subscriber identity
 - subscriber-based passwordless authentication
 - database sessions
@@ -87,4 +87,4 @@ Transactional notification email and Send Log recording are restored for:
 
 ## Review and deployment
 
-This is a complete source tree, not a patch. The schema is created by the single Phase 3A migration; there are no upgrade migrations. Review the files as a replacement v5.0.1 development tree, run Composer dependencies, apply the clean development migrations only to a disposable database, and test the full application workflow against the target PostgreSQL and SMTP services before production use.
+This is a complete source tree, not a patch. The schema is created by the single Phase 3A migration; there are no upgrade migrations. Use the podman development environment (`bin/dev up`) or a disposable database for the clean migrations, and test the full application workflow, including the banlist suppression database and SMTP delivery, on the target installation before production use. Deployment is described in `README.md`.

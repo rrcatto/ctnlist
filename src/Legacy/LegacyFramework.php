@@ -121,7 +121,7 @@ final class LegacyFramework
         $syncServers = json_decode((string) $envOr('SYNC_DATABASES_JSON', '[]'), true);
         $fat->set('dbservers', is_array($syncServers) ? $syncServers : []);
         $fat->set('today', date('Y.m.d H:i:s'));
-        $fat->set('version', '5.0.1-restored');
+        $fat->set('version', '5.0.2');
 
         $dbDriver = strtolower((string) $envOr('DB_DRIVER', 'pgsql'));
         if ($dbDriver !== 'pgsql') {
