@@ -1,8 +1,8 @@
 parameters:
   level: 5
   paths:
-    - classes
-    - index.php
+    - src
+    - public_html/index.php
     - tests
   excludePaths:
     analyse:

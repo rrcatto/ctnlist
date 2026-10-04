@@ -56,7 +56,7 @@ Usage: bin/dev <command> [args]
   php <args>         Run PHP in the app container
   analyse            Run PHPStan (composer analyse)
   test [args]        Run PHPUnit
-  lint               php -l over classes/ and index.php
+  lint               php -l over public_html/index.php, src/ and tests/
   psql [args]        Open psql on the ctnlist database
   shell              Bash shell in the app container
   reset-db           DESTROY the database volume and re-run migrations
@@ -97,7 +97,7 @@ case "$cmd" in
     analyse) in_app composer analyse ;;
     test) in_app vendor/bin/phpunit "$@" ;;
     lint)
-        in_app sh -c 'for f in index.php classes/*.php; do php -l "$f" >/dev/null || exit 1; done; echo "No syntax errors."'
+        in_app sh -c 'for f in public_html/index.php $(find src tests -name "*.php"); do php -l "$f" >/dev/null || exit 1; done; echo "No syntax errors."'
         ;;
     psql) if [ -t 0 ]; then podman exec -it "$DB" psql -U ctnlist -d ctnlist "$@"; else psql_db "$@"; fi ;;
     shell) podman exec -it "$APP" bash ;;

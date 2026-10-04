@@ -38,9 +38,11 @@ services:
     volumes:
       # Shared code at the path index.php hard-codes (CTNLIST_SHARED_DIRECTORY).
       - ./:/usr/local/lib/php/ctnlist/5.0.1
-      # Per-installation public_html and .env, as on a deployed instance.
-      - ./index.php:/var/www/ctnlist/public_html/index.php:ro
+      # Per-installation public_html, .env and writable var/, as on a
+      # deployed instance.
+      - ./public_html:/var/www/ctnlist/public_html:ro
       - ./dev/podman/ctnlist.env:/var/www/ctnlist/.env:ro
+      - instance-var:/var/www/ctnlist/var
       - logs:/var/www/ctnlist/logs
 
   web:
@@ -51,9 +53,9 @@ services:
       - "127.0.0.1:8180:80"
     volumes:
       - ./dev/podman/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./css:/var/www/ctnlist/public_html/css:ro
-      - ./js:/var/www/ctnlist/public_html/js:ro
+      - ./public_html:/var/www/ctnlist/public_html:ro
 
 volumes:
   pgdata:
+  instance-var:
   logs:

@@ -17,9 +17,9 @@
     "phpunit/phpunit": "^12.0"
   },
   "autoload": {
-    "classmap": [
-      "classes/"
-    ]
+    "psr-4": {
+      "App\\": "src/"
+    }
   },
   "autoload-dev": {
     "psr-4": {
@@ -35,10 +35,10 @@
   },
   "scripts": {
     "analyse": "php -d memory_limit=-1 vendor/bin/phpstan analyse",
-    "migrate-paralegal": "vendor/bin/phinx migrate -c phinx/phinx-paralegal.php -e production",
-    "migrate-banlist": "vendor/bin/phinx migrate -c phinx/phinx-banlist.php -e production",
-    "status-paralegal": "vendor/bin/phinx status -c phinx/phinx-paralegal.php -e production",
-    "status-banlist": "vendor/bin/phinx status -c phinx/phinx-banlist.php -e production",
+    "migrate-paralegal": "vendor/bin/phinx migrate -c config/phinx/phinx-paralegal.php -e production",
+    "migrate-banlist": "vendor/bin/phinx migrate -c config/phinx/phinx-banlist.php -e production",
+    "status-paralegal": "vendor/bin/phinx status -c config/phinx/phinx-paralegal.php -e production",
+    "status-banlist": "vendor/bin/phinx status -c config/phinx/phinx-banlist.php -e production",
     "test": "vendor/bin/phpunit"
   }
 }
