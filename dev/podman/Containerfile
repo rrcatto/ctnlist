@@ -16,10 +16,10 @@ COPY dev/podman/php.ini /usr/local/etc/php/conf.d/zz-ctnlist-dev.ini
 
 # The instance's writable var/ (compiled templates, later the Symfony cache)
 # and logs/; public_html is mounted read-only.
-RUN mkdir -p /usr/local/lib/php/ctnlist/5.0.2 /var/www/ctnlist/public_html /var/www/ctnlist/var /var/www/ctnlist/logs \
+RUN mkdir -p /usr/local/lib/php/ctnlist/5.0.3 /var/www/ctnlist/public_html /var/www/ctnlist/var /var/www/ctnlist/logs \
     && chown www-data:www-data /var/www/ctnlist/var /var/www/ctnlist/logs
 
 ENV COMPOSER_ALLOW_SUPERUSER=1 \
     CTNLIST_INSTANCE_DIR=/var/www/ctnlist
 
-WORKDIR /usr/local/lib/php/ctnlist/5.0.2
+WORKDIR /usr/local/lib/php/ctnlist/5.0.3

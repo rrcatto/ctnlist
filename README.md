@@ -1,18 +1,20 @@
-# ctnlist 5.0.2
+# ctnlist 5.0.3
 
 ctnlist is a web-based mailing-list application created by Richard Royston Catto in 2009. Version 5.0.x is an incremental modernisation of the working v5.0 application, not a replacement of its established workflows.
 
-Version 5.0.2 keeps the behaviour of 5.0.1-restored and moves the application from the Fat-Free Framework to Symfony 8.1. The migration is in progress: Symfony is the front controller and owns sessions, errors and responses, while routes not yet ported still run on Fat-Free through a temporary bridge (see [Migration status](#migration-status)).
+Versions 5.0.2 and later keep the behaviour of 5.0.1-restored and move the application from the Fat-Free Framework to Symfony 8.1. The migration is in progress: Symfony is the front controller and owns sessions, authentication, CSRF, the page layout, errors and responses, while routes not yet ported still run on Fat-Free through a temporary bridge (see [Migration status](#migration-status)).
+
+Version 5.0.3 moves sign-in, logout, permission checks and CSRF to Symfony Security, renders every page in a single Twig layout, and ports the home, privacy and store pages.
 
 ## Platform and upgrades
 
 - PHP 8.4.1+ (developed on 8.5), Composer
-- Symfony 8.1 with Doctrine DBAL 4; Fat-Free Framework 3.9 for the routes not yet ported
+- Symfony 8.1 (including Symfony Security and Twig) with Doctrine DBAL 4; Fat-Free Framework 3.9 for the routes not yet ported
 - PostgreSQL with versioned Phinx migrations
 - Symfony Mailer behind the application-owned `mailer` wrapper
 - permanent RFC 9562 UUIDv7 subscriber identifiers
 - `subscribers` as the canonical identity table
-- passwordless one-time email authentication
+- passwordless one-time email authentication (Symfony Security from 5.0.3)
 - application-owned database sessions
 - multiple mailing lists and per-list consent
 - immutable `ALL` system list as an optional audience
@@ -121,7 +123,7 @@ dev/podman/     development container files
 
 ## Deployment
 
-The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/5.0.2/` (the path is set in `public_html/index.php`). Run `composer install --no-dev` there.
+The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/5.0.3/` (the path is set in `public_html/index.php`). Run `composer install --no-dev` there.
 
 Each installation has its own directory containing:
 

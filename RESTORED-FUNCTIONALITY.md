@@ -1,6 +1,6 @@
 # ctnlist restored functionality
 
-This source tree uses the working v5.0 application as its behavioural baseline while retaining the approved v5.0.1 technical and data-model upgrades. Version 5.0.2 preserves this behaviour while moving the application to Symfony; the workflows and invariants below are the acceptance criteria for that migration.
+This source tree uses the working v5.0 application as its behavioural baseline while retaining the approved v5.0.1 technical and data-model upgrades. Versions 5.0.2 and later preserve this behaviour while moving the application to Symfony; the workflows and invariants below are the acceptance criteria for that migration.
 
 ## Administrator authority
 
@@ -77,7 +77,7 @@ Transactional notification email and Send Log recording are restored for:
 - PostgreSQL and Phinx
 - Symfony Mailer (Symfony 8.1 framework from v5.0.2)
 - UUIDv7 subscriber identity
-- subscriber-based passwordless authentication
+- subscriber-based passwordless authentication (Symfony Security from v5.0.3)
 - database sessions
 - multiple lists and per-list consent
 - roles and ACL
