@@ -12,7 +12,7 @@ ctnlist is a web-based mailing-list application created by Richard Royston Catto
 - passwordless one-time email authentication
 - application-owned database sessions
 - multiple mailing lists and per-list consent
-- immutable `ALL` system list (`ALL00`) as an optional audience
+- immutable `ALL` system list as an optional audience
 - roles, permissions and ACL
 - CSRF protection for state-changing actions
 - separate PostgreSQL global email/domain suppression database
@@ -101,7 +101,7 @@ ls_confirmed = TRUE
 ls_unsubscribed = FALSE
 ```
 
-A message can be saved without any audience. `ALL00` is available for general campaigns but is not mandatory.
+A message can be saved without any audience. `ALL` is available for general campaigns but is not mandatory.
 
 ## Configuration
 
@@ -113,7 +113,7 @@ SMTP can be configured with a single `MAILER_DSN` or an optional `MAIL_SMTP_SERV
 
 ## Database setup
 
-The v5.0.1 schema is managed by Phinx. The corrective migration `20260718193000_restore_v5_behavioural_schema.php` updates databases that already ran the original Phase 3A migration. The corrected Phase 3A migration is used for clean installations. The package includes destructive reset scripts for disposable development databases:
+The v5.0.1 schema is managed by Phinx as a single migration, `20260716120000_create_phase3a_schema.php`. ctnlist is not yet in production, so schema changes are made in that migration and the development database is rebuilt; there are no upgrade migrations. The package includes destructive reset scripts for disposable development databases:
 
 ```text
 database/reset-development.sql

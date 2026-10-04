@@ -331,41 +331,26 @@ $fat->route('GET /my/messages', static function () use ($user, $loggedIn, $rende
 });
 
 // Per-list consent. The MUID route variants preserve message-linked smlog
-// activity. The one- and two-value compatibility forms keep previously issued
-// v5 links working by treating them as ALL-list actions.
-$showConfirm = static function (Base $fat, array $params) use ($subscriber, $user, $listService, $render): void {
-    $shortcode = strtoupper(trim((string) ($params['shortcode'] ?? ListsM::ALL_SHORTCODE)));
-    $muid = trim((string) ($params['muid'] ?? ''));
-    if ($muid === '' && $shortcode !== '' && $listService->findByShortcode($shortcode) === null) {
-        $muid = (string) ($params['shortcode'] ?? '');
-        $shortcode = ListsM::ALL_SHORTCODE;
-    }
+// activity.
+$showConfirm = static function (Base $fat, array $params) use ($subscriber, $user, $render): void {
     $render('Confirm subscription', $subscriber->CreateConfirmHTMLform(
         (string) $params['token'],
-        $shortcode,
+        strtoupper(trim((string) $params['shortcode'])),
         $user,
-        $muid
+        trim((string) ($params['muid'] ?? ''))
     ));
 };
-$fat->route('GET /confirm/@token', $showConfirm);
 $fat->route('GET /confirm/@token/@shortcode', $showConfirm);
 $fat->route('GET /confirm/@token/@shortcode/@muid', $showConfirm);
 $fat->route('POST /confirm', static fn() => $render('Subscription confirmed', $subscriber->ConfirmSubscription($user)));
-$showUnsubscribe = static function (Base $fat, array $params) use ($subscriber, $user, $listService, $render): void {
-    $shortcode = strtoupper(trim((string) ($params['shortcode'] ?? ListsM::ALL_SHORTCODE)));
-    $muid = trim((string) ($params['muid'] ?? ''));
-    if ($muid === '' && $shortcode !== '' && $listService->findByShortcode($shortcode) === null) {
-        $muid = (string) ($params['shortcode'] ?? '');
-        $shortcode = ListsM::ALL_SHORTCODE;
-    }
+$showUnsubscribe = static function (Base $fat, array $params) use ($subscriber, $user, $render): void {
     $render('Unsubscribe', $subscriber->CreateUnsubscribeHTMLform(
         (string) $params['token'],
-        $shortcode,
+        strtoupper(trim((string) $params['shortcode'])),
         $user,
-        $muid
+        trim((string) ($params['muid'] ?? ''))
     ));
 };
-$fat->route('GET /unsubscribe/@token', $showUnsubscribe);
 $fat->route('GET /unsubscribe/@token/@shortcode', $showUnsubscribe);
 $fat->route('GET /unsubscribe/@token/@shortcode/@muid', $showUnsubscribe);
 $fat->route('POST /unsubscribe', static fn() => $render('Unsubscribed', $subscriber->Unsubscribe($user)));
@@ -460,9 +445,9 @@ $fat->route('GET /subscribe', static function (Base $fat) use ($user, $message, 
         if ($shortcode !== '') {
             $list = $listService->findByShortcode($shortcode);
         } else {
-            // Compatibility for previously issued subscribe links that carried
-            // only the MUID. A single assigned list is unambiguous. When a
-            // message has several lists, let the subscriber choose the list.
+            // Links from messages sent without a list context carry only the
+            // MUID. A single assigned list is unambiguous. When a message has
+            // several lists, let the subscriber choose the list.
             $listIds = $listService->messageListIds($messageId);
             if (count($listIds) === 1) {
                 $list = $listService->findById($listIds[0]);

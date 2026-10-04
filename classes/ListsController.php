@@ -35,7 +35,7 @@ final class ListsController extends Controller
         $html .= '</tbody></table></div></div>';
         $html .= '<div class="col-lg-5"><form action="{{@BaseURL}}lists" method="post" class="card card-body">' . $csrf;
         $html .= '<h2 class="h5">Create a topic list</h2>';
-        $html .= '<div class="mb-3"><label class="form-label">Shortcode</label><input class="form-control" name="shortcode" minlength="5" maxlength="6" pattern="[A-Za-z0-9]{5,6}" required><div class="form-text">5–6 letters or numbers.</div></div>';
+        $html .= '<div class="mb-3"><label class="form-label">Shortcode</label><input class="form-control" name="shortcode" minlength="3" maxlength="6" pattern="[A-Za-z0-9]{3,6}" required><div class="form-text">3–6 letters or numbers.</div></div>';
         $html .= '<div class="mb-3"><label class="form-label">Name</label><input class="form-control" name="name" maxlength="100" required></div>';
         $html .= '<div class="mb-3"><label class="form-label">Description</label><textarea class="form-control" name="description" rows="5"></textarea></div>';
         $html .= '<button class="btn btn-primary" type="submit">Create list</button></form></div></div>';

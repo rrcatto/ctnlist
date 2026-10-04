@@ -45,7 +45,7 @@ usage() {
     cat <<'EOF'
 Usage: bin/dev <command> [args]
 
-  up                 Build and start containers, install Composer deps, run migrations
+  up                 Build and start containers, install Composer deps, run migrations, seed admin
   down               Stop and remove containers (data volumes are kept)
   restart            down + up
   ps | logs [svc]    Container status / follow logs (app, web, db, mailpit)
@@ -77,10 +77,10 @@ case "$cmd" in
         fi
         wait_for_db
         in_app composer migrate-paralegal
+        psql_db -q -v email="$ADMIN_EMAIL_DEFAULT" < dev/podman/seed-admin.sql >/dev/null
         echo
-        echo "App:     http://localhost:8180"
+        echo "App:     http://localhost:8180  (log in as $ADMIN_EMAIL_DEFAULT; the link arrives in Mailpit)"
         echo "Mailpit: http://localhost:8125"
-        echo "Next:    bin/dev seed-admin, then log in at http://localhost:8180/login"
         ;;
     down) compose down ;;
     restart) "$0" down && "$0" up ;;

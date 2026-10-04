@@ -6,7 +6,7 @@ This source tree uses the working v5.0 application as its behavioural baseline w
 
 - Messages and templates can always be saved as drafts.
 - No list is required when saving a message.
-- `ALL00` is optional and is never inserted automatically.
+- `ALL` is optional and is never inserted automatically.
 - Message values are stored as supplied rather than rewritten into a system-selected workflow.
 
 ## Message workflow
@@ -22,7 +22,6 @@ Restored or retained:
 - advanced queue rotation across a total audience volume
 - immutable first-send archives
 - proof, resend, forwarding and archive forwarding
-- old numeric-message tracking compatibility
 - message-linked confirmation, subscription and unsubscription tracking
 - proof confirmation by GET followed by CSRF-protected POST delivery
 
@@ -88,4 +87,4 @@ Transactional notification email and Send Log recording are restored for:
 
 ## Review and deployment
 
-This is a complete source tree, not a patch. The forward migration `20260718193000_restore_v5_behavioural_schema.php` updates an already-created v5.0.1 schema; the corrected Phase 3A migration covers clean installations. Review the files as a replacement v5.0.1 development tree, run Composer dependencies, apply the clean development migrations only to a disposable database, and test the full application workflow against the target PostgreSQL and SMTP services before production use.
+This is a complete source tree, not a patch. The schema is created by the single Phase 3A migration; there are no upgrade migrations. Review the files as a replacement v5.0.1 development tree, run Composer dependencies, apply the clean development migrations only to a disposable database, and test the full application workflow against the target PostgreSQL and SMTP services before production use.

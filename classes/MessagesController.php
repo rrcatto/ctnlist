@@ -51,7 +51,6 @@ class MessagesController extends Controller
     public function MessageCount(): int { return (int) $this->message->msgcount(); }
     public function RetrieveMessage(string $muid): bool { return $this->message->read($muid); }
     public function loadMessage(int $aid): bool { return $this->message->loadByAid($aid); }
-    public function loadMid(int $mid): bool { return $this->message->loadByMid($mid); }
     public function CreateMUID(): string { return $this->message->CreateMUID(); }
 
     public function getSubject(string $muid): string
@@ -412,14 +411,9 @@ HTML;
         }
     }
 
-    /** Track an open, retaining compatibility with old numeric message IDs. */
     public function TrackOpen(string $subscriberToken, string $muid): void
     {
-        $resolvedMuid = $this->resolveMessageMuid($muid);
-        if ($resolvedMuid === '' || !$this->messageWasSentToSubscriber($subscriberToken, $resolvedMuid)) {
-            return;
-        }
-        if (!$this->RetrieveMessage($resolvedMuid)) {
+        if (!$this->messageWasSentToSubscriber($subscriberToken, $muid) || !$this->RetrieveMessage($muid)) {
             return;
         }
 
@@ -427,7 +421,7 @@ HTML;
         $this->message->m_last_read = date('Y-m-d H:i:s');
         $this->message->save();
         $this->subscriber->bumpPriority($subscriberToken);
-        $this->smlog->logMsgRead($subscriberToken, $resolvedMuid);
+        $this->smlog->logMsgRead($subscriberToken, $muid);
     }
 
     public function CreateReactionHTMLform(string $subscriberToken, string $muid, string $reaction): string
@@ -863,17 +857,5 @@ HTML;
     {
         $lists = $this->lists->messageLists($messageId);
         return (string) ($lists[0]['l_shortcode'] ?? '');
-    }
-
-    private function resolveMessageMuid(string $muidOrId): string
-    {
-        $muidOrId = trim($muidOrId);
-        if ($this->RetrieveMessage($muidOrId)) {
-            return (string) $this->message->m_uniqid;
-        }
-        if (ctype_digit($muidOrId) && $this->loadMid((int) $muidOrId)) {
-            return (string) $this->message->m_uniqid;
-        }
-        return '';
     }
 }

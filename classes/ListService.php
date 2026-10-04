@@ -234,8 +234,8 @@ final class ListService
     {
         $shortcode = strtoupper(trim($shortcode));
         $name = trim($name);
-        if (!preg_match('/^[A-Z0-9]{5,6}$/', $shortcode)) {
-            throw new InvalidArgumentException('List shortcode must contain 5 or 6 uppercase letters/numbers.');
+        if (!preg_match('/^[A-Z0-9]{3,6}$/', $shortcode)) {
+            throw new InvalidArgumentException('List shortcode must contain 3 to 6 uppercase letters/numbers.');
         }
         if ($name === '') {
             throw new InvalidArgumentException('List name is required.');

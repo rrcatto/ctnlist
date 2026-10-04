@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 class ListsM extends \DB\SQL\Mapper
 {
-    public const ALL_SHORTCODE = 'ALL00';
+    public const ALL_SHORTCODE = 'ALL';
 
     public function __construct(Base $fat)
     {
