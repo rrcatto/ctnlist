@@ -23,7 +23,7 @@ final class DatabaseSessionHandler implements \SessionHandlerInterface
         return true;
     }
 
-    public function read(string $id): string|false
+    public function read(string $id): string
     {
         $rows = $this->db->exec(
             'SELECT ses_data FROM sessions WHERE ses_id = :id',
@@ -59,7 +59,7 @@ final class DatabaseSessionHandler implements \SessionHandlerInterface
         return true;
     }
 
-    public function gc(int $max_lifetime): int|false
+    public function gc(int $max_lifetime): int
     {
         $this->db->exec(
             'DELETE FROM sessions WHERE ses_stamp < :cutoff',

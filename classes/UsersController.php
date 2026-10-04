@@ -49,7 +49,7 @@ class UsersController extends Controller
         $this->user = new SubscribersM($fat);
         $this->loginToken = new AuthLoginTokenM($fat);
         $this->authSession = new AuthSessionM($fat);
-        $this->acl = new AclService($fat, $this->dbPDO);
+        $this->acl = new AclService($this->dbPDO);
         $this->lists = new ListService($fat, $this->dbPDO);
 
         $this->clearUserContext();

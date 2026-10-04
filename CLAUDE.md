@@ -37,14 +37,16 @@ bin/dev help                # all commands: down, restart, ps, logs, migrate, st
 ```bash
 bin/dev analyse                      # composer analyse: PHPStan level 5 over classes/ and index.php
 bin/dev lint                         # php -l over index.php and classes/*.php (how the tree is validated during packaging)
-bin/dev test                         # PHPUnit; no tests or phpunit.xml exist yet
-bin/dev test --filter <TestName>     # single test, once tests exist
+bin/dev test                         # PHPUnit (phpunit.dist.xml)
+bin/dev test --filter <TestName>     # single test or data-set, e.g. --filter 'testRouteRendersForAdministrator@/lists'
 
 composer migrate-paralegal  # main DB migrations (database/migrations/domain)  = bin/dev migrate
 composer status-paralegal   #                                                 = bin/dev status
 composer migrate-banlist    # global suppression DB migrations (database/migrations/banlist); not used in dev
 composer status-banlist
 ```
+
+`tests/Smoke/RouteSmokeTest` requests every GET route of the running stack over HTTP (from the app container to `http://web`), anonymously and as `admin@ctnlist.test` (logged in by inserting a magic-link token). It creates and deletes its own message/template/archive fixtures in the dev DB. It is the route-parity check for the Symfony migration: add new GET routes to it. The app writes timestamps in PHP's timezone (Africa/Johannesburg) while PostgreSQL runs in UTC, so compute timestamps in PHP when inserting rows the app compares against `date()`.
 
 Phinx configs live in `phinx/`. `phinx-paralegal.php` loads `.env` from `INSTANCE_ENV_DIR` (default `/home/paralegal`; the dev container sets `/var/www/ctnlist`); `phinx-banlist.php` loads `ban.env` from `GDB_ENV_DIRECTORY`/`GDB_ENV_FILE`. Export those before running migrations against another installation.
 

@@ -10,7 +10,7 @@ final class RolesController extends Controller
     public function __construct(private Base $fat)
     {
         $this->db = $fat->get('dbPDO');
-        $this->acl = new AclService($fat, $this->db);
+        $this->acl = new AclService($this->db);
     }
 
     public function index(): string

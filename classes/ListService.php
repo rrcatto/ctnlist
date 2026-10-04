@@ -12,14 +12,10 @@ declare(strict_types=1);
 final class ListService
 {
     private ListsM $list;
-    private ListSubscribersM $membership;
-    private MessageListsM $messageList;
 
     public function __construct(private Base $fat, private \DB\SQL $db)
     {
         $this->list = new ListsM($fat);
-        $this->membership = new ListSubscribersM($fat);
-        $this->messageList = new MessageListsM($fat);
     }
 
     /** @return list<array<string,mixed>> */
@@ -171,7 +167,7 @@ final class ListService
             ['ml_m_id = :mid', ':mid' => $messageId],
             ['order' => 'ml_l_id ASC']
         );
-        return array_values(array_map(static fn(array $row): int => (int) $row['ml_l_id'], $rows));
+        return array_map(static fn(array $row): int => (int) $row['ml_l_id'], $rows);
     }
 
     /** @return list<array<string,mixed>> */

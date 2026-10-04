@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 final class AclService
 {
-    public function __construct(private Base $fat, private \DB\SQL $db)
+    public function __construct(private \DB\SQL $db)
     {
     }
 

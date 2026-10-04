@@ -22,3 +22,4 @@
 Thumbs.db
 # Generated podman dev instance config (contains random secrets)
 /dev/podman/ctnlist.env
+/.phpunit.cache/

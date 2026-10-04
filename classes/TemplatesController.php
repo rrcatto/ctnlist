@@ -122,7 +122,7 @@ class TemplatesController extends Controller {
   public function CreateTemplateHTMLform($tid = 0) {
     $html = "";
     if (!Controller::allowed($this->fat, 'templates.manage')) {
-      $html .= "<p class=\"{{@pclass}\">Access denied</p>";
+      $html .= "<p class=\"{{@pclass}}\">Access denied</p>";
       return $html;
     }
     if ($tid == 0) {
@@ -131,7 +131,7 @@ class TemplatesController extends Controller {
       $ttext = "";
       $legend = 'Create Template';
     } elseif (!$this->RetrieveTemplate($tid)) {
-      $html .= "<p class=\"{{@pclass}\">Template does not exist</p>";
+      $html .= "<p class=\"{{@pclass}}\">Template does not exist</p>";
       return $html;
     } else {
       $tname = $this->template->t_name;
@@ -209,10 +209,10 @@ class TemplatesController extends Controller {
     $tid = $this->fat->get('POST.t_id');
     if ($tid == 0) {
       $this->template->reset();
-      $html .= "<p class=\"{{@pclass}\">Template created</p>";
+      $html .= "<p class=\"{{@pclass}}\">Template created</p>";
     } else {
       $valid = $this->RetrieveTemplate($tid);
-      $html .= "<p class=\"{{@pclass}\">Template saved</p>";
+      $html .= "<p class=\"{{@pclass}}\">Template saved</p>";
     }
     $this->template->t_name = $this->fat->get('POST.t_name');
     $this->template->t_html = $this->fat->get('POST.mt_html');

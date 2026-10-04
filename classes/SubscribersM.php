@@ -951,7 +951,7 @@ class SubscribersM extends \DB\SQL\Mapper
 
     public function getEmailUser(string $email): string
     {
-        return explode('@', self::normaliseEmail($email), 2)[0] ?? '';
+        return explode('@', self::normaliseEmail($email), 2)[0];
     }
 
     public function getEmailDomain(string $email): string

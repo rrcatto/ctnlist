@@ -633,7 +633,7 @@ HTML;
                 $model->m_datesent = date('Y-m-d H:i:s');
                 $model->save();
             }
-            if ((int) $model->m_a_id === 0 && $this->archive !== null) {
+            if ((int) $model->m_a_id === 0) {
                 $model->m_a_id = $this->archive->CreateArchiveForMessage($model);
                 $model->save();
             }

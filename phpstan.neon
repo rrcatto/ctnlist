@@ -3,6 +3,7 @@ parameters:
   paths:
     - classes
     - index.php
+    - tests
   excludePaths:
     analyse:
       - vendor
