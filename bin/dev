@@ -30,6 +30,20 @@ ensure_env() {
     echo "Generated $env_file"
 }
 
+# Integration tests (tests/Integration) use their own database, migrated
+# alongside the development one; each test runs in a rolled-back transaction.
+ensure_test_db() {
+    local db
+    for db in ctnlist_test ctnlist_banlist_test; do
+        if [ "$(psql_db -Atc "SELECT 1 FROM pg_database WHERE datname = '$db'")" != "1" ]; then
+            psql_db -qc "CREATE DATABASE $db"
+        fi
+    done
+    podman exec -i -e DB_NAME=ctnlist_test "$APP" composer migrate-paralegal >/dev/null
+    # The app container's working directory is the shared-code path.
+    podman exec -i -e GDB_ENV_FILE=banlist-test.env "$APP" sh -c 'GDB_ENV_DIRECTORY="$PWD/dev/podman" composer migrate-banlist' >/dev/null
+}
+
 wait_for_db() {
     for _ in $(seq 1 60); do
         if podman exec "$DB" pg_isready -q -U ctnlist -d ctnlist 2>/dev/null; then
@@ -81,6 +95,7 @@ case "$cmd" in
         wait_for_db
         in_app composer migrate-paralegal
         psql_db -q -v email="$ADMIN_EMAIL_DEFAULT" < dev/podman/seed-admin.sql >/dev/null
+        ensure_test_db
         echo
         echo "App:     http://localhost:8180  (log in as $ADMIN_EMAIL_DEFAULT; the link arrives in Mailpit)"
         echo "Mailpit: http://localhost:8125"
@@ -89,7 +104,7 @@ case "$cmd" in
     restart) "$0" down && "$0" up ;;
     ps) compose ps ;;
     logs) compose logs -f "$@" ;;
-    migrate) wait_for_db; in_app composer migrate-paralegal ;;
+    migrate) wait_for_db; in_app composer migrate-paralegal; ensure_test_db ;;
     status) in_app composer status-paralegal ;;
     seed-admin)
         wait_for_db
