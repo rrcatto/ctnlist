@@ -85,6 +85,13 @@ Transactional notification email and Send Log recording are restored for:
 - separate suppression database
 - externally located `ban.env` support through `GDB_ENV_DIRECTORY` and `GDB_ENV_FILE`
 
+## Known v5 behaviours
+
+These are part of the v5 baseline and are preserved deliberately; change them only by decision.
+
+- The v5 address cleanup rules (now `App\Subscriber\EmailNormaliser`) make addresses in non-commercial domains unusable on purpose, including `.org`, `.gov`, `.gov.za`, `.gov.uk`, `.ac.za` and `.ac.uk`, as well as role accounts such as `postmaster@` or `newsletter@`. An unusable address counts as globally suppressed, so such a subscriber loses every list membership when a message is queued.
+- In the anonymous rendering used for archives, `{booking}`, `{contact}` and `{lms-booking}` are left unreplaced (a v5 defect), so they appear literally in archive pages.
+
 ## Review and deployment
 
 This is a complete source tree, not a patch. The schema is created by the single Phase 3A migration; there are no upgrade migrations. Use the podman development environment (`bin/dev up`) or a disposable database for the clean migrations, and test the full application workflow, including the banlist suppression database and SMTP delivery, on the target installation before production use. Deployment is described in `README.md`.

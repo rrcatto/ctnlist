@@ -1,4 +1,4 @@
-# ctnlist 5.0.3
+# ctnlist 5.0.4
 
 ctnlist is a web-based mailing-list application created by Richard Royston Catto in 2009. Version 5.0.x is an incremental modernisation of the working v5.0 application, not a replacement of its established workflows.
 
@@ -6,10 +6,12 @@ Versions 5.0.2 and later keep the behaviour of 5.0.1-restored and move the appli
 
 Version 5.0.3 moves sign-in, logout, permission checks and CSRF to Symfony Security, renders every page in a single Twig layout, and ports the home, privacy and store pages.
 
+Version 5.0.4 ports list, role and ACL administration to Symfony and adds the Symfony campaign core: global suppression, the Send Log and message log, mail transports with failover, the transactional and campaign mailers, template rendering, archives, messages and the delivery queue. These services are covered by integration tests against a separate test database; the subscriber-facing and administrator routes move onto them in the next phases, so live delivery still uses the Fat-Free code.
+
 ## Platform and upgrades
 
 - PHP 8.4.1+ (developed on 8.5), Composer
-- Symfony 8.1 (including Symfony Security and Twig) with Doctrine DBAL 4; Fat-Free Framework 3.9 for the routes not yet ported
+- Symfony 8.1 (including Symfony Security, Twig and Mailer) with Doctrine DBAL 4; Fat-Free Framework 3.9 for the routes not yet ported
 - PostgreSQL with versioned Phinx migrations
 - Symfony Mailer behind the application-owned `mailer` wrapper
 - permanent RFC 9562 UUIDv7 subscriber identifiers
@@ -123,7 +125,7 @@ dev/podman/     development container files
 
 ## Deployment
 
-The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/5.0.3/` (the path is set in `public_html/index.php`). Run `composer install --no-dev` there.
+The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/5.0.4/` (the path is set in `public_html/index.php`). Run `composer install --no-dev` there.
 
 Each installation has its own directory containing:
 
@@ -164,7 +166,7 @@ Do not use those reset scripts for a database whose contents must be preserved.
 `bin/dev` runs a podman-compose stack that mirrors the production layout: nginx, PHP 8.5-FPM, PostgreSQL 16 and Mailpit.
 
 ```bash
-bin/dev up          # build and start, composer install, migrations, seed admin@ctnlist.test
+bin/dev up          # build and start, composer install, migrations (including the test databases), seed admin@ctnlist.test
 bin/dev help        # all commands
 ```
 

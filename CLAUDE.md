@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # ctnlist mailing list
 
-ctnlist (v5.0.3) is a web-based mailing-list application. v5.0 is the **behavioural baseline**: changes should preserve established v5 workflows rather than redesign them. See `README.md` and `RESTORED-FUNCTIONALITY.md` for the full feature and invariant list.
+ctnlist (v5.0.4) is a web-based mailing-list application. v5.0 is the **behavioural baseline**: changes should preserve established v5 workflows rather than redesign them. See `README.md` and `RESTORED-FUNCTIONALITY.md` for the full feature and invariant list.
 
 ## Development software
 
@@ -15,7 +15,7 @@ ctnlist (v5.0.3) is a web-based mailing-list application. v5.0 is the **behaviou
 
 ## Local development environment (podman)
 
-`bin/dev` drives a podman-compose stack (`compose.yaml`, files in `dev/podman/`): nginx 1.30 → PHP 8.5-FPM, PostgreSQL 16 and Mailpit. Containers mirror the production layout (repo mounted at the shared-code path `/usr/local/lib/php/ctnlist/5.0.3`, the repo's `public_html/` mounted read-only at `/var/www/ctnlist/public_html`, `.env` one level up, writable `var/` volume).
+`bin/dev` drives a podman-compose stack (`compose.yaml`, files in `dev/podman/`): nginx 1.30 → PHP 8.5-FPM, PostgreSQL 16 and Mailpit. Containers mirror the production layout (repo mounted at the shared-code path `/usr/local/lib/php/ctnlist/5.0.4`, the repo's `public_html/` mounted read-only at `/var/www/ctnlist/public_html`, `.env` one level up, writable `var/` volume).
 
 ```bash
 bin/dev up                  # build, start, composer install (first run), clear the instance cache, run migrations (also ctnlist_test, ctnlist_banlist_test), seed admin@ctnlist.test
@@ -64,7 +64,7 @@ Unported code lives in `src/Legacy/` (namespace `App\Legacy`) and `config/legacy
 
 ## Deployment layout
 
-The repository is the shared code tree, installed at `/usr/local/lib/php/ctnlist/5.0.3/` (hard-coded as `$sharedDirectory` in `public_html/index.php`). Each installation has its own directory containing:
+The repository is the shared code tree, installed at `/usr/local/lib/php/ctnlist/5.0.4/` (hard-coded as `$sharedDirectory` in `public_html/index.php`). Each installation has its own directory containing:
 - `public_html/`: a copy of the repo's `public_html/` (`index.php`, `css/`, `js/`), used as the web root;
 - `.env` one directory **above** `public_html` (start from `.env.example`; `APP_ENV` is `prod`, `dev` or `test`). The Symfony runtime loads it (runtime option `project_dir` = the installation directory);
 - a writable `var/` (Symfony cache and logs, F3 compiled templates in `var/tmp/`) and `logs/`.
