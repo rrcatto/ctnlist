@@ -1,8 +1,8 @@
-# ctnlist 5.0.5
+# ctnlist 6.0
 
-ctnlist is a web-based mailing-list application created by Richard Royston Catto in 2009. Version 5.0.x is an incremental modernisation of the working v5.0 application, not a replacement of its established workflows.
+ctnlist is a web-based mailing-list application created by Richard Royston Catto in 2009. Versions 5.0.x and 6.0 are an incremental modernisation of the working v5.0 application, not a replacement of its established workflows.
 
-Versions 5.0.2 and later keep the behaviour of 5.0.1-restored and move the application from the Fat-Free Framework to Symfony 8.1. The migration is complete on the development branch: every route is a Symfony controller and Fat-Free has been removed (see [Migration status](#migration-status)).
+Versions 5.0.2 to 6.0 keep the behaviour of 5.0.1-restored and move the application from the Fat-Free Framework to Symfony 8.1. Version 6.0 completes the migration: every route is a Symfony controller and Fat-Free has been removed (see [Migration status](#migration-status)).
 
 Version 5.0.3 moves sign-in, logout, permission checks and CSRF to Symfony Security, renders every page in a single Twig layout, and ports the home, privacy and store pages.
 
@@ -10,7 +10,7 @@ Version 5.0.4 ports list, role and ACL administration to Symfony and adds the Sy
 
 Version 5.0.5 moves every subscriber-facing page onto Symfony and the new services: sign-in link requests, the profile pages, the confirm/unsubscribe links and `/subscribe`, forwarding, likes and dislikes, resends, the open-tracking pixel, the archives and the contact form. Sign-in links, consent notifications, forwards, resends and contact acknowledgements are now sent through the Symfony mailers. Administration (subscribers, bulk operations, import/export, messages, templates, the queue) and the reports still run on Fat-Free and the legacy mailer.
 
-Since 5.0.5 the administration pages (messages and templates, queueing, sending and proofs, subscribers, bulk operations, import, export, synchronisation and the Ecwid endpoint) and the Send Log, Site Log and message activity reports run on Symfony, all mail goes through the Symfony mailers, and the Fat-Free Framework, its bridge and the legacy code have been removed. The Site Log again records every request.
+Version 6.0 moves the administration pages (messages and templates, queueing, sending and proofs, subscribers, bulk operations, import, export, synchronisation and the Ecwid endpoint) and the Send Log, Site Log and message activity reports onto Symfony. All mail now goes through the Symfony mailers, the Fat-Free Framework, its bridge and the legacy code are removed, the Site Log again records every request, and the code passes PHPStan level 6. Import logs and export files are written to `APP_LOG_DIR` (default: the installation's `logs/`).
 
 ## Platform and upgrades
 
@@ -129,13 +129,13 @@ dev/podman/     development container files
 
 ## Deployment
 
-The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/5.0.5/` (the path is set in `public_html/index.php`). Run `composer install --no-dev` there.
+The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.0/` (the path is set in `public_html/index.php`). Run `composer install --no-dev` there.
 
 Each installation has its own directory containing:
 
 - `public_html/`: a copy of the repository's `public_html/`, used as the web server's document root. nginx serves `css/` and `js/` directly and passes everything else to `index.php` (see `dev/podman/nginx.conf`);
 - `.env`, one level above `public_html/` (start from `.env.example`);
-- writable `var/` (Symfony cache and logs, compiled templates) and `logs/` directories.
+- writable `var/` (Symfony cache and logs) and `logs/` (contact log, import log and export files) directories.
 
 The compiled Symfony container embeds absolute paths, so clear each installation's cache after deploying a new version (or empty its `var/cache/`).
 

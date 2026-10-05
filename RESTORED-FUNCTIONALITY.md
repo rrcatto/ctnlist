@@ -1,6 +1,6 @@
 # ctnlist restored functionality
 
-This source tree uses the working v5.0 application as its behavioural baseline while retaining the approved v5.0.1 technical and data-model upgrades. Versions 5.0.2 and later preserve this behaviour while moving the application to Symfony; the workflows and invariants below are the acceptance criteria for that migration.
+This source tree uses the working v5.0 application as its behavioural baseline while retaining the approved v5.0.1 technical and data-model upgrades. Versions 5.0.2 to 6.0 preserved this behaviour while moving the application to Symfony (complete in 6.0); the workflows and invariants below were the acceptance criteria for that migration and remain the baseline for further changes.
 
 ## Administrator authority
 
@@ -101,7 +101,7 @@ Made while porting to Symfony, where the v5 behaviour was a defect rather than a
 - A sign-in link is claimed atomically, so two simultaneous clicks cannot both sign in.
 - Forms on the Symfony pages redirect after a successful change and show the outcome as a message, so reloading does not resubmit.
 - Saving the subscriber form as a subscriber ignores a posted priority: v5 added 100 to whatever priority the request carried, so a crafted request could raise one's own send priority. Subscribers still get the v5 result of 100.
-- The Site Log records every request again, including Symfony pages and unknown paths (5.0.2–5.0.5 recorded only requests that reached the Fat-Free bridge). The row is written after the response is sent, so the reverse DNS lookup no longer delays pages; its time is PHP time like the rest of the application (it was the database's UTC default), and the IP is the client address as Symfony determines it (`X-Forwarded-For` is honoured only from `TRUSTED_PROXIES`; the raw header is still recorded in its own column).
+- The Site Log records every request again, including Symfony pages and unknown paths (5.0.2–5.0.5 recorded only requests that reached the Fat-Free bridge; fixed in 6.0). The row is written after the response is sent, so the reverse DNS lookup no longer delays pages; its time is PHP time like the rest of the application (it was the database's UTC default), and the IP is the client address as Symfony determines it (`X-Forwarded-For` is honoured only from `TRUSTED_PROXIES`; the raw header is still recorded in its own column).
 - Opening another person's subscriber form, or one that does not exist, gives the 403 or 404 page instead of a 200 page reading "Access denied." or "The subscriber does not exist.".
 
 ## Review and deployment
