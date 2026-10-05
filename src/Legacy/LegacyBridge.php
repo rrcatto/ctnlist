@@ -33,8 +33,7 @@ final class LegacyBridge
      * records the request (including the user) in its constructor.
      */
     private const SERVICES = [
-        'options', 'user', 'sendlog', 'smlog', 'subscriber', 'message', 'template',
-        'mailer', 'queue', 'listService', 'sitelog',
+        'options', 'user', 'sendlog', 'smlog', 'subscriber', 'sitelog',
     ];
 
     public function __construct(
@@ -45,11 +44,6 @@ final class LegacyBridge
             'sendlog' => SendlogController::class,
             'smlog' => SmlogController::class,
             'subscriber' => SubscribersController::class,
-            'message' => MessagesController::class,
-            'template' => TemplatesController::class,
-            'mailer' => mailer::class,
-            'queue' => QueueController::class,
-            'listService' => ListService::class,
             'sitelog' => SiteLogController::class,
         ])]
         private readonly ContainerInterface $legacy,

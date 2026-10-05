@@ -1,0 +1,12 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Proof send{% endblock %}
+
+{% block content %}
+<form method="post" action="{{ path('admin_proof_submit', {muid: muid}) }}" class="card card-body">
+  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+  <h1 class="h4">Send proof message</h1>
+  <p>Send this message to {{ test_email }}?</p>
+  <button class="btn btn-primary" type="submit">Send Proof</button>
+</form>
+{% endblock %}

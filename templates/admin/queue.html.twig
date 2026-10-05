@@ -1,0 +1,42 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Queue{% endblock %}
+
+{% block content %}
+{% if rows is empty %}
+  <p>There is nothing in the queue.</p>
+{% else %}
+  <div class="d-flex gap-2 mb-3">
+    <a class="btn btn-primary" href="{{ path('admin_queue_process') }}">Process Queue</a>
+    <form method="post" action="{{ path('admin_queue_clear') }}" onsubmit="return confirm('Clear the entire queue?')">
+      <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+      <button class="btn btn-outline-danger" type="submit">Clear Queue</button>
+    </form>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-striped table-hover table-bordered">
+      <thead><tr><th>Message</th><th>Subscriber</th><th>List</th><th>Added</th><th>Last interaction</th><th>MP:SP</th><th></th></tr></thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <td><a href="{{ path('admin_message', {muid: row.q_muid}) }}" title="{{ row.q_subject }}">{{ row.q_subject|length > 80 ? row.q_subject|slice(0, 80) ~ '…' : row.q_subject }}</a></td>
+          <td><a href="{{ site.baseUrl }}subscribe/{{ row.q_s_uuid }}">{{ row.q_email }}</a></td>
+          <td>{{ row.q_list_shortcode }}</td>
+          <td>{{ row.q_date_added }}</td>
+          <td>{{ row.q_last_interacted ?: '-' }}</td>
+          <td>{{ row.q_mpriority }}:{{ row.q_spriority }}</td>
+          <td>
+            <form method="post" action="{{ path('admin_queue_delete') }}">
+              <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+              <input type="hidden" name="queue_id" value="{{ row.q_id }}">
+              <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include '_pagination.html.twig' with {base: path('admin_queue')} %}
+{% endif %}
+{% endblock %}

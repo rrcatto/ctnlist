@@ -1,0 +1,25 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Queue multiple messages{% endblock %}
+
+{% block content %}
+<form action="{{ path('admin_queue_rotation_submit') }}" method="post">
+  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+  <fieldset class="border rounded p-4">
+    <legend>Send Multiple Messages</legend>
+    <div class="row g-3">
+      {% for slot in 1..slots %}
+        <div class="col-12">
+          <label class="form-label" for="muid{{ slot }}">Select Message {{ slot }}</label>
+          <select class="form-select" id="muid{{ slot }}" name="muid{{ slot }}">
+            <option value=""></option>
+            {% for message in messages %}<option value="{{ message.m_uniqid }}">{{ message.m_subject }}</option>{% endfor %}
+          </select>
+        </div>
+      {% endfor %}
+      <div class="col-12"><label class="form-label" for="mvolume">Total number of emails to queue</label><input class="form-control" id="mvolume" type="number" name="mvolume" value="{{ volume }}"></div>
+      <div class="col-12"><button class="btn btn-primary" type="submit">Queue Multiple Messages</button></div>
+    </div>
+  </fieldset>
+</form>
+{% endblock %}

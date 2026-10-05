@@ -1,0 +1,14 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Process queue{% endblock %}
+
+{% block content %}
+<form method="post" action="{{ path('admin_queue_process_submit') }}" class="card card-body">
+  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+  <h1 class="h4">Process delivery queue</h1>
+  <input type="hidden" name="muid" value="{{ muid }}">
+  <label class="form-label" for="p-limit">Maximum messages to send</label>
+  <input class="form-control mb-3" id="p-limit" type="number" name="limit" value="{{ limit }}">
+  <button class="btn btn-primary" type="submit">Start sending</button>
+</form>
+{% endblock %}

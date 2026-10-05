@@ -1,0 +1,11 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Stop sending{% endblock %}
+
+{% block content %}
+<form method="post" action="{{ path('admin_queue_stop_submit') }}" class="card card-body">
+  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+  <h1 class="h4">Stop queue processing</h1>
+  <button class="btn btn-danger" type="submit">Stop sending</button>
+</form>
+{% endblock %}

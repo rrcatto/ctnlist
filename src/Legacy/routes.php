@@ -20,11 +20,6 @@ return static function (
     SendlogController $sendlog,
     SmlogController $smlog,
     SubscribersController $subscriber,
-    MessagesController $message,
-    TemplatesController $template,
-    mailer $mailer,
-    QueueController $queue,
-    ListService $listService,
     SiteLogController $sitelog,
     LegacyPage $page,
 ): void {
@@ -127,67 +122,6 @@ return static function (
     });
 
     // Message and template administration.
-    // Queue construction and delivery.
-    $fat->route('GET /advanced-queue', static function () use ($admin, $message, $render): void { $admin('messages.queue'); $render('Queue multiple messages', $message->CreateAdvancedQueueHTMLform()); });
-    $fat->route('POST /advanced-queue', static function (Base $fat) use ($admin, $message, $render): void {
-        $admin('messages.queue');
-        Csrf::requireValid($fat);
-        $muids = [];
-        for ($i = 1; $i <= 4; $i++) {
-            $value = trim((string) $fat->get('POST.muid' . $i));
-            if ($value !== '') { $muids[] = $value; }
-        }
-        $render('Queue multiple messages', $message->AdvancedSendListToQueue($muids, (int) $fat->get('POST.mvolume')));
-    });
-    $fat->route('GET /queuelist/@muid', static function (Base $fat, array $params) use ($admin, $render): void {
-        $admin('messages.queue');
-        $muid = htmlspecialchars((string) $params['muid'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $render('Queue message', '<form method="post" action="{{@BaseURL}}queuelist" class="card card-body">' . Csrf::field($fat)
-            . '<input type="hidden" name="muid" value="' . $muid . '"><label class="form-label">Maximum subscribers to add in this operation</label>'
-            . '<input class="form-control mb-3" type="number" name="limit" value="500000"><button class="btn btn-primary">Queue this message</button></form>');
-    });
-    $fat->route('POST /queuelist', static function (Base $fat) use ($admin, $message, $render): void {
-        $admin('messages.queue');
-        Csrf::requireValid($fat);
-        $render('Queue message', $message->SendListToQueue((string) $fat->get('POST.muid'), (int) ($fat->get('POST.limit') ?: 500000)));
-    });
-    $fat->route('GET /queue', static function (Base $fat) use ($admin, $queue, $render): void { $admin('queue.process'); $render('Queue', $queue->CreateQueueHTMLList(1, (int) $fat->get('r'))); });
-    $fat->route('GET /queue/@p', static function (Base $fat, array $params) use ($admin, $queue, $render): void { $admin('queue.process'); $render('Queue', $queue->CreateQueueHTMLList((int) $params['p'], (int) $fat->get('r'))); });
-    $fat->route('POST /queue/delete', static function (Base $fat) use ($admin, $queue, $render): void { $admin('queue.process'); Csrf::requireValid($fat); $queue->DeleteQueueItem((int) $fat->get('POST.queue_id')); $render('Queue', $queue->CreateQueueHTMLList(1, (int) $fat->get('r'))); });
-    $fat->route('POST /queue/clear', static function (Base $fat) use ($admin, $queue, $render): void { $admin('queue.process'); Csrf::requireValid($fat); $count = $queue->ClearQueue(); $render('Queue', '<p>Cleared ' . $count . ' queue record(s).</p>'); });
-    $processForm = static function (Base $fat, string $muid = '', int $limit = 250000): string {
-        return '<form method="post" action="{{@BaseURL}}processqueue" class="card card-body">' . Csrf::field($fat)
-            . '<h1 class="h4">Process delivery queue</h1><input type="hidden" name="muid" value="' . htmlspecialchars($muid) . '">'
-            . '<label class="form-label">Maximum messages to send</label><input class="form-control mb-3" type="number" name="limit" value="' . $limit . '">'
-            . '<button class="btn btn-primary" type="submit">Start sending</button></form>';
-    };
-    $fat->route('GET /processqueue', static function (Base $fat) use ($admin, $render, $processForm): void { $admin('queue.process'); $render('Process queue', $processForm($fat)); });
-    $fat->route('GET /processqueue/@muid', static function (Base $fat, array $params) use ($admin, $render, $processForm): void { $admin('queue.process'); $render('Process queue', $processForm($fat, (string) $params['muid'])); });
-    $fat->route('GET /processqueue/@muid/@limit', static function (Base $fat, array $params) use ($admin, $render, $processForm): void { $admin('queue.process'); $render('Process queue', $processForm($fat, (string) $params['muid'], (int) $params['limit'])); });
-    $fat->route('POST /processqueue', static function (Base $fat) use ($admin, $queue, $render): void {
-        $admin('queue.process'); Csrf::requireValid($fat);
-        $sent = $queue->ProcessQueue((string) $fat->get('POST.muid'), (int) ($fat->get('POST.limit') ?: 250000));
-        $render('Process queue', '<p>Sent ' . $sent . ' message(s).</p>');
-    });
-    $fat->route('GET /stop-send', static function (Base $fat) use ($admin, $actionForm, $render): void { $admin('queue.process'); $render('Stop sending', $actionForm('Stop queue processing', '/stop-send', 'Stop sending', 'btn-danger')); });
-    $fat->route('POST /stop-send', static function (Base $fat) use ($admin, $options, $render): void { $admin('queue.process'); Csrf::requireValid($fat); $options->SetOption('SendQueue', 'N'); $render('Stop sending', '<p>The stop request has been recorded.</p>'); });
-    $fat->route('GET /sendtome/@muid', static function (Base $fat, array $params) use ($admin, $render): void {
-        $admin('messages.manage');
-        $muid = (string) $params['muid'];
-        $html = '<form method="post" action="{{@BaseURL}}sendtome/'
-            . rawurlencode($muid) . '" class="card card-body">' . Csrf::field($fat)
-            . '<h1 class="h4">Send proof message</h1><p>Send this message to '
-            . htmlspecialchars((string) $fat->get('TestEmail'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '?</p>'
-            . '<button class="btn btn-primary" type="submit">Send Proof</button></form>';
-        $render('Proof send', $html);
-    });
-    $fat->route('POST /sendtome/@muid', static function (Base $fat, array $params) use ($admin, $message, $render): void {
-        $admin('messages.manage');
-        Csrf::requireValid($fat);
-        $sent = $message->SendToAddress((string) $params['muid'], (string) $fat->get('TestEmail'), 'PROOF');
-        $render('Proof send', '<p>' . ($sent > 0 ? 'Proof message sent.' : 'Proof message could not be sent.') . '</p>');
-    });
-
     // Audit and activity reports.
     $fat->route('GET /sendlog', static function (Base $fat) use ($admin, $sendlog, $render): void { $admin('logs.view'); $render('Send Log', $sendlog->CreateSendlogHTMLList((string) $fat->get('GET.e'), (string) $fat->get('GET.t'), 1, (int) $fat->get('r'))); });
     $fat->route('GET /sendlog/@p', static function (Base $fat, array $params) use ($admin, $sendlog, $render): void { $admin('logs.view'); $render('Send Log', $sendlog->CreateSendlogHTMLList((string) $fat->get('GET.e'), (string) $fat->get('GET.t'), (int) $params['p'], (int) $fat->get('r'))); });

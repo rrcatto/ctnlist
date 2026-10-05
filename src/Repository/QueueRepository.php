@@ -50,6 +50,21 @@ final class QueueRepository
     }
 
     /**
+     * A page of the queue for the administrator, in send order.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function page(int $offset, int $limit): array
+    {
+        return $this->db->fetchAllAssociative(
+            'SELECT q_id, q_muid, q_subject, q_s_uuid, q_email, q_list_shortcode, q_date_added, q_last_interacted, q_mpriority, q_spriority
+             FROM queue
+             ORDER BY q_mpriority DESC, (q_last_interacted IS NULL) ASC, q_last_interacted DESC, q_spriority DESC, q_id ASC
+             LIMIT ' . max(1, $limit) . ' OFFSET ' . max(0, $offset)
+        );
+    }
+
+    /**
      * Next rows to send, in v5 order: message priority, engaged subscribers
      * first (most recent interaction), subscriber priority, then age.
      *
