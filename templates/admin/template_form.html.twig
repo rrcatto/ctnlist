@@ -1,0 +1,28 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ template.t_id ? 'Edit template' : 'Create template' }}{% endblock %}
+
+{% block content %}
+<form name="templateform" action="{{ path('admin_template_save') }}" method="post">
+  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+  <input type="hidden" name="t_id" value="{{ template.t_id }}">
+  <fieldset class="mb-3">
+    <legend>{{ template.t_id ? 'Edit Template' : 'Create Template' }}</legend>
+    <div class="row">
+      <div class="form-floating mb-3 py-2 col-md-6">
+        <input class="form-control" type="text" id="t_name" name="t_name" value="{{ template.t_name }}">
+        <label for="t_name">Template Name</label>
+      </div>
+      <div class="mb-3 py-2 col-md-12">
+        <label class="form-label" for="mt_html">HTML part</label>
+        <textarea class="form-control" id="mt_html" name="mt_html" style="width:100%;min-height:600px">{{ template.t_html }}</textarea>
+      </div>
+      <div class="mb-3 py-2 col-md-12">
+        <label class="form-label" for="t_text">Text part</label>
+        <textarea class="form-control" id="t_text" name="t_text" rows="20">{{ template.t_text }}</textarea>
+      </div>
+      <div class="col-md-6"><button class="btn btn-lg btn-primary" type="submit">Save Template</button></div>
+    </div>
+  </fieldset>
+</form>
+{% endblock %}

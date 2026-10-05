@@ -32,6 +32,39 @@ final class MessageRepository
         return $row === false ? null : self::hydrate($row);
     }
 
+    public function count(): int
+    {
+        return (int) $this->db->fetchOne('SELECT COUNT(*) FROM messages');
+    }
+
+    /**
+     * The administrator's message list, newest first, with delivery and
+     * reaction statistics and the selected lists' names.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function adminPage(int $offset, int $limit): array
+    {
+        return $this->db->fetchAllAssociative(
+            "SELECT m.m_id, m.m_uniqid, m.m_subject, m.m_datesent, m.m_queued, m.m_sent, m.m_last_read, m.m_last_like,
+                    m.m_reads, m.m_likes, m.m_dislikes,
+                    COALESCE((SELECT string_agg(l.l_name, ', ' ORDER BY l.l_system DESC, l.l_name)
+                              FROM message_lists ml JOIN lists l ON l.l_id = ml.ml_l_id WHERE ml.ml_m_id = m.m_id), '') AS list_names
+             FROM messages m
+             ORDER BY m.m_id DESC
+             LIMIT " . max(1, $limit) . ' OFFSET ' . max(0, $offset)
+        );
+    }
+
+    /** @return list<array{m_uniqid: string, m_subject: string}> newest first, for pickers */
+    public function choices(): array
+    {
+        return array_map(
+            static fn(array $row): array => ['m_uniqid' => (string) $row['m_uniqid'], 'm_subject' => (string) $row['m_subject']],
+            $this->db->fetchAllAssociative('SELECT m_uniqid, m_subject FROM messages ORDER BY m_id DESC')
+        );
+    }
+
     /** @return Message|null the message an archive was made from */
     public function findByArchiveId(int $archiveId): ?array
     {

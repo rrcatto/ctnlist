@@ -127,47 +127,6 @@ return static function (
     });
 
     // Message and template administration.
-    $fat->route('GET /messages', static function (Base $fat) use ($admin, $message, $render): void {
-        $admin('messages.manage');
-        $render('Messages', $message->CreateMessagesHTMLList(1, (int) $fat->get('r')));
-    });
-    $fat->route('GET /messages/@p', static function (Base $fat, array $params) use ($admin, $message, $render): void {
-        $admin('messages.manage');
-        $render('Messages', $message->CreateMessagesHTMLList((int) $params['p'], (int) $fat->get('r')));
-    });
-    $fat->route('GET /message', static function () use ($admin, $message, $render): void {
-        $admin('messages.manage');
-        $render('Create message', $message->CreateMessageHTMLform());
-    });
-    $fat->route('GET /message/@muid', static function (Base $fat, array $params) use ($admin, $message, $render): void {
-        $admin('messages.manage');
-        $render('Edit message', $message->CreateMessageHTMLform((string) $params['muid']));
-    });
-    $fat->route('POST /message', static function () use ($admin, $message, $render): void {
-        $admin('messages.manage');
-        $render('Message saved', $message->save() . $message->CreateMessagesHTMLList(1, 25, true));
-    });
-    $fat->route('GET /templates', static function (Base $fat) use ($admin, $template, $render): void {
-        $admin('templates.manage');
-        $render('Templates', $template->CreateTemplatesHTMLList(1, (int) $fat->get('r')));
-    });
-    $fat->route('GET /templates/@p', static function (Base $fat, array $params) use ($admin, $template, $render): void {
-        $admin('templates.manage');
-        $render('Templates', $template->CreateTemplatesHTMLList((int) $params['p'], (int) $fat->get('r')));
-    });
-    $fat->route('GET /template', static function () use ($admin, $template, $render): void {
-        $admin('templates.manage');
-        $render('Create template', $template->CreateTemplateHTMLform());
-    });
-    $fat->route('GET /template/@tid', static function (Base $fat, array $params) use ($admin, $template, $render): void {
-        $admin('templates.manage');
-        $render('Edit template', $template->CreateTemplateHTMLform((int) $params['tid']));
-    });
-    $fat->route('POST /template', static function () use ($admin, $template, $render): void {
-        $admin('templates.manage');
-        $render('Template saved', $template->save() . $template->CreateTemplatesHTMLList(1, 25, true));
-    });
-
     // Queue construction and delivery.
     $fat->route('GET /advanced-queue', static function () use ($admin, $message, $render): void { $admin('messages.queue'); $render('Queue multiple messages', $message->CreateAdvancedQueueHTMLform()); });
     $fat->route('POST /advanced-queue', static function (Base $fat) use ($admin, $message, $render): void {

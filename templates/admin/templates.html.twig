@@ -1,0 +1,21 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Templates{% endblock %}
+
+{% block content %}
+{% if templates is empty %}
+  <p>There are no templates.</p>
+{% else %}
+  <div class="table-responsive">
+    <table class="table table-striped table-hover table-bordered">
+      <thead class="table-info"><tr><th>Template <i class="fa fa-pencil" aria-hidden="true"></i></th></tr></thead>
+      <tbody>
+      {% for template in templates %}
+        <tr><td><a href="{{ path('admin_template', {id: template.t_id}) }}">{{ template.t_name }}</a></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include '_pagination.html.twig' with {base: path('admin_templates')} %}
+{% endif %}
+{% endblock %}

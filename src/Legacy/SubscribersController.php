@@ -378,24 +378,6 @@ HTML;
         return $html;
     }
 
-    /** Message audience checkboxes: ALL is available but never forced. */
-    public function CreateListHTMLCheckboxes(array $selectedIds = []): string
-    {
-        $selectedIds = array_map('intval', $selectedIds);
-        $html = '<div class="row g-2">';
-        foreach ($this->lists->all() as $list) {
-            $id = (int) $list['l_id'];
-            $checked = in_array($id, $selectedIds, true) ? ' checked' : '';
-            $html .= '<div class="col-md-6"><div class="form-check border rounded p-3 ps-5">'
-                . '<input class="form-check-input" type="checkbox" name="list_ids[]" value="' . $id
-                . '" id="message-list-' . $id . '"' . $checked . '>'
-                . '<label class="form-check-label" for="message-list-' . $id . '"><strong>'
-                . htmlspecialchars((string) $list['l_name']) . '</strong> – '
-                . htmlspecialchars((string) $list['l_description']) . '</label></div></div>';
-        }
-        return $html . '</div>';
-    }
-
     /** Restored subscriber search, filtering and pagination. */
     public function CreateSubscribersHTMLList(
         string $searchEmail = '',

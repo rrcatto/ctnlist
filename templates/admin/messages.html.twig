@@ -1,0 +1,35 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Messages{% endblock %}
+
+{% block content %}
+{% if messages is empty %}
+  <p>There are no messages.</p>
+{% else %}
+  <div class="table-responsive">
+    <table class="table table-striped table-hover table-bordered">
+      <thead><tr><th>Subject</th><th>Lists</th><th>Sent</th><th>Q:S</th><th>Last read</th><th>Last like</th><th>Reads</th><th>Likes</th><th>Dislikes</th><th>Add2Q</th><th>SendQ</th><th>Proof</th></tr></thead>
+      <tbody>
+      {% for message in messages %}
+        {% set muid = message.m_uniqid|url_encode %}
+        <tr>
+          <td><a href="{{ path('admin_message', {muid: message.m_uniqid}) }}" title="{{ message.m_subject }}">{{ message.m_subject|length > 60 ? message.m_subject|slice(0, 60) ~ '…' : message.m_subject }}</a></td>
+          <td>{% if message.list_names is empty %}<em>None selected</em>{% else %}{{ message.list_names }}{% endif %}</td>
+          <td>{{ message.m_datesent }}</td>
+          <td>{{ message.m_queued }}:{{ message.m_sent }}</td>
+          <td>{{ message.m_last_read }}</td>
+          <td>{{ message.m_last_like }}</td>
+          <td><a href="{{ site.baseUrl }}message-views/{{ muid }}">{{ message.m_reads }}</a></td>
+          <td>{{ message.m_likes }}</td>
+          <td>{{ message.m_dislikes }}</td>
+          <td><a class="btn btn-sm u-btn-deeporange" href="{{ site.baseUrl }}queuelist/{{ muid }}">Queue</a></td>
+          <td><a class="btn btn-sm u-btn-yellow" href="{{ site.baseUrl }}processqueue/{{ muid }}">SendQ</a></td>
+          <td><a class="btn btn-sm u-btn-indigo" href="{{ site.baseUrl }}sendtome/{{ muid }}">Proof</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include '_pagination.html.twig' with {base: path('admin_messages')} %}
+{% endif %}
+{% endblock %}
