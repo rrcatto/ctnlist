@@ -1,0 +1,15 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Forward message{% endblock %}
+
+{% block content %}
+<form action="{{ path('message_forward_submit') }}" method="post" class="card card-body">
+  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+  <input type="hidden" name="subscriber_token" value="{{ token }}">
+  <input type="hidden" name="muid" value="{{ muid }}">
+  <h1 class="h4">Forward message</h1>
+  <p>Enter up to 10 email addresses.</p>
+  <div class="mb-3"><label class="form-label" for="forward-emails">Email addresses</label><textarea class="form-control" id="forward-emails" name="bemail" rows="8" required></textarea></div>
+  <button class="btn btn-primary" type="submit">Forward current message</button>
+</form>
+{% endblock %}

@@ -32,6 +32,42 @@ final class MessageRepository
         return $row === false ? null : self::hydrate($row);
     }
 
+    /** @return Message|null the message an archive was made from */
+    public function findByArchiveId(int $archiveId): ?array
+    {
+        if ($archiveId < 1) {
+            return null;
+        }
+        $row = $this->db->fetchAssociative('SELECT ' . self::COLUMNS . ' FROM messages WHERE m_a_id = ? ORDER BY m_id LIMIT 1', [$archiveId]);
+        return $row === false ? null : self::hydrate($row);
+    }
+
+    /** Count an open (read) and, optionally, a like or dislike. */
+    public function recordReaction(int $messageId, ?string $reaction, string $now): void
+    {
+        $extra = match ($reaction) {
+            'like' => ', m_likes = m_likes + 1, m_last_like = :now',
+            'dislike' => ', m_dislikes = m_dislikes + 1, m_last_dislike = :now',
+            null => '',
+            default => throw new \InvalidArgumentException('Unknown reaction ' . $reaction),
+        };
+        $this->db->executeStatement(
+            'UPDATE messages SET m_reads = m_reads + 1, m_last_read = :now' . $extra . ' WHERE m_id = :id',
+            ['now' => $now, 'id' => $messageId]
+        );
+    }
+
+    public function recordForward(int $messageId, int $senderId, int $recipientId, string $recipientEmail, string $now): void
+    {
+        $this->db->insert('message_forwards', [
+            'mf_m_id' => $messageId,
+            'mf_sender_s_id' => $senderId,
+            'mf_recipient_s_id' => $recipientId,
+            'mf_recipient_email' => $recipientEmail,
+            'mf_forwarded_at' => $now,
+        ]);
+    }
+
     public function findMuidById(int $id): ?string
     {
         $muid = $this->db->fetchOne('SELECT m_uniqid FROM messages WHERE m_id = ?', [$id]);

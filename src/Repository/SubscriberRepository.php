@@ -125,6 +125,12 @@ final class SubscriberRepository
         $this->db->update('subscribers', $fields, ['s_id' => $id]);
     }
 
+    /** Raise the priority to at least $priority (never lowers it). */
+    public function raisePriority(int $id, int $priority): void
+    {
+        $this->db->executeStatement('UPDATE subscribers SET s_priority = GREATEST(s_priority, ?) WHERE s_id = ?', [$priority, $id]);
+    }
+
     /** v5 queue-time state: bounces and priority reset, one fewer email left (not below zero). */
     public function markQueued(int $id): void
     {

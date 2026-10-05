@@ -33,6 +33,20 @@ final class EmailNormaliser
         return self::normalise(self::fixUser(self::user($email)) . '@' . self::fixDomain(self::domain($email)));
     }
 
+    /**
+     * The distinct valid addresses found in free text (one per line,
+     * separated by commas, …), normalised, in order of appearance.
+     *
+     * @return list<string>
+     */
+    public static function extract(string $input): array
+    {
+        if (!preg_match_all('/\b([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,63})\b/i', $input, $matches)) {
+            return [];
+        }
+        return array_values(array_unique(array_filter(array_map(self::normalise(...), $matches[1]), self::isValid(...))));
+    }
+
     public static function user(string $email): string
     {
         return explode('@', self::normalise($email), 2)[0];

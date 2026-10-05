@@ -60,7 +60,7 @@ final class ConsentController extends AbstractController
         $message = $list === null
             ? 'The subscription could not be confirmed.'
             : $this->consent->confirm($user, $list, trim($request->request->getString('muid')));
-        return $this->render('consent/result.html.twig', ['title' => 'Subscription confirmed', 'message' => $message]);
+        return $this->render('page/result.html.twig', ['title' => 'Subscription confirmed', 'message' => $message]);
     }
 
     #[Route('/unsubscribe/{token}/{shortcode}/{muid}', name: 'consent_unsubscribe', defaults: ['muid' => ''], methods: ['GET'])]
@@ -91,7 +91,7 @@ final class ConsentController extends AbstractController
                 trim($request->request->getString('muid')),
                 $this->isGranted('subscribers.manage')
             );
-        return $this->render('consent/result.html.twig', ['title' => 'Unsubscribed', 'message' => $message]);
+        return $this->render('page/result.html.twig', ['title' => 'Unsubscribed', 'message' => $message]);
     }
 
     /**

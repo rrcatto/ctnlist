@@ -64,73 +64,9 @@ class UsersController extends Controller
 
 
 
-    public function authenticationPrompt(
-        string $subscriberToken,
-        string $action,
-        ?string $messageUid = null,
-        ?int $listId = null
-    ): string {
-        $subscriber = new SubscribersM($this->fat);
-        if (!$subscriber->read($subscriberToken)) {
-            $this->fat->error(404);
-        }
-
-        $messageId = null;
-        if ($messageUid !== null && $messageUid !== '') {
-            // Use the established Mapper model for ordinary message lookup.
-            $message = new MessagesM($this->fat);
-            if ($message->read($messageUid)) {
-                $messageId = (int) $message->m_id;
-            }
-        }
-
-        $csrf = Csrf::field($this->fat);
-        $masked = htmlspecialchars(
-            SubscribersM::maskEmail((string) $subscriber->s_email),
-            ENT_QUOTES | ENT_SUBSTITUTE,
-            'UTF-8'
-        );
-        $token = htmlspecialchars($subscriberToken, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $safeAction = htmlspecialchars($action, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $midField = $messageId === null ? '' : '<input type="hidden" name="message_id" value="' . $messageId . '">';
-        $listField = $listId === null ? '' : '<input type="hidden" name="list_id" value="' . $listId . '">';
-
-        return <<<HTML
-<div class="card mx-auto" style="max-width: 620px;">
-  <div class="card-body">
-    <h1 class="h4">Authentication required</h1>
-    <p>This request relates to <strong>{$masked}</strong>.</p>
-    <p>Before continuing, verify that you can access this email account. The secure sign-in link will return you directly to this action.</p>
-    <form action="{{@BaseURL}}auth/request" method="post">
-      {$csrf}
-      <input type="hidden" name="subscriber_token" value="{$token}">
-      <input type="hidden" name="return_action" value="{$safeAction}">
-      {$midField}
-      {$listField}
-      <button class="btn btn-primary" type="submit">Send secure sign-in link</button>
-    </form>
-  </div>
-</div>
-HTML;
-    }
 
 
 
-
-
-    public function matchesSubscriberToken(string $token): bool
-    {
-        return $this->uloggedin
-            && $token !== ''
-            && hash_equals((string) $this->user->s_uuid, strtolower(trim($token)));
-    }
-
-    public function requireMatchingSubscriberToken(string $token): void
-    {
-        if (!$this->matchesSubscriberToken($token)) {
-            $this->fat->error(403);
-        }
-    }
 
     public function can(string $permission): bool
     {

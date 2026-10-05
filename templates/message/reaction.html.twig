@@ -1,0 +1,13 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ reaction|capitalize }} message{% endblock %}
+
+{% block content %}
+<form action="{{ path('message_reaction_submit', {reaction: reaction}) }}" method="post" class="card card-body">
+  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+  <input type="hidden" name="subscriber_token" value="{{ token }}">
+  <input type="hidden" name="muid" value="{{ muid }}">
+  <h1 class="h4">{{ reaction|capitalize }} this message</h1>
+  <button class="btn btn-primary" type="submit">Confirm</button>
+</form>
+{% endblock %}
