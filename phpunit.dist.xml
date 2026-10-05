@@ -18,6 +18,8 @@
         <env name="MAIL_SMTP_SERVERS_JSON" value="[]" force="true"/>
         <env name="MAIL_RATE_PER_MINUTE" value="0" force="true"/>
         <env name="APP_ADMIN_EMAIL" value="owner@ctnlist.test" force="true"/>
+        <env name="AUTH_MAGIC_LINK_MAX_PER_EMAIL" value="5" force="true"/>
+        <env name="AUTH_MAGIC_LINK_MAX_PER_IP" value="20" force="true"/>
         <env name="BANLIST_TEST_ENV" value="dev/podman/banlist-test.env" force="false"/>
         <!-- The smoke suite drives the running podman stack over HTTP from
              inside the app container; override these for another instance. -->

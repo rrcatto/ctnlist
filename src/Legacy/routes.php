@@ -60,59 +60,6 @@ return static function (
 
 
     // Passwordless authentication and profile management.
-    $fat->route('GET /login', static fn() => $render('Login', $user->CreateLoginHTMLform()));
-    $fat->route('POST /login', static function (Base $fat) use ($user, $render): void {
-        Csrf::requireValid($fat);
-        $returnAction = trim((string) $fat->get('POST.return_action')) ?: 'profile';
-        $returnMessageId = (int) $fat->get('POST.return_message_id');
-        $returnListId = (int) $fat->get('POST.return_list_id');
-        $user->requestMagicLink(
-            (string) $fat->get('POST.email'),
-            $returnAction,
-            $returnMessageId > 0 ? $returnMessageId : null,
-            $returnListId > 0 ? $returnListId : null
-        );
-        $render('Check your email', '<p>If the address is valid, a secure sign-in link has been sent.</p>');
-    });
-    $fat->route('POST /auth/request', static function (Base $fat) use ($subscriber, $user, $render): void {
-        Csrf::requireValid($fat);
-        $token = strtolower(trim((string) $fat->get('POST.subscriber_token')));
-        if (!$subscriber->RetrieveSubscriber($token)) {
-            $fat->error(404);
-        }
-        $user->requestMagicLink(
-            (string) $subscriber->subscriber->s_email,
-            (string) $fat->get('POST.return_action'),
-            (int) $fat->get('POST.message_id') ?: null,
-            (int) $fat->get('POST.list_id') ?: null
-        );
-        $render('Check your email', '<p>If the request is valid, a secure sign-in link has been sent.</p>');
-    });
-    $fat->route('GET /profile', static function (Base $fat) use ($user, $loggedIn): void {
-        $loggedIn();
-        $fat->reroute('/profile/subscriber/' . rawurlencode((string) $user->user->s_uuid));
-    });
-    $fat->route('GET /profile/subscriber/@token', static function (Base $fat, array $params) use ($user, $render): void {
-        $token = strtolower((string) $params['token']);
-        if (!$user->matchesSubscriberToken($token)) {
-            $render('Authentication required', $user->authenticationPrompt($token, 'profile'));
-            return;
-        }
-        $render('My profile', $user->DisplayProfileHTML());
-    });
-    $fat->route('GET /edit-profile', static function () use ($user, $loggedIn, $render): void {
-        $loggedIn();
-        $render('Edit profile', $user->CreateEditProfileHTMLform());
-    });
-    $fat->route('POST /edit-profile', static function () use ($user, $loggedIn, $render): void {
-        $loggedIn();
-        $render('Edit profile', $user->save() . $user->CreateEditProfileHTMLform());
-    });
-    $fat->route('GET /my/messages', static function () use ($user, $loggedIn, $render): void {
-        $loggedIn();
-        $render('Messages sent to me', $user->DisplayMessageHistoryHTML());
-    });
-
     // Per-list consent. The MUID route variants preserve message-linked smlog
     // activity.
     $showConfirm = static function (Base $fat, array $params) use ($subscriber, $user, $render): void {

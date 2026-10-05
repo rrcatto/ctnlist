@@ -84,6 +84,30 @@ final class MessageLog
         return $shortcode === false ? '' : strtoupper(trim((string) $shortcode));
     }
 
+    /**
+     * Messages delivered to the subscriber, newest first.
+     *
+     * @return list<array{m_uniqid: string, m_subject: string, sml_date_sent: string}>
+     */
+    public function history(string $subscriberUuid): array
+    {
+        $subscriberUuid = self::uuid($subscriberUuid);
+        if ($subscriberUuid === null) {
+            return [];
+        }
+        return array_map(static fn(array $row): array => [
+            'm_uniqid' => (string) $row['m_uniqid'],
+            'm_subject' => (string) $row['m_subject'],
+            'sml_date_sent' => (string) $row['sml_date_sent'],
+        ], $this->db->fetchAllAssociative(
+            'SELECT m.m_uniqid, m.m_subject, sml.sml_date_sent
+             FROM smlog sml JOIN messages m ON m.m_uniqid = sml.sml_muid
+             WHERE sml.sml_s_uuid = ? AND sml.sml_date_sent IS NOT NULL
+             ORDER BY sml.sml_date_sent DESC',
+            [$subscriberUuid]
+        ));
+    }
+
     public function deleteForMessage(string $muid): void
     {
         $this->db->executeStatement('DELETE FROM smlog WHERE sml_muid = ?', [$muid]);

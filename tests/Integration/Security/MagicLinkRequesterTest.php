@@ -1,0 +1,72 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Tests\Integration\Security;
+
+use App\Security\MagicLinkRequester;
+use App\Security\SubscriberUserProvider;
+use App\Subscriber\ProfileService;
+use App\Tests\Integration\IntegrationTestCase;
+use Symfony\Component\Mime\Email;
+
+final class MagicLinkRequesterTest extends IntegrationTestCase
+{
+    public function testNewAddressGetsAnIdentityAndIsSentOnToConfirmAll(): void
+    {
+        self::assertTrue($this->service(MagicLinkRequester::class)->request(' New@Example.com '));
+
+        $identity = $this->db->fetchAssociative("SELECT s_id FROM subscribers WHERE s_email = 'new@example.com'");
+        self::assertIsArray($identity, 'identity created');
+        self::assertFalse((bool) $this->db->fetchOne('SELECT ls_confirmed FROM list_subscribers WHERE ls_s_id = ?', [$identity['s_id']]), 'no consent granted');
+        $token = $this->db->fetchAssociative('SELECT alt_email, alt_return_action, alt_return_l_id FROM auth_login_tokens WHERE alt_s_id = ?', [$identity['s_id']]);
+        self::assertSame(['alt_email' => 'new@example.com', 'alt_return_action' => 'confirm', 'alt_return_l_id' => $this->listId('ALL')], $token);
+
+        self::assertEmailCount(1);
+        $email = self::getMailerMessage();
+        self::assertInstanceOf(Email::class, $email);
+        self::assertMatchesRegularExpression('#/auth/verify\?token=[A-Za-z0-9_-]{43}#', (string) $email->getTextBody());
+        self::assertSame('MAGIC-LINK', $this->db->fetchOne('SELECT sl_type FROM sendlog ORDER BY sl_id DESC LIMIT 1'));
+    }
+
+    public function testKnownSubscriberKeepsTheRequestedReturnAction(): void
+    {
+        $id = $this->createSubscriber('jane@example.com');
+        $requester = $this->service(MagicLinkRequester::class);
+
+        self::assertTrue($requester->request('jane@example.com', 'messages'));
+        self::assertTrue($requester->request('jane@example.com', 'not-an-action', 5, 6));
+        self::assertSame(
+            [['alt_return_action' => 'messages', 'alt_return_l_id' => null], ['alt_return_action' => 'profile', 'alt_return_l_id' => null]],
+            $this->db->fetchAllAssociative('SELECT alt_return_action, alt_return_l_id FROM auth_login_tokens WHERE alt_s_id = ? ORDER BY alt_id', [$id]),
+            'unknown actions fall back to the profile without context'
+        );
+    }
+
+    public function testRateLimitAndUnusableAddresses(): void
+    {
+        $requester = $this->service(MagicLinkRequester::class);
+        for ($i = 0; $i < 5; $i++) {
+            self::assertTrue($requester->request('busy@example.com'));
+        }
+        self::assertFalse($requester->request('busy@example.com'), 'AUTH_MAGIC_LINK_MAX_PER_EMAIL reached');
+        self::assertFalse($requester->request('not-an-address'));
+        self::assertFalse($requester->request('postmaster@example.com'), 'unusable under the v5 rules');
+        self::assertSame(0, (int) $this->db->fetchOne("SELECT COUNT(*) FROM subscribers WHERE s_email LIKE '%postmaster%'"));
+    }
+
+    public function testProfileUpdateIsStoredAndNotified(): void
+    {
+        $id = $this->createSubscriber('jane@example.com', 'Jane');
+        $user = $this->service(SubscriberUserProvider::class)->loadUserBySubscriberId($id);
+
+        $this->service(ProfileService::class)->update($user, [
+            's_fname' => '  Janet ', 's_lname' => str_repeat('x', 150), 's_birthday' => '1990-02-30x', 's_country' => 'Zambia', 's_email' => 'ignored@example.com',
+        ]);
+
+        $row = $this->db->fetchAssociative('SELECT s_fname, LENGTH(s_lname) AS lname_length, s_birthday, s_country, s_email FROM subscribers WHERE s_id = ?', [$id]);
+        self::assertSame(['s_fname' => 'Janet', 'lname_length' => 100, 's_birthday' => null, 's_country' => 'Zambia', 's_email' => 'jane@example.com'], $row);
+        self::assertSame('UPDATE-USER', $this->db->fetchOne('SELECT sl_type FROM sendlog ORDER BY sl_id DESC LIMIT 1'));
+        self::assertEmailCount(1);
+    }
+}

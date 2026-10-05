@@ -1,0 +1,34 @@
+{% extends 'base.html.twig' %}
+
+{% macro options(choices, current, blank) %}
+  <option value=""{{ current is empty ? ' selected' }}>{{ blank }}</option>
+  {% for choice in choices %}
+    <option value="{{ choice }}"{{ choice == current ? ' selected' }}>{{ choice }}</option>
+  {% endfor %}
+{% endmacro %}
+
+{% block title %}Edit profile{% endblock %}
+
+{% block content %}
+{% import _self as form %}
+<form action="{{ path('profile_save') }}" method="post">
+  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+  <fieldset class="border rounded p-4">
+    <legend>Edit profile</legend>
+    <div class="row g-3">
+      <div class="col-md-6"><label class="form-label" for="p-fname">First name</label><input class="form-control" id="p-fname" name="s_fname" maxlength="100" value="{{ profile.s_fname }}"></div>
+      <div class="col-md-6"><label class="form-label" for="p-lname">Last name</label><input class="form-control" id="p-lname" name="s_lname" maxlength="100" value="{{ profile.s_lname }}"></div>
+      <div class="col-md-6"><label class="form-label" for="p-email">Email</label><input class="form-control" id="p-email" value="{{ profile.s_email }}" readonly></div>
+      <div class="col-md-6"><label class="form-label" for="p-phone">Cell</label><input class="form-control" id="p-phone" name="s_phone" maxlength="30" value="{{ profile.s_phone }}"></div>
+      <div class="col-md-6"><label class="form-label" for="p-birthday">Birthdate</label><input class="form-control" id="p-birthday" type="date" name="s_birthday" value="{{ profile.s_birthday }}"></div>
+      <div class="col-md-6"><label class="form-label" for="p-gender">Gender</label><select class="form-select" id="p-gender" name="s_gender">{{ form.options(genders, profile.s_gender, '') }}</select></div>
+      <div class="col-md-6"><label class="form-label" for="p-province">Province</label><select class="form-select" id="p-province" name="s_province">{{ form.options(provinces, profile.s_province, 'Select Province') }}</select></div>
+      <div class="col-md-6"><label class="form-label" for="p-country">Country</label><select class="form-select" id="p-country" name="s_country">{{ form.options(countries, profile.s_country, 'Select Country') }}</select></div>
+      <div class="col-md-6"><label class="form-label" for="p-business">Company</label><input class="form-control" id="p-business" name="s_business" maxlength="100" value="{{ profile.s_business }}"></div>
+      <div class="col-md-6"><label class="form-label" for="p-url">Website</label><input class="form-control" id="p-url" name="s_url" maxlength="253" value="{{ profile.s_url }}"></div>
+      <div class="col-12"><label class="form-label" for="p-photo">Photo URL</label><input class="form-control" id="p-photo" name="s_photo" maxlength="253" value="{{ profile.s_photo }}"></div>
+      <div class="col-12"><button class="btn btn-primary" type="submit">Save profile</button></div>
+    </div>
+  </fieldset>
+</form>
+{% endblock %}

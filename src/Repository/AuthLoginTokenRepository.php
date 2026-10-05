@@ -13,6 +13,37 @@ final class AuthLoginTokenRepository
     {
     }
 
+    public function create(int $subscriberId, string $email, string $tokenHash, string $now, string $expiresAt, string $ip, string $userAgent, string $returnAction, ?int $returnMessageId, ?int $returnListId): void
+    {
+        $this->db->insert('auth_login_tokens', [
+            'alt_s_id' => $subscriberId,
+            'alt_email' => $email,
+            'alt_token_hash' => $tokenHash,
+            'alt_created_at' => $now,
+            'alt_expires_at' => $expiresAt,
+            'alt_requested_ip' => mb_substr($ip, 0, 45),
+            'alt_user_agent' => mb_substr($userAgent, 0, 500),
+            'alt_return_action' => $returnAction,
+            'alt_return_m_id' => $returnMessageId,
+            'alt_return_l_id' => $returnListId,
+        ]);
+    }
+
+    public function delete(string $tokenHash): void
+    {
+        $this->db->executeStatement('DELETE FROM auth_login_tokens WHERE alt_token_hash = ?', [$tokenHash]);
+    }
+
+    public function countForEmailSince(string $email, string $since): int
+    {
+        return (int) $this->db->fetchOne('SELECT COUNT(*) FROM auth_login_tokens WHERE alt_email = ? AND alt_created_at >= ?', [$email, $since]);
+    }
+
+    public function countForIpSince(string $ip, string $since): int
+    {
+        return (int) $this->db->fetchOne('SELECT COUNT(*) FROM auth_login_tokens WHERE alt_requested_ip = ? AND alt_created_at >= ?', [$ip, $since]);
+    }
+
     /**
      * Atomically mark an unused, unexpired token as used, so a link cannot be
      * redeemed twice even by concurrent requests.

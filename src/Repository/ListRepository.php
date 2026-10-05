@@ -37,6 +37,13 @@ final class ListRepository
         return $row === false ? null : $this->hydrate($row);
     }
 
+    /** @return MailingList|null */
+    public function findByShortcode(string $shortcode): ?array
+    {
+        $row = $this->db->fetchAssociative('SELECT ' . self::COLUMNS . ' FROM lists WHERE l_shortcode = ?', [strtoupper(trim($shortcode))]);
+        return $row === false ? null : $this->hydrate($row);
+    }
+
     public function findShortcodeById(int $id): ?string
     {
         $shortcode = $this->db->fetchOne('SELECT l_shortcode FROM lists WHERE l_id = ?', [$id]);

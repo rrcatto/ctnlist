@@ -1,0 +1,19 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Login{% endblock %}
+
+{% block content %}
+<form name="loginform" action="{{ path('login_request') }}" method="post" role="form" class="mx-auto" style="max-width: 520px;">
+  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+  <input type="hidden" name="return_action" value="{{ return_action }}">
+  <fieldset class="border rounded p-4">
+    <legend>Sign in by email</legend>
+    <p>Enter your email address. We will send you a one-time sign-in link valid for 30 minutes.</p>
+    <div class="mb-3">
+      <label class="form-label" for="login-email">Email address</label>
+      <input class="form-control" id="login-email" name="email" type="email" maxlength="254" autocomplete="email" required>
+    </div>
+    <button class="btn btn-primary" type="submit">Email me a sign-in link</button>
+  </fieldset>
+</form>
+{% endblock %}

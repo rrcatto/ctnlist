@@ -1,0 +1,46 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}My profile{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+  <div class="card-body">
+    <h1 class="h4">Subscriber profile</h1>
+    <dl class="row mb-0">
+      <dt class="col-sm-3">Name</dt><dd class="col-sm-9">{{ (profile.s_fname ~ ' ' ~ profile.s_lname)|trim }}</dd>
+      <dt class="col-sm-3">Email</dt><dd class="col-sm-9">{{ profile.s_email }}</dd>
+      <dt class="col-sm-3">Subscriber UUIDv7</dt><dd class="col-sm-9"><code>{{ profile.s_uuid }}</code></dd>
+      <dt class="col-sm-3">Record created</dt><dd class="col-sm-9">{{ profile.s_created_at }}</dd>
+      <dt class="col-sm-3">Company</dt><dd class="col-sm-9">{{ profile.s_business }}</dd>
+    </dl>
+    <a class="btn btn-outline-primary" href="{{ path('profile_edit') }}">Edit profile</a>
+  </div>
+</div>
+
+<h2 class="h4">List memberships</h2>
+<div class="table-responsive">
+  <table class="table table-striped">
+    <thead><tr><th>List</th><th>Membership provenance</th><th>Status</th><th>Action</th></tr></thead>
+    <tbody>
+    {% for membership in memberships %}
+      {% set active = membership.confirmed and not membership.unsubscribed %}
+      <tr>
+        <td>{{ membership.l_name }}</td>
+        <td>
+          {% if membership.ls_uuid is null %}Not joined{% else %}<code>{{ membership.ls_uuid }}</code><br><small>Joined {{ membership.ls_subscribed_at }}</small>{% endif %}
+        </td>
+        <td>{{ active ? 'Confirmed' : (membership.unsubscribed ? 'Unsubscribed' : 'Awaiting confirmation') }}</td>
+        <td>
+          {% if active %}
+            <a class="btn btn-sm btn-outline-danger" href="{{ site.baseUrl }}unsubscribe/{{ profile.s_uuid }}/{{ membership.l_shortcode|url_encode }}">Unsubscribe</a>
+          {% else %}
+            <a class="btn btn-sm btn-outline-success" href="{{ site.baseUrl }}confirm/{{ profile.s_uuid }}/{{ membership.l_shortcode|url_encode }}">Confirm</a>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+<p><a class="btn btn-primary" href="{{ path('profile_messages') }}">Messages sent to me</a></p>
+{% endblock %}

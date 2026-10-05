@@ -86,6 +86,45 @@ final class SubscriberRepository
         return $this->recipient('LOWER(s_email) = ?', EmailNormaliser::correct($email));
     }
 
+    /**
+     * The subscriber for this address (after the v5 cleanup rules), created
+     * if needed. A new identity grants no list consent (the insert trigger
+     * adds an unconfirmed ALL membership and the subscriber role).
+     *
+     * @return array{identity: Identity, created: bool}|null null for an unusable address
+     */
+    public function findOrCreateIdentity(string $email, string $now): ?array
+    {
+        $email = EmailNormaliser::correct($email);
+        if (!EmailNormaliser::isValid($email)) {
+            return null;
+        }
+        $created = $this->db->executeStatement(
+            'INSERT INTO subscribers (s_email, s_created_at) VALUES (?, ?) ON CONFLICT ((LOWER(s_email))) DO NOTHING',
+            [$email, $now]
+        ) === 1;
+        $identity = $this->findIdentityByEmail($email);
+        return $identity === null ? null : ['identity' => $identity, 'created' => $created];
+    }
+
+    /** @return array<string, ?string>|null the profile fields, as stored */
+    public function profile(int $id): ?array
+    {
+        $row = $this->db->fetchAssociative(
+            'SELECT s_uuid, s_email, s_created_at, s_fname, s_lname, s_phone, s_birthday, s_gender, s_province,
+                    s_country, s_business, s_url, s_photo
+             FROM subscribers WHERE s_id = ?',
+            [$id]
+        );
+        return $row === false ? null : array_map(static fn(mixed $v): ?string => $v === null ? null : (string) $v, $row);
+    }
+
+    /** @param array<string, ?string> $fields subscriber-editable profile columns */
+    public function updateProfile(int $id, array $fields): void
+    {
+        $this->db->update('subscribers', $fields, ['s_id' => $id]);
+    }
+
     /** v5 queue-time state: bounces and priority reset, one fewer email left (not below zero). */
     public function markQueued(int $id): void
     {
