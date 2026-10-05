@@ -2,7 +2,7 @@
 
 ctnlist is a web-based mailing-list application created by Richard Royston Catto in 2009. Version 5.0.x is an incremental modernisation of the working v5.0 application, not a replacement of its established workflows.
 
-Versions 5.0.2 and later keep the behaviour of 5.0.1-restored and move the application from the Fat-Free Framework to Symfony 8.1. The migration is in progress: Symfony is the front controller and owns sessions, authentication, CSRF, the page layout, errors and responses, while routes not yet ported still run on Fat-Free through a temporary bridge (see [Migration status](#migration-status)).
+Versions 5.0.2 and later keep the behaviour of 5.0.1-restored and move the application from the Fat-Free Framework to Symfony 8.1. The migration is complete on the development branch: every route is a Symfony controller and Fat-Free has been removed (see [Migration status](#migration-status)).
 
 Version 5.0.3 moves sign-in, logout, permission checks and CSRF to Symfony Security, renders every page in a single Twig layout, and ports the home, privacy and store pages.
 
@@ -10,10 +10,12 @@ Version 5.0.4 ports list, role and ACL administration to Symfony and adds the Sy
 
 Version 5.0.5 moves every subscriber-facing page onto Symfony and the new services: sign-in link requests, the profile pages, the confirm/unsubscribe links and `/subscribe`, forwarding, likes and dislikes, resends, the open-tracking pixel, the archives and the contact form. Sign-in links, consent notifications, forwards, resends and contact acknowledgements are now sent through the Symfony mailers. Administration (subscribers, bulk operations, import/export, messages, templates, the queue) and the reports still run on Fat-Free and the legacy mailer.
 
+Since 5.0.5 the administration pages (messages and templates, queueing, sending and proofs, subscribers, bulk operations, import, export, synchronisation and the Ecwid endpoint) and the Send Log, Site Log and message activity reports run on Symfony, all mail goes through the Symfony mailers, and the Fat-Free Framework, its bridge and the legacy code have been removed. The Site Log again records every request.
+
 ## Platform and upgrades
 
 - PHP 8.4.1+ (developed on 8.5), Composer
-- Symfony 8.1 (including Symfony Security, Twig and Mailer) with Doctrine DBAL 4; Fat-Free Framework 3.9 is still installed but no longer routes any request
+- Symfony 8.1 (including Symfony Security, Twig and Mailer) with Doctrine DBAL 4
 - PostgreSQL with versioned Phinx migrations
 - Symfony Mailer: the application's mail services (`src/Mail/`: transports with failover and throttling, transactional and campaign mailers) send all mail
 - permanent RFC 9562 UUIDv7 subscriber identifiers
@@ -116,11 +118,11 @@ A message can be saved without any audience. `ALL` is available for general camp
 
 ```text
 bin/            console (Symfony), dev (podman development environment)
-config/         Symfony configuration; phinx/ (migration configs, default ban.env location); legacy/ (F3 design.ini)
+config/         Symfony configuration; phinx/ (migration configs, default ban.env location)
 database/       Phinx migrations (domain/, banlist/), destructive development reset scripts
 public_html/    per-installation front controller (index.php), css/, js/
-src/            application code, namespace App\ (src/Legacy/ holds the Fat-Free code still to be ported)
-templates/      Twig templates (base.html.twig is the site layout; legacy/page.html.twig wraps HTML from unported routes)
+src/            application code, namespace App\ (Controller/, Repository/ and domain folders: Campaign/, Queue/, Mail/, Log/, Subscriber/, Security/, Suppression/)
+templates/      Twig templates (base.html.twig is the site layout)
 tests/          PHPUnit: Unit/, Integration/ (application against the ctnlist_test database), Smoke/ (HTTP against the running stack)
 dev/podman/     development container files
 ```
@@ -184,13 +186,13 @@ bin/dev analyse     # PHPStan
 bin/dev test        # PHPUnit: unit, integration and smoke suites
 ```
 
-`tests/Smoke/RouteSmokeTest` requests every GET route of the running stack over HTTP, anonymously and as the development administrator, and checks status codes, login redirects, access control and PHP error output. It is the route-parity check for the Symfony migration. `tests/Smoke/AuthFlowTest` covers sign-in links, auth cookies, logout and CSRF, `tests/Smoke/LayoutTest` the site layout and error pages, `tests/Smoke/AdminListsRolesTest` list and role administration, and `ProfileTest`, `ConsentTest`, `MessageActionTest` and `ArchiveContactTest` the subscriber-facing pages. `tests/Unit` holds unit tests; `tests/Integration` boots the application against the `ctnlist_test` database (each test rolled back) and covers the campaign core: suppression (including the banlist database, `ctnlist_banlist_test`), the send and message logs, mail, rendering, messages and the delivery queue.
+`tests/Smoke/RouteSmokeTest` requests every GET route of the running stack over HTTP, anonymously and as the development administrator, and checks status codes, login redirects, access control and PHP error output. It was the route-parity check for the Symfony migration. `tests/Smoke/AuthFlowTest` covers sign-in links, auth cookies, logout and CSRF, `tests/Smoke/LayoutTest` the site layout and error pages, `tests/Smoke/AdminListsRolesTest` list and role administration, `AdminMessagesTemplatesTest`, `AdminQueueTest`, `AdminSubscribersTest` and `ReportsTest` the rest of the administration and the Site Log, and `ProfileTest`, `ConsentTest`, `MessageActionTest` and `ArchiveContactTest` the subscriber-facing pages. `tests/Unit` holds unit tests; `tests/Integration` boots the application against the `ctnlist_test` database (each test rolled back) and covers the services: suppression (including the banlist database, `ctnlist_banlist_test`), the send and message logs, mail, rendering, messages, the delivery queue, consent, contact and subscriber administration.
 
 The banlist suppression database and real SMTP delivery are not part of the development stack and must be tested on a target installation.
 
 ## Migration status
 
-The move from Fat-Free to Symfony proceeds in phases; each leaves a working application with lint, PHPStan and the smoke suite passing.
+The move from Fat-Free to Symfony was made in phases; each left a working application with lint, PHPStan and the smoke suite passing.
 
 | Phase | Status |
 |---|---|
@@ -204,7 +206,7 @@ The move from Fat-Free to Symfony proceeds in phases; each leaves a working appl
 | 7. Subscriber-facing routes | done |
 | 8. Administrator campaign routes | done |
 | 9. Reports | done |
-| 10. Remove Fat-Free | next |
+| 10. Remove Fat-Free; PHPStan level 6 | done |
 
 ## Licence
 

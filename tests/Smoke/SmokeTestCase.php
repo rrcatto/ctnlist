@@ -10,8 +10,7 @@ use PHPUnit\Framework\TestCase;
 /**
  * Base for tests that drive the running podman stack over HTTP (from the app
  * container to SMOKE_BASE_URL) and inspect the development database. They
- * exercise the web server, not the framework, so they stay valid throughout
- * the Fat-Free to Symfony migration.
+ * exercise the web server, not the framework.
  */
 abstract class SmokeTestCase extends TestCase
 {
@@ -116,7 +115,7 @@ abstract class SmokeTestCase extends TestCase
         ];
     }
 
-    /** No PHP error output and no unresolved Fat-Free template tokens. */
+    /** No PHP error output in the page. */
     protected static function assertCleanPage(string $route, string $body): void
     {
         self::assertDoesNotMatchRegularExpression(
@@ -124,6 +123,5 @@ abstract class SmokeTestCase extends TestCase
             $body,
             "PHP error output on {$route}"
         );
-        self::assertStringNotContainsString('{{@', $body, "unresolved F3 token on {$route}");
     }
 }

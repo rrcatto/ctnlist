@@ -1,5 +1,5 @@
 parameters:
-  level: 5
+  level: 6
   paths:
     - src
     - public_html/index.php
@@ -7,5 +7,3 @@ parameters:
   excludePaths:
     analyse:
       - vendor
-  universalObjectCratesClasses:
-    - DB\SQL\Mapper

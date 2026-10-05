@@ -35,7 +35,6 @@ services:
         resource: '../src/'
         exclude:
             - '../src/Kernel.php'
-            - '../src/Legacy/'
             # Value objects and exceptions, not services.
             - '../src/Security/SubscriberUser.php'
             - '../src/**/*NotFound.php'
@@ -60,24 +59,3 @@ services:
         class: Symfony\Bridge\Twig\ErrorRenderer\TwigErrorRenderer
         decorates: error_renderer.html
         arguments: ['@twig', '@twig.error_renderer.html.inner', '@App\Twig\ErrorPageDebug']
-
-    # ------------------------------------------------------------------
-    # Legacy Fat-Free objects, wired by the container until each area is
-    # ported. Mappers (*M) and helpers are still created by the legacy code.
-    # ------------------------------------------------------------------
-    App\Legacy\:
-        resource: '../src/Legacy/'
-        exclude:
-            - '../src/Legacy/routes.php'
-            - '../src/Legacy/*M.php'
-            - '../src/Legacy/{Controller,Csrf,UuidV7,LegacyRedirect,LegacyHttpError}.php'
-            - '../src/Legacy/htmlhelper.php'
-
-    Base:
-        class: Base
-        factory: ['@App\Legacy\LegacyFramework', 'create']
-
-    DB\SQL:
-        class: DB\SQL
-        factory: ['@Base', 'get']
-        arguments: ['dbPDO']

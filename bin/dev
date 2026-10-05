@@ -47,7 +47,7 @@ ensure_test_db() {
 # PHP-FPM runs as www-data and must be able to create its cache under
 # var/cache; tests run as root and would otherwise create it root-owned.
 ensure_instance_dirs() {
-    in_app install -d -o www-data -g www-data /var/www/ctnlist/var/cache /var/www/ctnlist/var/tmp
+    in_app install -d -o www-data -g www-data /var/www/ctnlist/var/cache
 }
 
 wait_for_db() {
@@ -97,7 +97,7 @@ case "$cmd" in
             in_app composer install --no-interaction
         fi
         # The compiled container embeds absolute paths; rebuild it on every up.
-        in_app rm -rf /var/www/ctnlist/var/cache /var/www/ctnlist/var/tmp
+        in_app rm -rf /var/www/ctnlist/var/cache
         ensure_instance_dirs
         wait_for_db
         in_app composer migrate-paralegal

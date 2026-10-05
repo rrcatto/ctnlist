@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Smoke;
 
-/** The Twig site layout around Symfony and legacy pages, and the error pages. */
+/** The Twig site layout and the error pages. */
 final class LayoutTest extends SmokeTestCase
 {
     public function testAnonymousLayout(): void
@@ -15,7 +15,7 @@ final class LayoutTest extends SmokeTestCase
         self::assertStringNotContainsString('navbarDropdownAdminMenu', $body);
     }
 
-    public function testAdministratorLayoutAroundALegacyPage(): void
+    public function testAdministratorLayout(): void
     {
         $client = self::client();
         self::loginAsAdmin($client);
@@ -25,7 +25,7 @@ final class LayoutTest extends SmokeTestCase
         self::assertStringContainsString('navbarDropdownAdminMenu', $body);
         self::assertMatchesRegularExpression('/Subscribers - \d+/', $body);
         self::assertStringContainsString('href="/logout"', $body);
-        self::assertStringContainsString('Create a topic list', $body, 'legacy content inside the layout');
+        self::assertStringContainsString('Create a topic list', $body, 'page content inside the layout');
     }
 
     public function testStandaloneStorePage(): void

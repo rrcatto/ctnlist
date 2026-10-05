@@ -9,8 +9,8 @@ use PHPUnit\Framework\Attributes\DataProvider;
 /**
  * Requests every GET route of the running application over HTTP, anonymously
  * and as the development administrator. It talks to the web server rather
- * than the framework, so the same suite checks route parity throughout the
- * Fat-Free to Symfony migration.
+ * than the framework; it was the route-parity check of the Fat-Free to
+ * Symfony migration. Add new GET routes to it.
  *
  * Fixtures (a message, template and archive) are created in the development
  * database and removed afterwards. Run with: bin/dev test --testsuite smoke

@@ -17,8 +17,7 @@ framework:
         cookie_httponly: true
         cookie_samesite: lax
 
-    # Session-stored CSRF tokens (id App\Security\Csrf::TOKEN_ID), used by both
-    # Symfony controllers and the legacy Csrf helper.
+    # Session-stored CSRF tokens (id App\Security\Csrf::TOKEN_ID, field csrf).
     csrf_protection: true
 
     mailer:
