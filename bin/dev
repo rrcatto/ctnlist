@@ -44,6 +44,12 @@ ensure_test_db() {
     podman exec -i -e GDB_ENV_FILE=banlist-test.env "$APP" sh -c 'GDB_ENV_DIRECTORY="$PWD/dev/podman" composer migrate-banlist' >/dev/null
 }
 
+# PHP-FPM runs as www-data and must be able to create its cache under
+# var/cache; tests run as root and would otherwise create it root-owned.
+ensure_instance_dirs() {
+    in_app install -d -o www-data -g www-data /var/www/ctnlist/var/cache /var/www/ctnlist/var/tmp
+}
+
 wait_for_db() {
     for _ in $(seq 1 60); do
         if podman exec "$DB" pg_isready -q -U ctnlist -d ctnlist 2>/dev/null; then
@@ -92,6 +98,7 @@ case "$cmd" in
         fi
         # The compiled container embeds absolute paths; rebuild it on every up.
         in_app rm -rf /var/www/ctnlist/var/cache /var/www/ctnlist/var/tmp
+        ensure_instance_dirs
         wait_for_db
         in_app composer migrate-paralegal
         psql_db -q -v email="$ADMIN_EMAIL_DEFAULT" < dev/podman/seed-admin.sql >/dev/null
@@ -114,7 +121,7 @@ case "$cmd" in
     php) in_app_tty php "$@" ;;
     console) if [ -t 0 ]; then podman exec -it -u www-data "$APP" bin/console "$@"; else podman exec -i -u www-data "$APP" bin/console "$@"; fi ;;
     analyse) in_app composer analyse ;;
-    test) in_app vendor/bin/phpunit "$@" ;;
+    test) ensure_instance_dirs; in_app vendor/bin/phpunit "$@" ;;
     lint)
         in_app sh -c 'for f in public_html/index.php $(find src tests -name "*.php"); do php -l "$f" >/dev/null || exit 1; done; echo "No syntax errors."'
         ;;

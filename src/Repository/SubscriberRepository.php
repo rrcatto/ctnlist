@@ -86,6 +86,15 @@ final class SubscriberRepository
         return $this->recipient('LOWER(s_email) = ?', EmailNormaliser::correct($email));
     }
 
+    /** v5 queue-time state: bounces and priority reset, one fewer email left (not below zero). */
+    public function markQueued(int $id): void
+    {
+        $this->db->executeStatement(
+            'UPDATE subscribers SET s_bounces = 0, s_priority = 0, s_emailsleft = GREATEST(0, s_emailsleft - 1) WHERE s_id = ?',
+            [$id]
+        );
+    }
+
     public function exists(int $id): bool
     {
         return $this->db->fetchOne('SELECT 1 FROM subscribers WHERE s_id = ?', [$id]) !== false;
