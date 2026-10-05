@@ -1,0 +1,13 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Subscribe{% endblock %}
+
+{% block content %}
+<h1 class="h4">Choose a mailing list</h1>
+<p>Select the list you want to join:</p>
+<ul>
+  {% for list in lists %}
+    <li><a href="{{ path('subscribe', {m: muid, l: list.l_shortcode}) }}">{{ list.l_name }}</a></li>
+  {% endfor %}
+</ul>
+{% endblock %}

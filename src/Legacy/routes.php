@@ -60,31 +60,6 @@ return static function (
 
 
     // Passwordless authentication and profile management.
-    // Per-list consent. The MUID route variants preserve message-linked smlog
-    // activity.
-    $showConfirm = static function (Base $fat, array $params) use ($subscriber, $user, $render): void {
-        $render('Confirm subscription', $subscriber->CreateConfirmHTMLform(
-            (string) $params['token'],
-            strtoupper(trim((string) $params['shortcode'])),
-            $user,
-            trim((string) ($params['muid'] ?? ''))
-        ));
-    };
-    $fat->route('GET /confirm/@token/@shortcode', $showConfirm);
-    $fat->route('GET /confirm/@token/@shortcode/@muid', $showConfirm);
-    $fat->route('POST /confirm', static fn() => $render('Subscription confirmed', $subscriber->ConfirmSubscription($user)));
-    $showUnsubscribe = static function (Base $fat, array $params) use ($subscriber, $user, $render): void {
-        $render('Unsubscribe', $subscriber->CreateUnsubscribeHTMLform(
-            (string) $params['token'],
-            strtoupper(trim((string) $params['shortcode'])),
-            $user,
-            trim((string) ($params['muid'] ?? ''))
-        ));
-    };
-    $fat->route('GET /unsubscribe/@token/@shortcode', $showUnsubscribe);
-    $fat->route('GET /unsubscribe/@token/@shortcode/@muid', $showUnsubscribe);
-    $fat->route('POST /unsubscribe', static fn() => $render('Unsubscribed', $subscriber->Unsubscribe($user)));
-
     // Subscriber message actions.
     // Restore the v5 administrator convenience route for forwarding a message.
     $fat->route('GET /forward/@muid', static function (Base $fat, array $params) use ($admin, $user, $message, $render): void {
@@ -164,59 +139,6 @@ return static function (
     });
 
     // Subscriber create/edit, search, import/export and integrations.
-    $fat->route('GET /subscribe', static function (Base $fat) use ($user, $message, $listService, $render): void {
-        $muid = trim((string) $fat->get('GET.m'));
-        $shortcode = strtoupper(trim((string) $fat->get('GET.l')));
-        $messageId = 0;
-        $list = null;
-
-        if ($muid !== '' && $message->RetrieveMessage($muid)) {
-            $messageId = (int) $message->message->m_id;
-            if ($shortcode !== '') {
-                $list = $listService->findByShortcode($shortcode);
-            } else {
-                // Links from messages sent without a list context carry only the
-                // MUID. A single assigned list is unambiguous. When a message has
-                // several lists, let the subscriber choose the list.
-                $listIds = $listService->messageListIds($messageId);
-                if (count($listIds) === 1) {
-                    $list = $listService->findById($listIds[0]);
-                } elseif (count($listIds) > 1) {
-                    $choices = '<h1 class="h4">Choose a mailing list</h1><p>Select the list you want to join:</p><ul>';
-                    foreach ($listIds as $listId) {
-                        $assigned = $listService->findById($listId);
-                        if ($assigned === null || !filter_var($assigned['l_active'], FILTER_VALIDATE_BOOLEAN)) {
-                            continue;
-                        }
-                        $choiceUrl = (string) $fat->get('BaseURL') . 'subscribe?m=' . rawurlencode($muid)
-                            . '&l=' . rawurlencode((string) $assigned['l_shortcode']);
-                        $choices .= '<li><a href="' . htmlspecialchars($choiceUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">'
-                            . htmlspecialchars((string) $assigned['l_name'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</a></li>';
-                    }
-                    $render('Subscribe', $choices . '</ul>');
-                    return;
-                }
-            }
-        }
-
-        if ($messageId > 0 && $list !== null && filter_var($list['l_active'], FILTER_VALIDATE_BOOLEAN)) {
-            $shortcode = (string) $list['l_shortcode'];
-            $listId = (int) $list['l_id'];
-            if ($user->uloggedin) {
-                $fat->reroute('/confirm/' . rawurlencode((string) $user->user->s_uuid)
-                    . '/' . rawurlencode($shortcode) . '/' . rawurlencode($muid));
-            }
-            $render(
-                'Subscribe',
-                '<h1 class="h4">Subscribe to ' . htmlspecialchars((string) $list['l_name'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</h1>'
-                . '<p>Sign in by email to confirm this list subscription.</p>'
-                . $user->CreateLoginHTMLform('confirm', $messageId, $listId)
-            );
-            return;
-        }
-
-        $render('Subscribe', '<h1 class="h4">Manage subscriptions</h1><p>Sign in to manage your list memberships.</p>' . $user->CreateLoginHTMLform());
-    });
     $fat->route('GET /subscribe/@token', static fn(Base $fat, array $params) => $render('Subscriber', $subscriber->CreateSubscriberHTMLform((string) $params['token'])));
     $fat->route('GET /subscribe/@token/@muid', static fn(Base $fat, array $params) => $render('Subscriber', $subscriber->CreateSubscriberHTMLform((string) $params['token'], (string) $params['muid'])));
     $fat->route('POST /subscribe', static fn() => $render('Subscriber', $subscriber->save()));

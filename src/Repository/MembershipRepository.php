@@ -43,6 +43,44 @@ final class MembershipRepository
         ));
     }
 
+    /**
+     * Grant consent for one list. The membership is created first (if
+     * needed) and then updated, so the audit trigger records "joined" and
+     * "confirmed" as separate events, as in v5.
+     */
+    public function confirm(int $subscriberId, int $listId, string $now): void
+    {
+        $this->ensure($subscriberId, $listId);
+        $this->db->executeStatement(
+            'UPDATE list_subscribers
+             SET ls_confirmed = TRUE, ls_unsubscribed = FALSE, ls_confirmed_at = ?,
+                 ls_unsubscribed_at = NULL, ls_unsubscribe_reason = NULL
+             WHERE ls_s_id = ? AND ls_l_id = ?',
+            [$now, $subscriberId, $listId]
+        );
+    }
+
+    /** Withdraw consent for one list. */
+    public function unsubscribe(int $subscriberId, int $listId, string $reason, string $now): void
+    {
+        $this->ensure($subscriberId, $listId);
+        $this->db->executeStatement(
+            'UPDATE list_subscribers
+             SET ls_confirmed = FALSE, ls_unsubscribed = TRUE, ls_unsubscribed_at = ?, ls_unsubscribe_reason = ?
+             WHERE ls_s_id = ? AND ls_l_id = ?',
+            [$now, mb_substr(trim($reason), 0, 255), $subscriberId, $listId]
+        );
+    }
+
+    /** Create the membership (no consent) if it does not exist; true when created. */
+    public function ensure(int $subscriberId, int $listId): bool
+    {
+        return $this->db->executeStatement(
+            'INSERT INTO list_subscribers (ls_s_id, ls_l_id) VALUES (?, ?) ON CONFLICT (ls_s_id, ls_l_id) DO NOTHING',
+            [$subscriberId, $listId]
+        ) === 1;
+    }
+
     /** Make every membership ineligible (a global unsubscribe, the multi-list form of v5's s_unsubscribe). */
     public function unsubscribeAll(int $subscriberId, string $reason, string $now): void
     {

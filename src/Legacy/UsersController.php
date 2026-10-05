@@ -63,38 +63,6 @@ class UsersController extends Controller
     }
 
 
-    public function CreateLoginHTMLform(
-        string $returnAction = 'profile',
-        ?int $returnMessageId = null,
-        ?int $returnListId = null
-    ): string {
-        $csrf = Csrf::field($this->fat);
-        $safeAction = htmlspecialchars($returnAction, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $messageField = $returnMessageId === null
-            ? ''
-            : '<input type="hidden" name="return_message_id" value="' . $returnMessageId . '">';
-        $listField = $returnListId === null
-            ? ''
-            : '<input type="hidden" name="return_list_id" value="' . $returnListId . '">';
-
-        return <<<HTML
-<form name="loginform" action="{{@BaseURL}}login" method="post" role="form" class="mx-auto" style="max-width: 520px;">
-  {$csrf}
-  <input type="hidden" name="return_action" value="{$safeAction}">
-  {$messageField}
-  {$listField}
-  <fieldset class="border rounded p-4">
-    <legend>Sign in by email</legend>
-    <p>Enter your email address. We will send you a one-time sign-in link valid for 30 minutes.</p>
-    <div class="mb-3">
-      <label class="form-label" for="login-email">Email address</label>
-      <input class="form-control" id="login-email" name="email" type="email" maxlength="254" autocomplete="email" required>
-    </div>
-    <button class="btn btn-primary" type="submit">Email me a sign-in link</button>
-  </fieldset>
-</form>
-HTML;
-    }
 
     public function authenticationPrompt(
         string $subscriberToken,

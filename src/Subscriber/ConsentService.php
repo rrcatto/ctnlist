@@ -1,0 +1,124 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\Subscriber;
+
+use App\Config\SiteConfig;
+use App\Log\MessageActivity;
+use App\Log\MessageLog;
+use App\Mail\TransactionalMailer;
+use App\Repository\MembershipRepository;
+use App\Repository\SubscriberRepository;
+use App\Security\SubscriberUser;
+use App\Suppression\SuppressionChecker;
+use Psr\Clock\ClockInterface;
+
+/**
+ * Per-list consent changed by the subscriber: confirming and unsubscribing,
+ * with the v5 engagement, smlog and notification effects. Globally
+ * suppressed addresses cannot be confirmed; a global unsubscribe disables
+ * every local membership and records the suppression.
+ *
+ * @phpstan-import-type MailingList from \App\Repository\ListRepository
+ */
+final class ConsentService
+{
+    /** Unsubscribe scopes offered on the form. */
+    public const SCOPES = ['list', 'global', 'bounce', 'spam'];
+
+    public function __construct(
+        private readonly MembershipRepository $memberships,
+        private readonly SubscriberRepository $subscribers,
+        private readonly SuppressionChecker $suppression,
+        private readonly Engagement $engagement,
+        private readonly MessageLog $messageLog,
+        private readonly TransactionalMailer $mailer,
+        private readonly SiteConfig $site,
+        private readonly ClockInterface $clock,
+    ) {
+    }
+
+    /**
+     * @param MailingList $list
+     * @return string the message shown to the subscriber
+     */
+    public function confirm(SubscriberUser $user, array $list, string $muid = ''): string
+    {
+        if ($this->suppression->isSuppressed($user->email)) {
+            return 'This email address or domain is globally suppressed and cannot be confirmed for bulk mail.';
+        }
+        $this->memberships->confirm($user->id, $list['l_id'], $this->now());
+        $priority = $this->subscribers->findRecipientByUuid($user->uuid)['s_priority'] ?? 0;
+        $this->engagement->set($user->uuid, $priority + 10);
+        if ($muid !== '') {
+            $this->messageLog->record($user->uuid, $muid, MessageActivity::Confirm);
+        }
+
+        $this->notify($user, 'CONFIRM', $list, $muid,
+            $user->email . ' has confirmed subscription to ' . $list['l_name'],
+            '<p>' . self::e($user->email) . ' has confirmed their subscription to <strong>' . self::e($list['l_name']) . '</strong>.</p>',
+            "{$user->email} has confirmed their subscription to {$list['l_name']}.\n");
+        return 'Your subscription to ' . $list['l_name'] . ' is confirmed.';
+    }
+
+    /**
+     * @param MailingList $list
+     * @param string $scope list (this list only), or global/bounce/spam (all
+     *                      local lists plus a global suppression of that kind)
+     * @param bool $byAdministrator records the suppression as an administrator action
+     * @return string the message shown to the subscriber
+     */
+    public function unsubscribe(SubscriberUser $user, array $list, string $scope, string $reason, string $muid = '', bool $byAdministrator = false): string
+    {
+        $reason = trim($reason);
+        $global = in_array($scope, ['global', 'bounce', 'spam'], true);
+        if ($global) {
+            $this->memberships->unsubscribeAll($user->id, $reason, $this->now());
+            $type = ['global' => 'USER', 'bounce' => 'BOUNCE', 'spam' => 'SPAM'][$scope];
+            if ($byAdministrator) {
+                $type = $scope === 'global' ? 'ADMIN' : $type . '-ADMIN';
+            }
+            $this->suppression->suppressEmail($user->email, $type, $reason);
+        } else {
+            $this->memberships->unsubscribe($user->id, $list['l_id'], $reason, $this->now());
+        }
+
+        $this->engagement->reset($user->uuid);
+        if ($muid !== '') {
+            $this->messageLog->record($user->uuid, $muid, MessageActivity::Unsubscribe);
+        }
+
+        $why = $reason !== '' ? $reason : 'No reason supplied';
+        $resubscribe = rtrim($this->site->baseUrl, '/') . '/confirm/' . rawurlencode($user->uuid) . '/' . rawurlencode($list['l_shortcode'])
+            . ($muid !== '' ? '/' . rawurlencode($muid) : '');
+        $this->notify($user, 'UNSUBSCRIBE', $list, $muid,
+            $user->email . ' has been unsubscribed from ' . $list['l_name'],
+            '<p>' . self::e($user->email) . ' has been unsubscribed from <strong>' . self::e($list['l_name']) . '</strong>.</p>'
+                . '<p>Reason: ' . self::e($why) . '</p><p><a href="' . self::e($resubscribe) . '">Re-subscribe</a></p>',
+            "{$user->email} has been unsubscribed from {$list['l_name']}.\nReason: {$why}\nRe-subscribe: {$resubscribe}\n");
+
+        return $global
+            ? 'You have been unsubscribed from all local lists and added to the global suppression database.'
+            : 'You have been unsubscribed from ' . $list['l_name'] . '.';
+    }
+
+    /** @param MailingList $list */
+    private function notify(SubscriberUser $user, string $type, array $list, string $muid, string $subject, string $html, string $text): void
+    {
+        $this->mailer->sendNotification(
+            $muid, $type, $this->site->fromAddress, $user->email, trim($user->firstName . ' ' . $user->lastName),
+            $subject, $html, $text, $user->uuid, $list['l_shortcode']
+        );
+    }
+
+    private function now(): string
+    {
+        return $this->clock->now()->format('Y-m-d H:i:s');
+    }
+
+    private static function e(string $value): string
+    {
+        return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    }
+}
