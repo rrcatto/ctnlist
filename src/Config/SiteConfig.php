@@ -10,7 +10,7 @@ namespace App\Config;
  */
 final class SiteConfig
 {
-    public const VERSION = '5.0.4';
+    public const VERSION = '5.0.5';
 
     /**
      * @param list<array<string, mixed>> $smtpServers MAIL_SMTP_SERVERS_JSON entries

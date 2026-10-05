@@ -1,4 +1,4 @@
-# ctnlist 5.0.4
+# ctnlist 5.0.5
 
 ctnlist is a web-based mailing-list application created by Richard Royston Catto in 2009. Version 5.0.x is an incremental modernisation of the working v5.0 application, not a replacement of its established workflows.
 
@@ -8,12 +8,14 @@ Version 5.0.3 moves sign-in, logout, permission checks and CSRF to Symfony Secur
 
 Version 5.0.4 ports list, role and ACL administration to Symfony and adds the Symfony campaign core: global suppression, the Send Log and message log, mail transports with failover, the transactional and campaign mailers, template rendering, archives, messages and the delivery queue. These services are covered by integration tests against a separate test database; the subscriber-facing and administrator routes move onto them in the next phases, so live campaign delivery still uses the Fat-Free code.
 
+Version 5.0.5 moves every subscriber-facing page onto Symfony and the new services: sign-in link requests, the profile pages, the confirm/unsubscribe links and `/subscribe`, forwarding, likes and dislikes, resends, the open-tracking pixel, the archives and the contact form. Sign-in links, consent notifications, forwards, resends and contact acknowledgements are now sent through the Symfony mailers. Administration (subscribers, bulk operations, import/export, messages, templates, the queue) and the reports still run on Fat-Free and the legacy mailer.
+
 ## Platform and upgrades
 
 - PHP 8.4.1+ (developed on 8.5), Composer
 - Symfony 8.1 (including Symfony Security, Twig and Mailer) with Doctrine DBAL 4; Fat-Free Framework 3.9 for the routes not yet ported
 - PostgreSQL with versioned Phinx migrations
-- Symfony Mailer behind the application-owned `mailer` wrapper
+- Symfony Mailer: the application's mail services (`src/Mail/`: transports with failover and throttling, transactional and campaign mailers) for the Symfony pages; the legacy `mailer` wrapper for the administration still on Fat-Free
 - permanent RFC 9562 UUIDv7 subscriber identifiers
 - `subscribers` as the canonical identity table
 - passwordless one-time email authentication (Symfony Security from 5.0.3)
@@ -119,13 +121,13 @@ database/       Phinx migrations (domain/, banlist/), destructive development re
 public_html/    per-installation front controller (index.php), css/, js/
 src/            application code, namespace App\ (src/Legacy/ holds the Fat-Free code still to be ported)
 templates/      Twig templates (base.html.twig is the site layout; legacy/page.html.twig wraps HTML from unported routes)
-tests/          PHPUnit (tests/Smoke: route smoke suite)
+tests/          PHPUnit: Unit/, Integration/ (application against the ctnlist_test database), Smoke/ (HTTP against the running stack)
 dev/podman/     development container files
 ```
 
 ## Deployment
 
-The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/5.0.4/` (the path is set in `public_html/index.php`). Run `composer install --no-dev` there.
+The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/5.0.5/` (the path is set in `public_html/index.php`). Run `composer install --no-dev` there.
 
 Each installation has its own directory containing:
 
@@ -146,9 +148,11 @@ CTNLIST_INSTANCE_DIR=/var/www/example composer migrate-paralegal
 
 Per-installation settings are read from `.env` outside the public web directory. Start with `.env.example`. `APP_ENV` is `prod`, `dev` or `test`. `TRUSTED_PROXIES` lists reverse proxies whose `X-Forwarded-*` headers are trusted.
 
-The main application uses `DB_*` settings. The separate global suppression database uses `GDB_*` settings in an externally managed `ban.env`. Set `GDB_ENV_DIRECTORY` and, when necessary, `GDB_ENV_FILE` in the installation `.env` (default: `config/phinx/ban.env` in the shared tree); the same variables can be exported when running the banlist Phinx configuration. `SUPPRESSION_PROVIDER=none` disables the suppression database and is only accepted with `APP_ENV=dev`.
+The main application uses `DB_*` settings. The separate global suppression database uses `GDB_*` settings in an externally managed `ban.env`. Set `GDB_ENV_DIRECTORY` and, when necessary, `GDB_ENV_FILE` in the installation `.env` (default: `config/phinx/ban.env` in the shared tree); the same variables can be exported when running the banlist Phinx configuration. `SUPPRESSION_PROVIDER=none` disables the suppression database and is only accepted with `APP_ENV` `dev` or `test`.
 
 SMTP can be configured with a single `MAILER_DSN` or an optional `MAIL_SMTP_SERVERS_JSON` array for per-server batching, delay, rate and failover. Optional legacy synchronisation targets use `SYNC_DATABASES_JSON`.
+
+Sign-in links expire after `AUTH_MAGIC_LINK_TTL` seconds and are rate-limited per address (`AUTH_MAGIC_LINK_MAX_PER_EMAIL` within `AUTH_MAGIC_LINK_EMAIL_WINDOW`) and per client IP (`AUTH_MAGIC_LINK_MAX_PER_IP` within `AUTH_MAGIC_LINK_IP_WINDOW`); a signed-in session lasts `AUTH_SESSION_TTL` seconds. Contact-form submissions are appended to `CONTACT_LOG_FILE` (default: the installation's `logs/contact.log`).
 
 ## Database setup
 
