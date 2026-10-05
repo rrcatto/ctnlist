@@ -175,10 +175,10 @@ The application is at http://localhost:8180. All outgoing mail is captured by Ma
 ```bash
 bin/dev lint        # php -l over public_html/index.php, src/ and tests/
 bin/dev analyse     # PHPStan
-bin/dev test        # PHPUnit
+bin/dev test        # PHPUnit: unit, integration and smoke suites
 ```
 
-`tests/Smoke/RouteSmokeTest` requests every GET route of the running stack over HTTP, anonymously and as the development administrator, and checks status codes, login redirects, access control and PHP error output. It is the route-parity check for the Symfony migration. `tests/Smoke/AuthFlowTest` covers sign-in links, auth cookies, logout and CSRF, `tests/Smoke/LayoutTest` the site layout and error pages, and `tests/Smoke/AdminListsRolesTest` list and role administration; `tests/Unit` holds unit tests.
+`tests/Smoke/RouteSmokeTest` requests every GET route of the running stack over HTTP, anonymously and as the development administrator, and checks status codes, login redirects, access control and PHP error output. It is the route-parity check for the Symfony migration. `tests/Smoke/AuthFlowTest` covers sign-in links, auth cookies, logout and CSRF, `tests/Smoke/LayoutTest` the site layout and error pages, and `tests/Smoke/AdminListsRolesTest` list and role administration. `tests/Unit` holds unit tests; `tests/Integration` boots the application against the `ctnlist_test` database (each test rolled back) and covers the campaign core: suppression (including the banlist database, `ctnlist_banlist_test`), the send and message logs, mail, rendering, messages and the delivery queue.
 
 The banlist suppression database and real SMTP delivery are not part of the development stack and must be tested on a target installation.
 
@@ -194,8 +194,8 @@ The move from Fat-Free to Symfony proceeds in phases; each leaves a working appl
 | 3. Authentication and security (Symfony Security, magic-link authenticator, ACL voter, CSRF) | done |
 | 4. Twig layout and simple pages | done |
 | 5. Lists, roles and ACL administration | done |
-| 6. Campaign core services on DBAL repositories | next |
-| 7. Subscriber-facing routes | |
+| 6. Campaign core services on DBAL repositories | done |
+| 7. Subscriber-facing routes | next |
 | 8. Administrator campaign routes | |
 | 9. Reports | |
 | 10. Remove Fat-Free | |
