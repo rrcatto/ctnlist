@@ -1,0 +1,25 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Archives{% endblock %}
+
+{% block content %}
+{% if archives is empty %}
+  <p>There are no archives.</p>
+{% else %}
+  <div class="table-responsive">
+    <table class="table table-striped table-hover table-bordered">
+      <thead class="table-info"><tr><th>Archived message</th><th>Created</th><th>Views</th></tr></thead>
+      <tbody>
+      {% for archive in archives %}
+        <tr>
+          <td><a href="{{ path('archive', {id: archive.a_id}) }}">{{ archive.a_subject|slice(0, 80) }}...</a></td>
+          <td>{{ archive.a_datecreated }}</td>
+          <td>{{ archive.a_viewed }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include '_pagination.html.twig' with {base: path('archives')} %}
+{% endif %}
+{% endblock %}

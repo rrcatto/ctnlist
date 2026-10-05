@@ -22,7 +22,6 @@ return static function (
     SubscribersController $subscriber,
     MessagesController $message,
     TemplatesController $template,
-    ArchivesController $archive,
     mailer $mailer,
     QueueController $queue,
     ListService $listService,
@@ -237,72 +236,5 @@ return static function (
     $fat->route('GET /sitelog/@p', static function (Base $fat, array $params) use ($admin, $sitelog, $render): void { $admin('logs.view'); $render('Site Log', $sitelog->CreateSiteLogHTMLList((string) $fat->get('GET.q'), (string) $fat->get('GET.e'), (string) $fat->get('GET.u'), (string) $fat->get('GET.ip'), (string) $fat->get('GET.li'), (string) $fat->get('GET.from'), (string) $fat->get('GET.to'), (int) $params['p'], (int) $fat->get('r'))); });
     $fat->route('GET /message-views/@muid', static function (Base $fat, array $params) use ($admin, $smlog, $render): void { $admin('logs.view'); $render('Message activity', $smlog->CreateMessageReadsHTMLList((string) $params['muid'], (string) $fat->get('GET.e'), 1, (int) $fat->get('r'))); });
     $fat->route('GET /message-views/@muid/@p', static function (Base $fat, array $params) use ($admin, $smlog, $render): void { $admin('logs.view'); $render('Message activity', $smlog->CreateMessageReadsHTMLList((string) $params['muid'], (string) $fat->get('GET.e'), (int) $params['p'], (int) $fat->get('r'))); });
-
-    // Archives and contextual contact/order form.
-    $fat->route('GET /archives', static function (Base $fat) use ($archive, $render): void { $render('Archives', $archive->CreateArchivesHTMLList(1, (int) $fat->get('r'))); });
-    $fat->route('GET /archives/@p', static function (Base $fat, array $params) use ($archive, $render): void { $render('Archives', $archive->CreateArchivesHTMLList((int) $params['p'], (int) $fat->get('r'))); });
-    $fat->route('GET /archive/@aid', static function (Base $fat, array $params) use ($archive, $render): void { $render('Archive', $archive->ShowArchive((int) $params['aid'])); });
-    $fat->route('GET /archive/@aid/@token/@muid', static function (Base $fat, array $params) use ($archive, $render): void { $render('Archive', $archive->ShowArchive((int) $params['aid'], (string) $params['token'], (string) $params['muid'])); });
-    $contactForm = static function (Base $fat, string $token = '', string $muid = '') use ($subscriber): string {
-        $values = ['name' => '', 'email' => '', 'cell' => '', 'company' => '', 'website' => ''];
-        if ($token !== '' && $subscriber->RetrieveSubscriber($token)) {
-            $values = [
-                'name' => trim((string) $subscriber->subscriber->s_fname . ' ' . (string) $subscriber->subscriber->s_lname),
-                'email' => (string) $subscriber->subscriber->s_email,
-                'cell' => (string) $subscriber->subscriber->s_phone,
-                'company' => (string) $subscriber->subscriber->s_business,
-                'website' => (string) $subscriber->subscriber->s_url,
-            ];
-        }
-        $e = static fn(mixed $v): string => htmlspecialchars((string) $v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        return '<form action="{{@BaseURL}}contact-form" method="post" class="card card-body">' . Csrf::field($fat)
-            . '<input type="hidden" name="suid" value="' . $e($token) . '"><input type="hidden" name="muid" value="' . $e($muid) . '">'
-            . '<input type="hidden" name="realm" value="' . $e((string) $fat->get('BookingURL')) . '">'
-            . '<div class="row g-3"><div class="col-md-6"><label class="form-label">Full name</label><input class="form-control" name="name" value="' . $e($values['name']) . '"></div>'
-            . '<div class="col-md-6"><label class="form-label">Email</label><input class="form-control" name="email" value="' . $e($values['email']) . '"></div>'
-            . '<div class="col-md-6"><label class="form-label">Cell</label><input class="form-control" name="cell" value="' . $e($values['cell']) . '"></div>'
-            . '<div class="col-md-6"><label class="form-label">Company</label><input class="form-control" name="company" value="' . $e($values['company']) . '"></div>'
-            . '<div class="col-md-6"><label class="form-label">Website</label><input class="form-control" name="website" value="' . $e($values['website']) . '"></div>'
-            . '<div class="col-md-6"><label class="form-label">Topic / subject</label><input class="form-control" name="topic"></div>'
-            . '<div class="col-12"><label class="form-label">Message</label><textarea class="form-control" name="message" rows="8"></textarea></div>'
-            . '<div class="col-12"><button class="btn btn-primary" type="submit">Send request</button></div></div></form>';
-    };
-    $fat->route('GET /contact-form', static function (Base $fat) use ($loggedIn, $render, $contactForm): void {
-        $loggedIn();
-        $render('Contact', $contactForm($fat));
-    });
-    $fat->route('GET /contact-form/@token', static function (Base $fat, array $params) use ($subscriber, $render, $contactForm): void {
-        $token = (string) $params['token'];
-        $subscriber->bumpPriority($token, 12345);
-        $render('Contact', $contactForm($fat, $token));
-    });
-    $fat->route('GET /contact-form/@token/@muid', static function (Base $fat, array $params) use ($subscriber, $render, $contactForm): void {
-        $token = (string) $params['token'];
-        $subscriber->bumpPriority($token, 23456);
-        $render('Contact', $contactForm($fat, $token, (string) $params['muid']));
-    });
-    $fat->route('POST /contact-form', static function (Base $fat) use ($mailer, $subscriber, $render): void {
-        Csrf::requireValid($fat);
-        $token = trim((string) $fat->get('POST.suid'));
-        $subscriberEmail = $token !== '' ? $subscriber->getEmail($token) : '';
-        $form = [
-            'name' => trim((string) $fat->get('POST.name')),
-            'email' => trim((string) $fat->get('POST.email')),
-            'Cell' => trim((string) $fat->get('POST.cell')),
-            'Web site' => trim((string) $fat->get('POST.website')),
-            'Company' => trim((string) $fat->get('POST.company')),
-            'Topic' => trim((string) $fat->get('POST.topic')),
-            'Comments' => trim((string) $fat->get('POST.message')),
-            'Booking-Form-URL' => trim((string) $fat->get('POST.realm')),
-            'SubscriberEmail' => $subscriberEmail,
-            'SubscriberUUID' => $token,
-            'MessageMUID' => trim((string) $fat->get('POST.muid')),
-            'IPAddr' => (string) $fat->get('IP'),
-            'UserAgent' => (string) $fat->get('AGENT'),
-            'XFWDFOR' => (string) ($_SERVER['HTTP_X_FORWARDED_FOR'] ?? ''),
-        ];
-        $customer = new customers($fat, $mailer);
-        $render('Contact', $customer->save($form));
-    });
 
 };

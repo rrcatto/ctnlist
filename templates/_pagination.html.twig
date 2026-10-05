@@ -1,0 +1,30 @@
+{# v5 pager. Variables: pagination (App\Http\Pagination), base (URL of the list, pages are base/N), query (string appended, e.g. "?e=x"). #}
+{% set query = query ?? '' %}
+{% set current = pagination.page %}
+{% set last = pagination.lastPage %}
+{% macro item(label, href, state) %}<li class="page-item{{ state ? ' ' ~ state }}"><a class="page-link" href="{{ href }}">{{ label }}</a></li>{% endmacro %}
+{% import _self as pager %}
+<div class="d-flex flex-row justify-content-between">
+  <div class="p-2"><button class="btn btn-primary">{{ last == 1 ? '1 page' : current ~ ' of ' ~ last ~ ' pages' }}</button></div>
+  <div class="p-2">
+    {% if last > 1 %}
+      <nav aria-label="Page navigation"><ul class="pagination">
+        {% if current == 1 %}
+          {{ pager.item('|<', '#', 'disabled') }}{{ pager.item('«', '#', 'disabled') }}
+        {% else %}
+          {{ pager.item('|<', base ~ '/1' ~ query, '') }}{{ pager.item('«', base ~ '/' ~ (current - 1) ~ query, '') }}
+          {% if current == last and current - 2 >= 1 and current - 2 != current - 1 %}{{ pager.item(current - 2, base ~ '/' ~ (current - 2) ~ query, '') }}{% endif %}
+          {{ pager.item(current - 1, base ~ '/' ~ (current - 1) ~ query, '') }}
+        {% endif %}
+        {{ pager.item(current, base ~ '/' ~ current ~ query, 'active') }}
+        {% if current == last %}
+          {{ pager.item('»', '#', 'disabled') }}{{ pager.item('>|', '#', 'disabled') }}
+        {% else %}
+          {{ pager.item(current + 1, base ~ '/' ~ (current + 1) ~ query, '') }}
+          {% if current == 1 and current + 2 <= last %}{{ pager.item(current + 2, base ~ '/' ~ (current + 2) ~ query, '') }}{% endif %}
+          {{ pager.item('»', base ~ '/' ~ (current + 1) ~ query, '') }}{{ pager.item('>|', base ~ '/' ~ last ~ query, '') }}
+        {% endif %}
+      </ul></nav>
+    {% endif %}
+  </div>
+</div>

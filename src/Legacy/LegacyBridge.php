@@ -33,7 +33,7 @@ final class LegacyBridge
      * records the request (including the user) in its constructor.
      */
     private const SERVICES = [
-        'options', 'user', 'sendlog', 'smlog', 'subscriber', 'message', 'template', 'archive',
+        'options', 'user', 'sendlog', 'smlog', 'subscriber', 'message', 'template',
         'mailer', 'queue', 'listService', 'sitelog',
     ];
 
@@ -47,7 +47,6 @@ final class LegacyBridge
             'subscriber' => SubscribersController::class,
             'message' => MessagesController::class,
             'template' => TemplatesController::class,
-            'archive' => ArchivesController::class,
             'mailer' => mailer::class,
             'queue' => QueueController::class,
             'listService' => ListService::class,
