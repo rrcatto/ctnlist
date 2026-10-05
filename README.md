@@ -13,7 +13,7 @@ Version 5.0.5 moves every subscriber-facing page onto Symfony and the new servic
 ## Platform and upgrades
 
 - PHP 8.4.1+ (developed on 8.5), Composer
-- Symfony 8.1 (including Symfony Security, Twig and Mailer) with Doctrine DBAL 4; Fat-Free Framework 3.9 for the reports not yet ported
+- Symfony 8.1 (including Symfony Security, Twig and Mailer) with Doctrine DBAL 4; Fat-Free Framework 3.9 is still installed but no longer routes any request
 - PostgreSQL with versioned Phinx migrations
 - Symfony Mailer: the application's mail services (`src/Mail/`: transports with failover and throttling, transactional and campaign mailers) send all mail
 - permanent RFC 9562 UUIDv7 subscriber identifiers
@@ -203,8 +203,8 @@ The move from Fat-Free to Symfony proceeds in phases; each leaves a working appl
 | 6. Campaign core services on DBAL repositories | done |
 | 7. Subscriber-facing routes | done |
 | 8. Administrator campaign routes | done |
-| 9. Reports | next |
-| 10. Remove Fat-Free | |
+| 9. Reports | done |
+| 10. Remove Fat-Free | next |
 
 ## Licence
 

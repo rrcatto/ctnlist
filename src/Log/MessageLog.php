@@ -108,6 +108,27 @@ final class MessageLog
         ));
     }
 
+    /** Message activity report: subscribers who read the message, optionally filtered by email. */
+    public function readersCount(string $muid, string $email): int
+    {
+        return (int) $this->db->fetchOne(
+            'SELECT COUNT(*) FROM smlog WHERE sml_muid = ? AND sml_reads > 0 AND LOWER(sml_email) LIKE LOWER(?)',
+            [$muid, '%' . trim($email) . '%']
+        );
+    }
+
+    /** @return list<array<string, mixed>> most recent read first */
+    public function readersPage(string $muid, string $email, int $offset, int $limit): array
+    {
+        return $this->db->fetchAllAssociative(
+            'SELECT sml_email, sml_list_shortcode, sml_reads, sml_last_read, sml_likes, sml_last_like, sml_dislikes, sml_last_dislike,
+                    sml_forwards, sml_subscribe, sml_unsubscribe
+             FROM smlog WHERE sml_muid = ? AND sml_reads > 0 AND LOWER(sml_email) LIKE LOWER(?)
+             ORDER BY sml_last_read DESC, sml_id DESC LIMIT ' . max(1, $limit) . ' OFFSET ' . max(0, $offset),
+            [$muid, '%' . trim($email) . '%']
+        );
+    }
+
     public function deleteForMessage(string $muid): void
     {
         $this->db->executeStatement('DELETE FROM smlog WHERE sml_muid = ?', [$muid]);

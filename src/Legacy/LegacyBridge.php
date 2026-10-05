@@ -33,7 +33,7 @@ final class LegacyBridge
      * records the request (including the user) in its constructor.
      */
     private const SERVICES = [
-        'options', 'user', 'sendlog', 'smlog', 'sitelog',
+        'options', 'user',
     ];
 
     public function __construct(
@@ -41,9 +41,6 @@ final class LegacyBridge
             'fat' => Base::class,
             'options' => OptionsController::class,
             'user' => UsersController::class,
-            'sendlog' => SendlogController::class,
-            'smlog' => SmlogController::class,
-            'sitelog' => SiteLogController::class,
         ])]
         private readonly ContainerInterface $legacy,
         private readonly Security $security,

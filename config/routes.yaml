@@ -14,12 +14,3 @@ auth_verify:
     path: /auth/verify
     methods: [GET]
 
-# Routes not yet ported to Symfony controllers fall through to Fat-Free. This
-# catch-all must stay the last route.
-legacy:
-    path: /{path}
-    controller: App\Legacy\LegacyBridge
-    defaults:
-        path: ''
-    requirements:
-        path: '.*'

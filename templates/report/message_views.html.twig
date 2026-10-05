@@ -1,0 +1,33 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Message activity{% endblock %}
+
+{% block content %}
+{% set base = path('report_message_views', {muid: muid}) %}
+<form name="messageviewsform" action="{{ base }}" method="get" class="row g-3 mb-4">
+  <div class="col-md-6"><label class="form-label" for="f-e">Email address</label><input class="form-control" id="f-e" type="search" name="e" value="{{ email }}"></div>
+  <div class="col-md-3 align-self-end"><button class="btn btn-primary" type="submit">Search message activity</button></div>
+</form>
+{% if rows is empty %}
+  <p>No matching subscriber has read this message yet.</p>
+{% else %}
+  <div class="table-responsive">
+    <table class="table table-striped table-hover table-bordered">
+      <thead><tr><th>Email</th><th>List</th><th>Reads</th><th>Last read</th><th>Likes</th><th>Last like</th><th>Dislikes</th><th>Last dislike</th><th>Forwards</th><th>Subscribe</th><th>Unsubscribe</th></tr></thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <td>{{ row.sml_email }}</td><td>{{ row.sml_list_shortcode }}</td>
+          <td>{{ row.sml_reads }}</td><td>{{ row.sml_last_read }}</td>
+          <td>{{ row.sml_likes }}</td><td>{{ row.sml_last_like }}</td>
+          <td>{{ row.sml_dislikes }}</td><td>{{ row.sml_last_dislike }}</td>
+          <td>{{ row.sml_forwards }}</td>
+          <td>{{ row.sml_subscribe > 0 ? 'Yes' }}</td><td>{{ row.sml_unsubscribe > 0 ? 'Yes' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include '_pagination.html.twig' with {base: base, query: query} %}
+{% endif %}
+{% endblock %}

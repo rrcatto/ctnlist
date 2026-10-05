@@ -1,0 +1,46 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Send Log{% endblock %}
+
+{% block content %}
+<div class="mb-3"><strong>All time:</strong>
+  {% for row in by_type %}
+    <a href="{{ path('report_sendlog', {t: row.sl_type}) }}" class="btn btn-primary btn-sm mx-1">{{ row.sl_type }} <span class="badge bg-light text-dark">{{ row.sl_total }}</span></a>
+  {% endfor %}
+</div>
+{% for month, totals in by_month %}
+  <div class="mb-2"><strong>{{ month }}:</strong>
+    {% for row in totals %}
+      <a href="{{ path('report_sendlog', {t: row.sl_type}) }}" class="btn btn-outline-primary btn-sm mx-1">{{ row.sl_type }} <span class="badge bg-primary">{{ row.sl_total }}</span></a>
+    {% endfor %}
+  </div>
+{% endfor %}
+<form action="{{ path('report_sendlog') }}" method="get" class="card card-body mb-4">
+  <div class="row g-3">
+    <div class="col-md-5"><label class="form-label" for="f-e">Email address</label><input class="form-control" id="f-e" type="search" name="e" value="{{ filters.e }}"></div>
+    <div class="col-md-4"><label class="form-label" for="f-t">Message type</label>
+      <select class="form-select" id="f-t" name="t">
+        <option value=""{{ filters.t is empty ? ' selected' }}>All Types</option>
+        {% for type in types %}<option value="{{ type }}"{{ type == filters.t ? ' selected' }}>{{ type }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2"><label class="form-label" for="f-r">Rows</label><input class="form-control" id="f-r" type="number" min="1" max="200" name="r" value="{{ pagination.perPage }}"></div>
+    <div class="col-md-1 d-flex align-items-end"><button class="btn btn-primary" type="submit">Search</button></div>
+  </div>
+</form>
+{% if rows is empty %}
+  <p>No emails match that search.</p>
+{% else %}
+  <div class="table-responsive">
+    <table class="table table-striped table-bordered">
+      <thead><tr><th>Sent</th><th>Type</th><th>Email</th><th>List</th><th>Subject</th><th>Subscriber UUID</th></tr></thead>
+      <tbody>
+      {% for row in rows %}
+        <tr><td>{{ row.sl_datesent }}</td><td>{{ row.sl_type }}</td><td>{{ row.sl_email }}</td><td>{{ row.sl_list_shortcode }}</td><td>{{ row.sl_subject }}</td><td><code>{{ row.sl_s_uuid }}</code></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include '_pagination.html.twig' with {base: path('report_sendlog'), query: query} %}
+{% endif %}
+{% endblock %}

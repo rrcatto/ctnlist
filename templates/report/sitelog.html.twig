@@ -1,0 +1,46 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Site Log{% endblock %}
+
+{% block content %}
+<form method="get" action="{{ path('report_sitelog') }}" class="card card-body mb-4">
+  <h1 class="h4">Site Log</h1>
+  <div class="row g-3">
+    <div class="col-lg-4"><label class="form-label" for="f-q">Keyword</label><input class="form-control" id="f-q" name="q" value="{{ filters.q }}"></div>
+    <div class="col-lg-4"><label class="form-label" for="f-e">Email</label><input class="form-control" id="f-e" name="e" value="{{ filters.e }}"></div>
+    <div class="col-lg-4"><label class="form-label" for="f-u">URL</label><input class="form-control" id="f-u" name="u" value="{{ filters.u }}"></div>
+    <div class="col-lg-3"><label class="form-label" for="f-ip">IP address</label><input class="form-control" id="f-ip" name="ip" value="{{ filters.ip }}"></div>
+    <div class="col-lg-3"><label class="form-label" for="f-li">Login state</label>
+      <select class="form-select" id="f-li" name="li">
+        {% for value, label in {'': 'All', '1': 'Logged in', '0': 'Not logged in'} %}<option value="{{ value }}"{{ filters.li == value ? ' selected' }}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-lg-3"><label class="form-label" for="f-from">From date</label><input class="form-control" id="f-from" type="date" name="from" value="{{ filters.from }}"></div>
+    <div class="col-lg-3"><label class="form-label" for="f-to">To date</label><input class="form-control" id="f-to" type="date" name="to" value="{{ filters.to }}"></div>
+    <div class="col-lg-3"><label class="form-label" for="f-r">Rows</label><input class="form-control" id="f-r" type="number" min="1" max="200" name="r" value="{{ pagination.perPage }}"></div>
+    <div class="col-12"><button class="btn btn-primary" type="submit">Search Site Log</button> <a class="btn btn-outline-secondary" href="{{ path('report_sitelog') }}">Clear</a></div>
+  </div>
+</form>
+{% if rows is empty %}
+  <p>No site accesses match that search.</p>
+{% else %}
+  <div class="table-responsive">
+    <table class="table table-striped table-hover table-bordered align-middle">
+      <thead><tr><th>Accessed</th><th>Email</th><th>URL</th><th>Network</th><th>Login</th><th>User agent</th></tr></thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <td>{{ row.stl_logged_at }}</td>
+          <td>{{ row.stl_email }}</td>
+          <td><code>{{ row.stl_url }}</code></td>
+          <td>{{ row.stl_ip }}{% if row.stl_xfwdfor %}<br><small>Forwarded: {{ row.stl_xfwdfor }}</small>{% endif %}{% if row.stl_host %}<br><small>Host: {{ row.stl_host }}</small>{% endif %}</td>
+          <td>{{ row.stl_logged_in ? 'Yes' : 'No' }}</td>
+          <td class="small">{{ row.stl_agent }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include '_pagination.html.twig' with {base: path('report_sitelog'), query: query} %}
+{% endif %}
+{% endblock %}
