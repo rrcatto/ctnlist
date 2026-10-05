@@ -1,0 +1,41 @@
+{% extends 'base.html.twig' %}
+
+{% macro options(choices, current, blank) %}
+  <option value=""{{ current is empty ? ' selected' }}>{{ blank }}</option>
+  {% for choice in choices %}<option value="{{ choice }}"{{ choice == current ? ' selected' }}>{{ choice }}</option>{% endfor %}
+{% endmacro %}
+
+{% block title %}Subscriber{% endblock %}
+
+{% block content %}
+{% import _self as form %}
+<form action="{{ path('admin_subscriber_save') }}" method="post">
+  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+  <input type="hidden" name="subscriber_token" value="{{ token }}">
+  <input type="hidden" name="muid" value="{{ muid }}">
+  <fieldset class="border rounded p-4">
+    <legend>Edit Subscriber</legend>
+    <div class="row g-3">
+      {% if administrator %}
+        <div class="col-md-6"><label class="form-label" for="list_id">Add to list</label>{% include 'admin/_list_select.html.twig' with {name: 'list_id', selected: (lists|first).l_id ?? 0} %}</div>
+        <div class="col-md-6"><label class="form-label" for="s-priority">Priority</label><input class="form-control" id="s-priority" type="number" name="s_priority" value="{{ priority }}"></div>
+      {% endif %}
+      <div class="col-md-6"><label class="form-label" for="s-fname">First name</label><input class="form-control" id="s-fname" name="s_fname" value="{{ profile.s_fname }}"></div>
+      <div class="col-md-6"><label class="form-label" for="s-lname">Last name</label><input class="form-control" id="s-lname" name="s_lname" value="{{ profile.s_lname }}"></div>
+      <div class="col-md-6"><label class="form-label" for="s-email">Email</label><input class="form-control" id="s-email" type="email" value="{{ profile.s_email }}" readonly></div>
+      <div class="col-md-6"><label class="form-label" for="s-gender">Gender</label><select class="form-select" id="s-gender" name="s_gender">{{ form.options(genders, profile.s_gender, '') }}</select></div>
+      <div class="col-md-6"><label class="form-label" for="s-province">Province</label><select class="form-select" id="s-province" name="s_province">{{ form.options(provinces, profile.s_province, 'Select Province') }}</select></div>
+      <div class="col-md-6"><label class="form-label" for="s-country">Country</label><select class="form-select" id="s-country" name="s_country">{{ form.options(countries, profile.s_country, 'Select Country') }}</select></div>
+      <div class="col-12">
+        <h2 class="h5">List memberships</h2>
+        <ul>
+          {% for membership in memberships %}
+            <li>{{ membership.l_name }} ({{ membership.l_shortcode }}): {{ membership.ls_uuid is null ? 'not joined' : (membership.unsubscribed ? 'unsubscribed' : (membership.confirmed ? 'confirmed' : 'pending')) }}</li>
+          {% endfor %}
+        </ul>
+      </div>
+      <div class="col-12"><button class="btn btn-primary" type="submit">Save Subscriber</button></div>
+    </div>
+  </fieldset>
+</form>
+{% endblock %}

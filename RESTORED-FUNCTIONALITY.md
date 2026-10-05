@@ -100,6 +100,8 @@ Made while porting to Symfony, where the v5 behaviour was a defect rather than a
 - The profile form's country list has a blank choice (v5 silently stored the first country, Afghanistan, when none was chosen).
 - A sign-in link is claimed atomically, so two simultaneous clicks cannot both sign in.
 - Forms on the Symfony pages redirect after a successful change and show the outcome as a message, so reloading does not resubmit.
+- Saving the subscriber form as a subscriber ignores a posted priority: v5 added 100 to whatever priority the request carried, so a crafted request could raise one's own send priority. Subscribers still get the v5 result of 100.
+- Opening another person's subscriber form, or one that does not exist, gives the 403 or 404 page instead of a 200 page reading "Access denied." or "The subscriber does not exist.".
 
 ## Review and deployment
 

@@ -44,6 +44,20 @@ final class ListRepository
         return $row === false ? null : $this->hydrate($row);
     }
 
+    /** @return MailingList|null by id, shortcode or name (case-insensitive), as v5 integrations pass them */
+    public function resolve(string $list): ?array
+    {
+        $list = trim($list);
+        if (ctype_digit($list)) {
+            return $this->findById((int) $list);
+        }
+        if ($found = $this->findByShortcode($list)) {
+            return $found;
+        }
+        $row = $this->db->fetchAssociative('SELECT ' . self::COLUMNS . ' FROM lists WHERE LOWER(l_name) = LOWER(?)', [$list]);
+        return $row === false ? null : $this->hydrate($row);
+    }
+
     public function findShortcodeById(int $id): ?string
     {
         $shortcode = $this->db->fetchOne('SELECT l_shortcode FROM lists WHERE l_id = ?', [$id]);

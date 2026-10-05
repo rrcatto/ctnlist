@@ -306,7 +306,7 @@ class SubscribersM extends \DB\SQL\Mapper
      * implementation also deleted subscriber rows during a read when an
      * address was suppressed. v5.0.1 deliberately keeps identity separate from
      * per-list consent, so cleanup remains here while shared suppression is
-     * enforced by SubscribersController and the queue workflow.
+     * enforced by App\Subscriber\SubscriptionService and the queue workflow.
      */
     public function normaliseCandidateEmail(string $email): string
     {

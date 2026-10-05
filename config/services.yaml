@@ -1,5 +1,8 @@
 parameters:
     app.timezone: '%env(APP_TIMEZONE)%'
+    # Import logs and export files (v5: the installation's logs/ directory).
+    app.instance_log_dir: '%kernel.instance_dir%/logs'
+    app.log_dir: '%env(default:app.instance_log_dir:APP_LOG_DIR)%'
 
     # Defaults for optional instance .env settings.
     env(APP_TIMEZONE): 'Africa/Johannesburg'
@@ -62,8 +65,7 @@ services:
             - '../src/Legacy/routes.php'
             - '../src/Legacy/*M.php'
             - '../src/Legacy/{Controller,Csrf,UuidV7,LegacyRedirect,LegacyHttpError}.php'
-            - '../src/Legacy/{formfield,htmlhelper,customers}.php'
-            - '../src/Legacy/Global*.php'
+            - '../src/Legacy/htmlhelper.php'
 
     Base:
         class: Base
@@ -73,14 +75,3 @@ services:
         class: DB\SQL
         factory: ['@Base', 'get']
         arguments: ['dbPDO']
-
-    App\Legacy\SubscribersController:
-        calls:
-            - [SetMailer, ['@App\Legacy\mailer']]
-
-    App\Legacy\MessagesController:
-        calls:
-            - [SetTemplate, ['@App\Legacy\TemplatesController']]
-            - [SetQueue, ['@App\Legacy\QueueController']]
-            - [SetArchive, ['@App\Legacy\ArchivesController']]
-            - [SetMailer, ['@App\Legacy\mailer']]

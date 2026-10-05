@@ -131,6 +131,92 @@ final class SubscriberRepository
         $this->db->executeStatement('UPDATE subscribers SET s_priority = GREATEST(s_priority, ?) WHERE s_id = ?', [$priority, $id]);
     }
 
+    /** Subscribers matching the administrator's list filters. */
+    public function reportCount(string $email, bool $activeOnly, bool $includeUnsubscribed, int $listId): int
+    {
+        [$where, $params] = self::reportFilter($email, $activeOnly, $includeUnsubscribed, $listId);
+        return (int) $this->db->fetchOne('SELECT COUNT(DISTINCT s.s_id) FROM subscribers s ' . $where, $params);
+    }
+
+    /**
+     * A page of the administrator's subscriber list: engaged first, with a
+     * "List:state" summary of every membership.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function reportPage(string $email, bool $activeOnly, bool $includeUnsubscribed, int $listId, int $offset, int $limit): array
+    {
+        [$where, $params] = self::reportFilter($email, $activeOnly, $includeUnsubscribed, $listId);
+        return $this->db->fetchAllAssociative(
+            "SELECT s.s_id, s.s_uuid, s.s_email, s.s_fname, s.s_lname, s.s_priority, s.s_last_interacted, s.s_bounces, s.s_emailsleft,
+                    STRING_AGG(l.l_name || ':' || CASE
+                        WHEN ls.ls_confirmed AND NOT ls.ls_unsubscribed THEN 'confirmed'
+                        WHEN ls.ls_unsubscribed THEN 'unsubscribed'
+                        ELSE 'pending' END, ', ' ORDER BY l.l_name) AS memberships
+             FROM subscribers s
+             LEFT JOIN list_subscribers ls ON ls.ls_s_id = s.s_id
+             LEFT JOIN lists l ON l.l_id = ls.ls_l_id
+             {$where}
+             GROUP BY s.s_id
+             ORDER BY (s.s_last_interacted IS NULL) ASC, s.s_last_interacted DESC, s.s_priority DESC, s.s_email ASC
+             LIMIT " . max(1, min(200, $limit)) . ' OFFSET ' . max(0, $offset),
+            $params
+        );
+    }
+
+    /**
+     * The v5 export lists: eligible addresses (confirmed, subscribed, active
+     * list), or for removal those with an unsubscribed membership and no
+     * eligible one; optionally limited to one list.
+     *
+     * @return list<string>
+     */
+    public function exportEmails(bool $eligible, int $offset, int $limit, int $listId): array
+    {
+        $params = ['offset' => max(0, $offset), 'limit' => max(1, min(10000000, $limit))];
+        $list = '';
+        if ($listId > 0) {
+            $list = ' AND ls.ls_l_id = :list';
+            $params['list'] = $listId;
+        }
+        $sql = $eligible
+            ? "SELECT DISTINCT s.s_email FROM subscribers s
+               JOIN list_subscribers ls ON ls.ls_s_id = s.s_id
+               JOIN lists l ON l.l_id = ls.ls_l_id
+               WHERE ls.ls_confirmed = TRUE AND ls.ls_unsubscribed = FALSE AND l.l_active = TRUE{$list}"
+            : "SELECT DISTINCT s.s_email FROM subscribers s
+               JOIN list_subscribers ls ON ls.ls_s_id = s.s_id
+               WHERE ls.ls_unsubscribed = TRUE{$list}
+                 AND NOT EXISTS (
+                     SELECT 1 FROM list_subscribers active_ls JOIN lists active_l ON active_l.l_id = active_ls.ls_l_id
+                     WHERE active_ls.ls_s_id = s.s_id AND active_ls.ls_confirmed = TRUE
+                       AND active_ls.ls_unsubscribed = FALSE AND active_l.l_active = TRUE)";
+        return array_map('strval', $this->db->fetchFirstColumn($sql . ' ORDER BY s.s_email LIMIT :limit OFFSET :offset', $params));
+    }
+
+    /** @return array{0: string, 1: array<string, mixed>} */
+    private static function reportFilter(string $email, bool $activeOnly, bool $includeUnsubscribed, int $listId): array
+    {
+        $clauses = [];
+        $params = [];
+        if (trim($email) !== '') {
+            $clauses[] = 'LOWER(s.s_email) LIKE LOWER(:email)';
+            $params['email'] = '%' . trim($email) . '%';
+        }
+        if ($activeOnly) {
+            $clauses[] = 's.s_last_interacted IS NOT NULL';
+        }
+        if (!$includeUnsubscribed) {
+            $clauses[] = 'EXISTS (SELECT 1 FROM list_subscribers active_ls JOIN lists active_l ON active_l.l_id = active_ls.ls_l_id
+                WHERE active_ls.ls_s_id = s.s_id AND active_ls.ls_confirmed = TRUE AND active_ls.ls_unsubscribed = FALSE AND active_l.l_active = TRUE)';
+        }
+        if ($listId > 0) {
+            $clauses[] = 'EXISTS (SELECT 1 FROM list_subscribers filter_ls WHERE filter_ls.ls_s_id = s.s_id AND filter_ls.ls_l_id = :list)';
+            $params['list'] = $listId;
+        }
+        return [$clauses === [] ? '' : 'WHERE ' . implode(' AND ', $clauses), $params];
+    }
+
     /** v5 queue-time state: bounces and priority reset, one fewer email left (not below zero). */
     public function markQueued(int $id): void
     {

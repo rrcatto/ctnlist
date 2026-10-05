@@ -13,9 +13,9 @@ Version 5.0.5 moves every subscriber-facing page onto Symfony and the new servic
 ## Platform and upgrades
 
 - PHP 8.4.1+ (developed on 8.5), Composer
-- Symfony 8.1 (including Symfony Security, Twig and Mailer) with Doctrine DBAL 4; Fat-Free Framework 3.9 for the routes not yet ported
+- Symfony 8.1 (including Symfony Security, Twig and Mailer) with Doctrine DBAL 4; Fat-Free Framework 3.9 for the reports not yet ported
 - PostgreSQL with versioned Phinx migrations
-- Symfony Mailer: the application's mail services (`src/Mail/`: transports with failover and throttling, transactional and campaign mailers) for the Symfony pages; the legacy `mailer` wrapper for the administration still on Fat-Free
+- Symfony Mailer: the application's mail services (`src/Mail/`: transports with failover and throttling, transactional and campaign mailers) send all mail
 - permanent RFC 9562 UUIDv7 subscriber identifiers
 - `subscribers` as the canonical identity table
 - passwordless one-time email authentication (Symfony Security from 5.0.3)
@@ -152,7 +152,7 @@ The main application uses `DB_*` settings. The separate global suppression datab
 
 SMTP can be configured with a single `MAILER_DSN` or an optional `MAIL_SMTP_SERVERS_JSON` array for per-server batching, delay, rate and failover. Optional legacy synchronisation targets use `SYNC_DATABASES_JSON`.
 
-Sign-in links expire after `AUTH_MAGIC_LINK_TTL` seconds and are rate-limited per address (`AUTH_MAGIC_LINK_MAX_PER_EMAIL` within `AUTH_MAGIC_LINK_EMAIL_WINDOW`) and per client IP (`AUTH_MAGIC_LINK_MAX_PER_IP` within `AUTH_MAGIC_LINK_IP_WINDOW`); a signed-in session lasts `AUTH_SESSION_TTL` seconds. Contact-form submissions are appended to `CONTACT_LOG_FILE` (default: the installation's `logs/contact.log`).
+Sign-in links expire after `AUTH_MAGIC_LINK_TTL` seconds and are rate-limited per address (`AUTH_MAGIC_LINK_MAX_PER_EMAIL` within `AUTH_MAGIC_LINK_EMAIL_WINDOW`) and per client IP (`AUTH_MAGIC_LINK_MAX_PER_IP` within `AUTH_MAGIC_LINK_IP_WINDOW`); a signed-in session lasts `AUTH_SESSION_TTL` seconds. Contact-form submissions are appended to `CONTACT_LOG_FILE` (default: the installation's `logs/contact.log`). Bulk-subscribe and import logs (`emails_added.txt`) and the export files (`export-subscribers.txt`, `export-remove.txt`) are written to `APP_LOG_DIR` (default: the installation's `logs/`).
 
 ## Database setup
 
@@ -202,8 +202,8 @@ The move from Fat-Free to Symfony proceeds in phases; each leaves a working appl
 | 5. Lists, roles and ACL administration | done |
 | 6. Campaign core services on DBAL repositories | done |
 | 7. Subscriber-facing routes | done |
-| 8. Administrator campaign routes | next |
-| 9. Reports | |
+| 8. Administrator campaign routes | done |
+| 9. Reports | next |
 | 10. Remove Fat-Free | |
 
 ## Licence

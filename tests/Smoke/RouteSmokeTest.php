@@ -72,7 +72,6 @@ final class RouteSmokeTest extends SmokeTestCase
         '/unsubscribe/{token}/{shortcode}', '/unsubscribe/{token}/{shortcode}/{muid}',
         '/forward/{token}/{muid}', '/resend/{token}/{muid}',
         '/like/{token}/{muid}', '/dislike/{token}/{muid}',
-        '/subscribe/{token}', '/subscribe/{token}/{muid}',
         '/contact-form/{token}', '/contact-form/{token}/{muid}',
         '/ut/{token}/{muid}',
     ];
@@ -84,6 +83,7 @@ final class RouteSmokeTest extends SmokeTestCase
 
     /** Routes that require an administrator or an ACL permission. */
     private const ADMIN = [
+        '/subscribe/{token}', '/subscribe/{token}/{muid}',
         '/subscribers', '/subscribers/1', '/activesubscribers', '/activesubscribers/1',
         '/bulk-subscribe', '/bulk-unsubscribe', '/import', '/export', '/export/0/10', '/sync',
         '/messages', '/messages/1', '/message', '/message/{muid}', '/forward/{muid}',

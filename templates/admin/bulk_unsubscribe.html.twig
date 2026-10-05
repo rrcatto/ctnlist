@@ -1,0 +1,22 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Bulk unsubscribe{% endblock %}
+
+{% block content %}
+<form action="{{ path('admin_bulk_unsubscribe_submit') }}" method="post">
+  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+  <fieldset class="border rounded p-4">
+    <legend>Unsubscribe multiple emails</legend>
+    <div class="mb-3"><label class="form-label" for="list_id">List</label>{% include 'admin/_list_select.html.twig' with {name: 'list_id', selected: (lists|first).l_id ?? 0} %}</div>
+    {% for value, label in {list: 'Remove from selected list only', domain: 'Filter entire domains', bounce: 'These are bounces', spam: 'These are spam complainers'} %}
+      <div class="form-check{{ loop.last ? ' mb-3' }}">
+        <input class="form-check-input" type="radio" name="scope" value="{{ value }}" id="scope-{{ value }}"{{ loop.first ? ' checked' }}>
+        <label class="form-check-label" for="scope-{{ value }}">{{ label }}</label>
+      </div>
+    {% endfor %}
+    <div class="mb-3"><label class="form-label" for="b-reason">Reason</label><input class="form-control" id="b-reason" name="reason" value="Bulk unsubscribe"></div>
+    <div class="mb-3"><label class="form-label" for="b-emails">Email addresses</label><textarea class="form-control" id="b-emails" rows="12" name="bemail"></textarea></div>
+    <button class="btn btn-danger" type="submit">Unsubscribe Emails</button>
+  </fieldset>
+</form>
+{% endblock %}

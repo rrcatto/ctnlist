@@ -1,0 +1,37 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ active ? 'Active subscribers' : 'Subscribers' }}{% endblock %}
+
+{% block content %}
+{% set base = path(active ? 'admin_subscribers_active' : 'admin_subscribers') %}
+<form method="get" action="{{ base }}" class="row g-3 mb-4">
+  <div class="col-md-4"><label class="form-label" for="f-e">Email address</label><input class="form-control" id="f-e" type="search" name="e" value="{{ filters.e }}"></div>
+  <div class="col-md-3"><label class="form-label" for="l">List</label>{% include 'admin/_list_select.html.twig' with {name: 'l', selected: filters.l, blank: 'All lists'} %}</div>
+  <div class="col-md-2"><label class="form-label" for="f-r">Rows</label><input class="form-control" id="f-r" type="number" name="r" value="{{ pagination.perPage }}"></div>
+  <div class="col-md-2 form-check align-self-end mb-2"><input class="form-check-input" type="checkbox" name="u" value="1" id="include-unsubscribed"{{ filters.u ? ' checked' }}><label class="form-check-label" for="include-unsubscribed">Include unsubscribed</label></div>
+  <div class="col-md-1 align-self-end"><button class="btn btn-primary" type="submit">Search</button></div>
+</form>
+{% if rows is empty %}
+  <p>There are no matching subscribers.</p>
+{% else %}
+  <div class="table-responsive">
+    <table class="table table-striped table-hover table-bordered">
+      <thead><tr><th>Email</th><th>Name</th><th>Lists</th><th>Priority</th><th>Bounces</th><th>Emails left</th><th>Last interaction</th></tr></thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <td><a href="{{ path('admin_subscriber', {token: row.s_uuid}) }}">{{ row.s_email }}</a></td>
+          <td>{{ (row.s_fname ~ ' ' ~ row.s_lname)|trim }}</td>
+          <td>{{ row.memberships }}</td>
+          <td>{{ row.s_priority }}</td>
+          <td>{{ row.s_bounces }}</td>
+          <td>{{ row.s_emailsleft }}</td>
+          <td>{{ row.s_last_interacted }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include '_pagination.html.twig' with {base: base, query: query} %}
+{% endif %}
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Import subscribers{% endblock %}
+
+{% block content %}
+<form action="{{ path('admin_import_submit') }}" method="post" enctype="multipart/form-data">
+  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+  <fieldset class="border rounded p-4">
+    <legend>Import subscriber file</legend>
+    <div class="mb-3"><label class="form-label" for="list_id">List</label>{% include 'admin/_list_select.html.twig' with {name: 'list_id', selected: (lists|first).l_id ?? 0} %}</div>
+    <div class="mb-3"><label class="form-label" for="i-priority">Priority</label><input class="form-control" id="i-priority" type="number" name="s_priority" value="0"></div>
+    <div class="mb-3"><label class="form-label" for="i-file">File</label><input class="form-control" id="i-file" type="file" name="subscriber_file"></div>
+    <button class="btn btn-primary" type="submit">Import</button>
+  </fieldset>
+</form>
+{% endblock %}
