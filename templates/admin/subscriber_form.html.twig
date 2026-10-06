@@ -60,15 +60,24 @@
       <div class="card mb-4">
         <div class="card-header fw-semibold">Delivery (catto-mail)</div>
         <div class="card-body small">
-          {% if delivery_state == 'ok' %}
+          {% if delivery.state == 'ok' %}
             <p class="mb-2"><i class="bi bi-check-circle text-success me-1" aria-hidden="true"></i>No hard bounce or complaint recorded.</p>
           {% else %}
-            <p class="mb-2"><span class="badge text-bg-danger">{{ delivery_state|replace({'_': ' '}) }}</span> Left out of campaigns{{ delivery_state == 'complained' ? ' and unsubscribed from every list' }}.</p>
+            <p class="mb-1"><span class="badge text-bg-danger">{{ delivery.state == 'complained' ? 'Spam complaint' : 'Hard bounce' }}</span>{% if delivery.at %} <span class="text-body-secondary">since {{ delivery.at|slice(0, 16) }}</span>{% endif %}</p>
+            <p class="mb-2">
+              {% if delivery.state == 'complained' %}
+                catto-mail reported that this subscriber marked a campaign as spam. They were unsubscribed from every list and are left out of campaigns.
+              {% else %}
+                catto-mail reported that the receiving server permanently refused a campaign to this address. They are left out of campaigns; their list memberships are unchanged.
+              {% endif %}
+            </p>
             {% if is_granted('subscribers.manage') %}
-              <form method="post" action="{{ path('admin_subscriber_delivery_ok', {token: app.request.attributes.get('token')}) }}" data-confirm="Let this subscriber receive campaigns again?" class="mb-2">
+              <form method="post" action="{{ path('admin_subscriber_delivery_ok', {token: app.request.attributes.get('token')}) }}"
+                    data-confirm="Clear the {{ delivery.state == 'complained' ? 'complaint' : 'hard bounce' }} block? This only lets the subscriber be selected for campaigns again; it does not restore list memberships or consent." class="mb-2">
                 <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-                <button class="btn btn-sm btn-outline-secondary" type="submit">Clear delivery problem</button>
+                <button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-unlock me-1" aria-hidden="true"></i>Clear the sending block</button>
               </form>
+              <p class="form-text mb-2">Clearing affects the sending block only. It does not re-subscribe anyone{{ delivery.state == 'complained' ? ' (lists left because of the complaint stay left)' }}, and catto-mail may still suppress the address on its side.</p>
             {% endif %}
           {% endif %}
           {% if validation %}

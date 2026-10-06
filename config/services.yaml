@@ -45,6 +45,7 @@ services:
             - '../src/CattoMail/SendOutcome.php'
             - '../src/CattoMail/CattoMail{Exception,Unavailable,Rejected}.php'
             - '../src/Subscriber/ProfileImage.php'
+            - '../src/Queue/QueueRowClaimed.php'
             # Validation constraints and the data objects Symfony forms edit.
             - '../src/Validator/'
             - '../src/Form/Model/'

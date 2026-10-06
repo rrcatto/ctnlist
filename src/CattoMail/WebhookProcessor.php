@@ -45,16 +45,14 @@ final class WebhookProcessor
         }
     }
 
-    /** @return int events processed */
-    public function processPending(int $limit = 200): int
+    /** @return array{processed: int, failed: int} */
+    public function processPending(int $limit = 200): array
     {
-        $done = 0;
+        $result = ['processed' => 0, 'failed' => 0];
         foreach ($this->events->unprocessed($limit) as $event) {
-            if ($this->process($event)) {
-                $done++;
-            }
+            $result[$this->process($event) ? 'processed' : 'failed']++;
         }
-        return $done;
+        return $result;
     }
 
     /** @param WebhookEvent $event */

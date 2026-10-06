@@ -44,6 +44,7 @@ final class RouteSmokeTest extends SmokeTestCase
         // catto-mail pages: a validation job and a send job with one recipient (no catto-mail call is made to show them).
         $validationId = (int) self::value("INSERT INTO cattomail_validation_jobs (cvj_idempotency_key, cvj_scope, cvj_total) VALUES (?, 'Smoke fixture', 0) RETURNING cvj_id", [bin2hex(random_bytes(16))]);
         $runId = (int) self::value("INSERT INTO cattomail_runs (cr_kind, cr_muid) VALUES ('campaign', ?) RETURNING cr_id", [$muid]);
+        $runUuid = (string) self::value('SELECT cr_uuid FROM cattomail_runs WHERE cr_id = ?', [$runId]);
         $jobId = (int) self::value("INSERT INTO cattomail_send_jobs (csj_cr_id, csj_seq, csj_idempotency_key, csj_muid, csj_message_class, csj_request) VALUES (?, 1, ?, ?, 'transactional', '{}') RETURNING csj_id",
             [$runId, bin2hex(random_bytes(16)), $muid]);
         $batchId = (int) self::value('INSERT INTO cattomail_batches (cb_csj_id, cb_seq, cb_idempotency_key) VALUES (?, 1, ?) RETURNING cb_id', [$jobId, bin2hex(random_bytes(16))]);
@@ -55,6 +56,7 @@ final class RouteSmokeTest extends SmokeTestCase
             'jid' => (string) $jobId,
             'ruuid' => $recipient,
             'run' => (string) $runId,
+            'runuuid' => $runUuid,
             'lid' => (string) $listId,
             'rid' => (string) self::value("SELECT r_id FROM roles WHERE r_key = 'administrator'"),
             'token' => self::$admin['s_uuid'],
@@ -108,7 +110,8 @@ final class RouteSmokeTest extends SmokeTestCase
         '/advanced-queue', '/queuelist/{muid}', '/queue', '/queue/1',
         '/processqueue', '/processqueue/{muid}', '/processqueue/{muid}/10',
         '/stop-send', '/sendtome/{muid}',
-        '/delivery', '/delivery/message/{muid}', '/delivery/job/{jid}', '/delivery/job/{jid}/1', '/delivery/recipient/{ruuid}',
+        '/delivery', '/delivery/message/{muid}', '/delivery/job/{jid}', '/delivery/job/{jid}/1', '/delivery/recipient/{ruuid}', '/delivery/run/{runuuid}',
+        '/delivery/webhooks', '/delivery/webhooks/1',
         '/address-validation', '/address-validation/{vid}', '/address-validation/{vid}/1',
         '/sendlog', '/sendlog/1', '/sitelog', '/sitelog/1',
         '/message-views/{muid}', '/message-views/{muid}/1',

@@ -159,6 +159,34 @@ final class CattoMailClientTest extends TestCase
         $notFound->getSendJob('0199a000-0000-7000-8000-000000000001');
     }
 
+    /** Webhook secrets, too, never reach a message or the log, even if catto-mail (or a proxy) echoed them. */
+    public function testWebhookSecretsAreRedactedAndTransportFailuresClassified(): void
+    {
+        $secret = 'whsec_never_shown_anywhere';
+        $http = new MockHttpClient(static fn(): MockResponse => new MockResponse('{"status":400,"detail":"bad signature ' . $secret . '"}', ['http_code' => 400]));
+        $client = new CattoMailClient($http, new CattoMailConfig('https://cattomail.test', 'key', $secret), $this->logger());
+        try {
+            $client->getSendJob('0199a000-0000-7000-8000-000000000001');
+            self::fail('accepted');
+        } catch (CattoMailRejected $e) {
+            self::assertStringNotContainsString($secret, $e->getMessage());
+        }
+        self::assertStringNotContainsString($secret, implode("\n", $this->logged));
+
+        self::assertSame('dns', CattoMailClient::transportFailure('Could not resolve host: catto-mail'));
+        self::assertSame('tls', CattoMailClient::transportFailure('SSL certificate problem: unable to get local issuer certificate'));
+        self::assertSame('connection', CattoMailClient::transportFailure('Failed to connect to localhost port 8443'));
+        $down = new CattoMailClient(new MockHttpClient(static fn() => throw new \Symfony\Component\HttpClient\Exception\TransportException('Could not resolve host: catto-mail')),
+            new CattoMailConfig('https://cattomail.test', 'key', ''), $this->logger(), static function (int $s): void {
+            });
+        try {
+            $down->getSendJob('0199a000-0000-7000-8000-000000000001');
+            self::fail('reached');
+        } catch (CattoMailUnavailable $e) {
+            self::assertStringStartsWith('catto-mail could not be reached (host name not found; the work is kept and retried)', $e->getMessage());
+        }
+    }
+
     public function testConfigurationAndInputGuards(): void
     {
         $client = new CattoMailClient(new MockHttpClient(), new CattoMailConfig('', '', ''), $this->logger());

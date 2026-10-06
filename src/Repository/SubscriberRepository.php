@@ -318,9 +318,28 @@ final class SubscriberRepository
     }
 
     /** An administrator returns the subscriber to campaign selection (e.g. the address was fixed by its owner). */
-    public function clearDeliveryProblem(int $id): void
+    /** @return array{state: string, at: ?string} the catto-mail delivery block (state ok: none) */
+    public function deliveryState(int $id): array
     {
-        $this->db->executeStatement("UPDATE subscribers SET s_delivery_state = 'ok', s_delivery_state_at = NULL WHERE s_id = ?", [$id]);
+        $row = $this->db->fetchAssociative('SELECT s_delivery_state, s_delivery_state_at FROM subscribers WHERE s_id = ?', [$id]);
+        return ['state' => (string) ($row['s_delivery_state'] ?? 'ok'), 'at' => isset($row['s_delivery_state_at']) ? (string) $row['s_delivery_state_at'] : null];
+    }
+
+    /**
+     * Lift the sending block only: memberships and consent are not touched
+     * (a complaint's unsubscriptions stay).
+     *
+     * @return string the state that was cleared ('ok' when there was none)
+     */
+    public function clearDeliveryProblem(int $id): string
+    {
+        $previous = $this->db->fetchOne(
+            "UPDATE subscribers s SET s_delivery_state = 'ok', s_delivery_state_at = NULL
+             FROM (SELECT s_id, s_delivery_state AS before FROM subscribers WHERE s_id = :id FOR UPDATE) p
+             WHERE s.s_id = p.s_id RETURNING p.before",
+            ['id' => $id]
+        );
+        return $previous === false ? 'ok' : (string) $previous;
     }
 
     /**

@@ -7,6 +7,7 @@ namespace App\Tests\Integration\Queue;
 use App\CattoMail\CattoMailSender;
 use App\CattoMail\CattoMailWorker;
 use App\CattoMail\OutgoingMessage;
+use App\CattoMail\OutgoingMessageFactory;
 use App\CattoMail\OutgoingRecipient;
 use App\CattoMail\SendJobAdmin;
 use App\CattoMail\SendOutcome;
@@ -14,6 +15,8 @@ use App\CattoMail\UnsubscribeLinks;
 use App\Log\MessageLog;
 use App\Queue\QueueBuilder;
 use App\Queue\QueueProcessor;
+use App\Queue\QueueRowClaimed;
+use App\Repository\MessageRepository;
 use App\Repository\OptionRepository;
 use App\Tests\Integration\IntegrationTestCase;
 use App\Tests\Support\FakeCattoMail;
@@ -217,7 +220,8 @@ final class QueueProcessorTest extends IntegrationTestCase
 
         $outcome = $this->service(QueueProcessor::class)->process();
         self::assertSame(SendOutcome::FAILED, $outcome->status);
-        self::assertStringContainsString('registered sending domain', (string) $outcome->problem);
+        self::assertStringContainsString('not a registered, enabled sending domain of this client', (string) $outcome->problem, "catto-mail's field error is shown");
+        self::assertStringStartsWith('catto-mail does not accept this From address', (string) $outcome->problem, 'with what to do about it');
         self::assertSame(2, (int) $this->db->fetchOne('SELECT COUNT(*) FROM queue'), 'still queued');
         self::assertSame(0, (int) $this->db->fetchOne('SELECT m_sent FROM messages WHERE m_uniqid = ?', [$muid]));
     }
@@ -238,6 +242,49 @@ final class QueueProcessorTest extends IntegrationTestCase
         self::assertSame(2, (int) $this->db->fetchOne('SELECT COUNT(*) FROM queue'));
         self::assertSame(0, (int) $this->db->fetchOne('SELECT m_sent FROM messages WHERE m_uniqid = ?', [$muid]));
         self::assertSame(2, $this->service(QueueProcessor::class)->process()->handedOff);
+    }
+
+    /**
+     * Invariant: a queue row disappears only together with its durable staging
+     * record. When the queue part of the transaction fails (another run took
+     * the row), the staged recipient is rolled back with it.
+     */
+    public function testStagingAndQueueRemovalAreOneTransaction(): void
+    {
+        [$muid, $uuids] = $this->queued(['Ann']);
+        $sender = $this->service(CattoMailSender::class);
+        $message = $this->service(MessageRepository::class)->findByMuid($muid) ?? self::fail('message');
+        $outgoing = $this->service(OutgoingMessageFactory::class)->forList($message, 'NEWS');
+        $run = $sender->startRun('campaign', $muid);
+        try {
+            $sender->stage($run, $outgoing, new OutgoingRecipient('reader1@example.com', $uuids[0], 'MESSAGE', 'Campaign', '<p>x</p>', 'x'),
+                static fn() => throw new QueueRowClaimed('taken'));
+            self::fail('the failed queue removal was ignored');
+        } catch (QueueRowClaimed) {
+        }
+        self::assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM cattomail_recipients WHERE crp_muid = ?', [$muid]), 'nothing staged');
+        self::assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM queue WHERE q_muid = ?', [$muid]), 'the queue row is still there');
+        $sender->finishRun($run, 0);
+
+        self::assertSame(1, $this->service(QueueProcessor::class)->process()->handedOff, 'the row is sent normally afterwards');
+    }
+
+    /**
+     * Two runs must never deliver one campaign message to one subscriber twice:
+     * a queue row that reappears for a subscriber with an active delivery of
+     * that message (e.g. fetched by a concurrent run) is dropped, not staged.
+     */
+    public function testAQueueRowForAnActiveDeliveryIsNotStagedAgain(): void
+    {
+        [$muid, $uuids] = $this->queued(['Ann', 'Ben']);
+        self::assertSame(2, $this->service(QueueProcessor::class)->process()->handedOff);
+        $this->db->executeStatement("INSERT INTO queue (q_s_uuid, q_muid, q_email, q_list_shortcode) VALUES (?, ?, 'reader1@example.com', 'NEWS')", [$uuids[0], $muid]);
+
+        $again = $this->service(QueueProcessor::class)->process();
+        self::assertSame([0, 0], [$again->staged, $again->handedOff]);
+        self::assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM queue'));
+        self::assertSame(1, (int) $this->db->fetchOne("SELECT COUNT(*) FROM cattomail_recipients WHERE crp_muid = ? AND crp_s_uuid = ?", [$muid, $uuids[0]]));
+        self::assertSame(2, (int) $this->db->fetchOne("SELECT COUNT(*) FROM sendlog WHERE sl_type = 'MESSAGE' AND sl_muid = ?", [$muid]), 'no second Send Log entry');
     }
 
     /**

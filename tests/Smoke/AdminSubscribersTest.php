@@ -75,6 +75,36 @@ final class AdminSubscribersTest extends SmokeTestCase
         self::assertSame($subscribers, (string) self::value('SELECT COUNT(*) FROM subscribers'), 'nobody added');
     }
 
+    /** Clearing a catto-mail delivery block: POST + CSRF, subscribers.manage, sending block only. */
+    public function testClearingADeliveryBlockChangesOnlyTheBlock(): void
+    {
+        self::$db->prepare('INSERT INTO subscribers (s_email) VALUES (?) ON CONFLICT ((LOWER(s_email))) DO NOTHING')->execute(['smoke-blocked@ctnlist.test']);
+        $id = (int) self::value('SELECT s_id FROM subscribers WHERE s_email = ?', ['smoke-blocked@ctnlist.test']);
+        $uuid = (string) self::value('SELECT s_uuid FROM subscribers WHERE s_id = ?', [$id]);
+        self::$db->prepare("UPDATE subscribers SET s_delivery_state = 'complained', s_delivery_state_at = ? WHERE s_id = ?")->execute([date('Y-m-d H:i:s'), $id]);
+        $memberships = self::rows('SELECT ls_l_id, ls_confirmed, ls_unsubscribed FROM list_subscribers WHERE ls_s_id = ? ORDER BY ls_l_id', [$id]);
+        try {
+            $admin = self::client();
+            self::loginAsAdmin($admin);
+            $page = self::request($admin, 'GET', '/subscribers/' . $uuid)['body'];
+            self::assertStringContainsString('Spam complaint', $page);
+            self::assertStringContainsString('does not restore list memberships or consent', $page);
+
+            self::assertSame(403, self::request(self::client(), 'POST', '/subscribers/' . $uuid . '/delivery-ok', ['csrf' => 'x'])['status'], 'anonymous: refused');
+            $forged = self::request($admin, 'POST', '/subscribers/' . $uuid . '/delivery-ok', ['csrf' => 'forged']);
+            self::assertNotSame(302, $forged['status'], 'a forged token changes nothing');
+            self::assertSame('complained', self::value('SELECT s_delivery_state FROM subscribers WHERE s_id = ?', [$id]));
+
+            $cleared = self::request($admin, 'POST', '/subscribers/' . $uuid . '/delivery-ok', ['csrf' => self::csrfToken($page)]);
+            self::assertSame(302, $cleared['status']);
+            self::assertStringContainsString('The complained block is cleared', self::request($admin, 'GET', '/subscribers/' . $uuid)['body']);
+            self::assertSame('ok', self::value('SELECT s_delivery_state FROM subscribers WHERE s_id = ?', [$id]));
+            self::assertSame($memberships, self::rows('SELECT ls_l_id, ls_confirmed, ls_unsubscribed FROM list_subscribers WHERE ls_s_id = ? ORDER BY ls_l_id', [$id]), 'memberships unchanged');
+        } finally {
+            self::$db->prepare("UPDATE subscribers SET s_delivery_state = 'ok', s_delivery_state_at = NULL WHERE s_id = ?")->execute([$id]);
+        }
+    }
+
     public function testExportAndSynchroniseOnlyChangeThingsOnPost(): void
     {
         $client = self::client();

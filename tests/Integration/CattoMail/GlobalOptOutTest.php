@@ -38,8 +38,11 @@ final class GlobalOptOutTest extends CattoMailTestCase
         $consent->unsubscribe($user, $list, 'list', 'No longer interested');
         $consent->unsubscribeByLink($identity, $list, '');
         $consent->unsubscribe($user, $list, 'global', 'All lists');
+        // ctnlist's own banlist scopes (address does not exist, spam) are ctnlist suppression, not catto-mail opt-outs.
+        $consent->unsubscribe($user, $list, 'bounce', '');
+        $consent->unsubscribe($user, $list, 'spam', '');
 
-        self::assertSame([], $this->fake->requests, 'list, one-click and all-lists unsubscribes make no catto-mail call');
+        self::assertSame([], $this->fake->requests, 'list, one-click, all-lists and banlist unsubscribes make no catto-mail call');
         self::assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM cattomail_global_optouts'));
         self::assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM list_subscribers WHERE ls_s_id = ? AND NOT ls_unsubscribed', [$id]));
     }
@@ -91,6 +94,36 @@ final class GlobalOptOutTest extends CattoMailTestCase
         self::assertSame('lifted', $this->service(CattoMailOptOutRepository::class)->find($optOut['cgo_id'])['cgo_status'] ?? '');
         self::assertNull($this->service(GlobalOptOut::class)->current($id));
         self::assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM list_subscribers WHERE ls_s_id = ? AND NOT ls_unsubscribed', [$id]), 'withdrawing does not re-subscribe');
+    }
+
+    /**
+     * The states the subscriber is told about: a withdrawal that cannot reach
+     * catto-mail stays lift_pending (the worker reports it; lifting is
+     * naturally idempotent), and an opt-out reported after a restart is
+     * created once from its stored key.
+     */
+    public function testWithdrawalAndCreationSurviveLostResponsesAndRestarts(): void
+    {
+        $optOuts = $this->service(CattoMailOptOutRepository::class);
+        $id = $this->createSubscriber('eve@example.com');
+        self::assertNull($this->service(GlobalOptOut::class)->withdraw($id), 'nothing to withdraw');
+
+        // The process stopped right after storing the request, before calling catto-mail.
+        $stored = $optOuts->create($id, 'eve@example.com');
+        self::assertSame(1, $this->service(CattoMailWorker::class)->run()['opt-outs reported']);
+        self::assertSame('active', $this->db->fetchOne('SELECT cgo_status FROM cattomail_global_optouts WHERE cgo_id = ?', [$stored['cgo_id']]));
+        self::assertSame($stored['cgo_id'], $optOuts->create($id, 'eve@example.com')['cgo_id'], 'a second request finds the open one');
+
+        // The lift reached catto-mail, but its response was lost.
+        $memberships = $this->db->fetchAllAssociative('SELECT ls_l_id, ls_confirmed, ls_unsubscribed FROM list_subscribers WHERE ls_s_id = ? ORDER BY ls_l_id', [$id]);
+        $this->fake->failNext('POST /global-suppressions/[0-9a-f-]+/lift', 'timeout', afterEffect: true, times: 3);
+        self::assertSame('lift_pending', $this->service(GlobalOptOut::class)->withdraw($id));
+        self::assertSame('lift_pending', $this->service(GlobalOptOut::class)->withdraw($id), 'asking again changes nothing');
+        self::assertSame(1, $this->service(CattoMailWorker::class)->run()['opt-outs reported']);
+        self::assertSame('lifted', $this->db->fetchOne('SELECT cgo_status FROM cattomail_global_optouts WHERE cgo_id = ?', [$stored['cgo_id']]));
+        self::assertCount(1, $this->fake->optOuts);
+        self::assertSame($memberships, $this->db->fetchAllAssociative('SELECT ls_l_id, ls_confirmed, ls_unsubscribed FROM list_subscribers WHERE ls_s_id = ? ORDER BY ls_l_id', [$id]),
+            'withdrawing changes no membership or consent');
     }
 
     public function testWithoutTheCapabilityNothingIsReported(): void

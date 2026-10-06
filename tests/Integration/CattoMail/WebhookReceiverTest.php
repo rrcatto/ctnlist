@@ -139,6 +139,42 @@ final class WebhookReceiverTest extends CattoMailTestCase
         self::assertSame([], $this->fake->requestsTo('POST', '/global-suppressions'), 'a complaint is not a catto-mail opt-out request');
     }
 
+    /** catto-mail may report the same outcome in several events (and polling sees it too): the effect is applied once. */
+    public function testBounceAndComplaintEffectsApplyOnceWhateverTheEventId(): void
+    {
+        $sent = $this->sentCampaign(['ann@example.com', 'ben@example.com']);
+        $this->fake->deliver($sent['job'], ['ann@example.com' => 'complained', 'ben@example.com' => 'hard_bounced']);
+        foreach ([1, 2] as $copy) {
+            $this->webhook('message.hard_bounced', $this->messageData($sent['job'], 'ben@example.com', 'hard_bounced', 'hard_bounce'), $this->eventId());
+            $this->webhook('message.complained', $this->messageData($sent['job'], 'ann@example.com', 'complained', 'complaint'), $this->eventId());
+        }
+        $this->webhook('send.completed', $this->fake->sendJobs[$sent['job']]);
+
+        self::assertSame(1, (int) $this->db->fetchOne('SELECT s_bounces FROM subscribers WHERE s_id = ?', [$sent['ids'][1]]), 'subscriber bounce count once');
+        self::assertSame(1, (int) $this->db->fetchOne('SELECT m_bounces FROM messages WHERE m_uniqid = ?', [$sent['muid']]), 'message bounce count once');
+        self::assertSame(1, (int) $this->db->fetchOne(
+            "SELECT COUNT(*) FROM list_subscription_events e JOIN list_subscribers ls ON ls.ls_id = e.lse_ls_id
+             JOIN lists l ON l.l_id = ls.ls_l_id WHERE ls.ls_s_id = ? AND l.l_shortcode = 'NEWS' AND e.lse_event = 'unsubscribed'", [$sent['ids'][0]]
+        ), 'one unsubscription per list');
+    }
+
+    /** Clearing the block lets the subscriber be selected again; it restores no membership or consent. */
+    public function testClearingTheBlockDoesNotResubscribe(): void
+    {
+        $sent = $this->sentCampaign(['ann@example.com']);
+        $this->fake->deliver($sent['job'], ['ann@example.com' => 'complained']);
+        $this->webhook('message.complained', $this->messageData($sent['job'], 'ann@example.com', 'complained', 'complaint'));
+        $subscribers = $this->service(\App\Repository\SubscriberRepository::class);
+
+        self::assertSame('complained', $subscribers->clearDeliveryProblem($sent['ids'][0]));
+        self::assertSame(['state' => 'ok', 'at' => null], $subscribers->deliveryState($sent['ids'][0]));
+        self::assertSame('ok', $subscribers->clearDeliveryProblem($sent['ids'][0]), 'nothing left to clear');
+        self::assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM list_subscribers WHERE ls_s_id = ? AND NOT ls_unsubscribed', [$sent['ids'][0]]),
+            'still unsubscribed from every list');
+        $next = $this->createMessage('Next', [(int) $this->db->fetchOne("SELECT l_id FROM lists WHERE l_shortcode = 'NEWS'")]);
+        self::assertSame(0, $this->service(\App\Queue\QueueBuilder::class)->queueMessage($next)->queued, 'so not queued until they rejoin');
+    }
+
     public function testEventsAboutOtherJobsOrRecipientsAreIgnored(): void
     {
         $sent = $this->sentCampaign(['ann@example.com']);

@@ -67,15 +67,24 @@ final class GlobalOptOut
         return $this->optOuts->find($optOut['cgo_id']) ?? $optOut;
     }
 
-    /** The recipient withdrew the request. */
-    public function withdraw(int $subscriberId): void
+    /**
+     * The recipient withdrew the request: POST /v1/global-suppressions/{id}/lift
+     * (naturally idempotent; the worker retries it). Lifting removes only this
+     * opt-out at catto-mail and re-subscribes nobody here.
+     *
+     * @return string|null the opt-out's state afterwards (lifted, or lift_pending until reported), null when there was none
+     */
+    public function withdraw(int $subscriberId): ?string
     {
         $optOut = $this->optOuts->currentForSubscriber($subscriberId);
-        if ($optOut === null || $optOut['cgo_status'] === 'lift_pending') {
-            return;
+        if ($optOut === null) {
+            return null;
         }
-        $this->optOuts->requestLift($optOut['cgo_id']);
-        $this->report($this->optOuts->find($optOut['cgo_id']) ?? $optOut);
+        if ($optOut['cgo_status'] !== 'lift_pending') {
+            $this->optOuts->requestLift($optOut['cgo_id']);
+            $this->report($this->optOuts->find($optOut['cgo_id']) ?? $optOut);
+        }
+        return ($this->optOuts->find($optOut['cgo_id']) ?? $optOut)['cgo_status'];
     }
 
     /**
@@ -83,8 +92,9 @@ final class GlobalOptOut
      * kept for the worker.
      *
      * @param OptOut $optOut
+     * @return bool false when it is kept for a retry or was refused
      */
-    public function report(array $optOut): void
+    public function report(array $optOut): bool
     {
         try {
             if ($optOut['cgo_remote_id'] === null && in_array($optOut['cgo_status'], ['pending', 'lift_pending'], true)) {
@@ -97,6 +107,7 @@ final class GlobalOptOut
                 $this->client->liftGlobalOptOut($optOut['cgo_remote_id']);
                 $this->optOuts->markLifted($optOut['cgo_id']);
             }
+            return true;
         } catch (CattoMailRejected $e) {
             if ($optOut['cgo_status'] === 'lift_pending' && $optOut['cgo_remote_id'] !== null) {
                 // The opt-out itself stands; only the withdrawal was refused.
@@ -104,8 +115,10 @@ final class GlobalOptOut
             } else {
                 $this->optOuts->markRejected($optOut['cgo_id'], $e->getMessage());
             }
+            return false;
         } catch (CattoMailUnavailable $e) {
             $this->optOuts->noteAttempt($optOut['cgo_id'], $e->getMessage());
+            return false;
         }
     }
 }

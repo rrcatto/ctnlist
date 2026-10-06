@@ -17,6 +17,7 @@ use App\Repository\OptionRepository;
 use App\Repository\QueueRepository;
 use App\Repository\SubscriberRepository;
 use App\Suppression\SuppressionChecker;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Psr\Clock\ClockInterface;
 
 /**
@@ -129,15 +130,25 @@ final class QueueProcessor
                 }
                 $queueId = $row['q_id'];
                 $messageId = $message['m_id'];
-                $this->sender->stage(
-                    $run,
-                    $this->outgoing->forList($message, $list),
-                    new OutgoingRecipient($recipient['s_email'], $recipient['s_uuid'], 'MESSAGE', (string) $message['m_subject'], $rendered->html, $rendered->text),
-                    function () use ($queueId, $messageId): void {
-                        $this->queue->delete($queueId);
-                        $this->messages->incrementSent($messageId);
-                    },
-                );
+                try {
+                    // The queue row leaves only with its durable staging record, and only once:
+                    // a run that finds the row already gone (another run staged it) rolls back.
+                    $this->sender->stage(
+                        $run,
+                        $this->outgoing->forList($message, $list),
+                        new OutgoingRecipient($recipient['s_email'], $recipient['s_uuid'], 'MESSAGE', (string) $message['m_subject'], $rendered->html, $rendered->text),
+                        function () use ($queueId, $messageId): void {
+                            if (!$this->queue->delete($queueId)) {
+                                throw new QueueRowClaimed('Queue row ' . $queueId . ' was staged by another run.');
+                            }
+                            $this->messages->incrementSent($messageId);
+                        },
+                    );
+                } catch (QueueRowClaimed | UniqueConstraintViolationException) {
+                    // Already staged by another run (or an active delivery of this message to this subscriber exists).
+                    $this->queue->delete($queueId);
+                    continue;
+                }
                 $staged++;
             }
         }

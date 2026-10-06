@@ -1,4 +1,4 @@
-# ctnlist 6.0.3
+# ctnlist 6.0.4
 
 ctnlist is a web-based mailing-list application created by Richard Royston Catto in 2009. Versions 5.0.x and 6.0.x are an incremental modernisation of the working v5.0 application, not a replacement of its established workflows.
 
@@ -29,6 +29,11 @@ Version 6.0.3 hands campaign delivery to the catto-mail smarthost and hardens th
   - placeholders never print literally;
   - one quality gate, `bin/dev check`.
 - **Profile pictures:** a subscriber can choose, crop and save one, and it shows beside their name in the site menu.
+
+Version 6.0.4 makes the catto-mail integration operable in production:
+- **Integration status page** (Admin → Sending → Delivery): a "Check connection" button that names the failure (host, connection, TLS, key, permission); the last API success and error; a worker heartbeat; counts of pending and stuck work; send-run pages; and a webhook-event diagnostic page.
+- **Hardening:** queue staging can no longer stage one queue row twice when queue runs overlap; job states only move forward, even when updates race; bounce and complaint effects commit with their once-only claim; one open global opt-out per subscriber; a single-instance worker with meaningful exit codes.
+- **Other changes:** clearer administrator errors (with catto-mail's field errors), an explicit confirmation for the global opt-out, and `ctnlist:cattomail:check` plus the optional real end-to-end check `bin/dev test-cattomail`. `bin/dev up` re-attaches the development catto-mail network automatically. The unused `MAIL_UNSUBSCRIBE_ADDRESS` is removed.
 
 ## Platform and upgrades
 
@@ -152,7 +157,7 @@ dev/podman/     development container files
 
 ## Deployment
 
-The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.0.3/` (the path is set in `public_html/index.php`). Run `composer install --no-dev` there. PHP needs the `gd` extension with JPEG and WebP support (profile pictures; `composer install` checks for it) and should have `exif` (phone photos are turned upright). The picture editor uploads only the cropped square (well under 1 MB); without JavaScript the original file is posted, so allow uploads of up to 8 MB (nginx `client_max_body_size`, PHP `upload_max_filesize`/`post_max_size`) or such uploads are refused.
+The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.0.4/` (the path is set in `public_html/index.php`). Run `composer install --no-dev` there. PHP needs the `gd` extension with JPEG and WebP support (profile pictures; `composer install` checks for it) and should have `exif` (phone photos are turned upright). The picture editor uploads only the cropped square (well under 1 MB); without JavaScript the original file is posted, so allow uploads of up to 8 MB (nginx `client_max_body_size`, PHP `upload_max_filesize`/`post_max_size`) or such uploads are refused.
 
 Each installation has its own directory containing:
 
@@ -231,6 +236,40 @@ ctnlist is the first client of the [catto-mail](https://github.com/rrcatto/catto
 - Proofs, and resends of a draft without lists, are transactional jobs.
 - A message's From domain must be a sending domain registered in catto-mail, and subscription mail needs an https `APP_BASE_URL`.
 - **Admin → Sending → Delivery (catto-mail)** shows each message's send jobs, every recipient's message state, and a recipient's event history read live from catto-mail. `remote_accepted` is acceptance by the receiving server, not inbox delivery; `open_recorded` is not proof of reading.
+- A queue row is removed only in the same transaction that stores its staged delivery, and only once: a concurrent queue run that finds the row already taken rolls back. The database also allows only one active campaign delivery of a message to a subscriber.
+
+**Integration status** (**Admin → Sending → Delivery**, permission `logs.view`). The page shows:
+- the configuration (the API key and secrets are never shown, only whether they are set);
+- **Check connection**: one read-only authenticated request (`GET /v1/send-jobs/<an id that cannot exist>`; the API has no health endpoint, and 404 proves network, TLS and the key). The result is one of: not configured, host name not found, cannot connect, TLS failure, API key rejected, client not permitted, temporarily unavailable, or reachable and authenticated;
+- the last successful call and the last API error;
+- the worker's last run, with a warning when it seems not to run;
+- pending or stuck work: unsealed or refused jobs, staged recipients, empty jobs left collecting, pending validations and opt-outs, and unprocessed or failed webhook events;
+- recent send runs, each with its own page listing the catto-mail jobs it became;
+- a webhook-event page (all, not processed, failed, ignored), with links to the job each event concerns.
+
+From the command line, `bin/console ctnlist:cattomail:check` shows the same configuration and connection check (exit status 0 only when reachable and authenticated).
+
+Error messages name the fix: a rejected key points to `CATTOMAIL_API_KEY`, an unregistered From domain to catto-mail's sending domains, an unreachable API says the work is kept and retried. catto-mail's field errors (where it gives the reason) are included; keys and secrets are redacted everywhere.
+
+**Send-job states.** ctnlist's own states come first: `open` (staging) and `ready` (closed, not yet sealed at catto-mail). After that it stores catto-mail's states unchanged:
+- `queued`: sealed by submit;
+- `processing`;
+- `dispatched`: everything handed to Postfix, suppressed or failed;
+- `completed`: every message has a final state, which can take days;
+- `failed` or `cancelled`.
+
+A job only moves forward, decided in one SQL statement, so a late webhook or a stale poll can never move it back. catto-mail's `collecting` never replaces ctnlist's own state. Recipient states are catto-mail's message states (`remote_accepted`, `soft_bounced`, `hard_bounced`, `complained`, `failed`, `suppressed`, …). A final state is never replaced by a non-final one, and a hard bounce or complaint is never replaced at all.
+
+**What "sent" means.** A recipient's Send Log row and smlog sent mark are written when catto-mail seals its job (`POST /send-jobs/{id}/submit` answers 202). That is ctnlist handing the message to its mail transport. It does not mean the receiving server accepted it (`remote_accepted`) or that it reached an inbox. The Delivery pages show those outcomes.
+
+**Empty jobs.** If every response to a job's creation was lost, catto-mail can hold an empty job in `collecting`. Its recipients are then staged in a new job, sent once. The contract has no way to cancel a job, and an empty job can't be submitted, so ctnlist marks it cancelled on its side and shows the count on the status page. Such a job sends nothing.
+
+**Retries.** Timeouts, connection failures, 5xx, 408, 425, 429 and `idempotency-in-progress` are retried up to three times in place with the same key, honouring `Retry-After` up to 10 seconds; after that the worker retries later. Other 4xx answers are refusals and are not retried. A refused job's recipients are marked `not_sent` and can be returned to the queue.
+
+**Matching.** Results are matched by reference, never by position:
+- message states by `external_recipient_reference` (the ctnlist delivery UUID);
+- validation results by `external_address_reference` (the subscriber UUID);
+- batches by their own key.
 
 **Idempotency.** Each operation's `Idempotency-Key` (validation job, send job, every recipient batch, global opt-out) is generated once and stored with its row before the request is sent. Every retry, in place or by the worker, resends the same key and the same body, so a timeout can never create a second job, batch or opt-out. Rendered content is kept until its batch is accepted.
 
@@ -242,13 +281,24 @@ ctnlist is the first client of the [catto-mail](https://github.com/rrcatto/catto
 - Handled: `validation.completed`/`failed` (results fetched), `send.completed`/`failed` (job and message states fetched), `message.hard_bounced`, `message.complained`. Unknown types are kept and ignored.
 - States never move backwards, so late or reordered events change nothing.
 
-**Worker.** Run `ctnlist:cattomail:work` from cron (every minute) per installation:
+**Worker.** Webhooks are the primary path; the worker is the safety net. Run `ctnlist:cattomail:work` from cron every minute, per installation:
 
 ```bash
-CTNLIST_INSTANCE_DIR=/var/www/example bin/console ctnlist:cattomail:work
+* * * * * CTNLIST_INSTANCE_DIR=/var/www/example /usr/local/lib/php/ctnlist/<version>/bin/console ctnlist:cattomail:work
 ```
 
-It processes stored webhook events not yet processed, retries unsealed send jobs and pending opt-outs and validation submissions (same keys), and reconciles by polling jobs without a final state (`GET /v1/send-jobs/{id}` with its messages, `GET /v1/validation-jobs/{id}` with its results).
+Each pass:
+- processes stored webhook events not yet processed;
+- retries unsealed send jobs, pending opt-outs and withdrawals, and validation submissions (same keys);
+- reconciles by polling jobs without a final state whose last check is older than `CATTOMAIL_RECONCILE_AFTER_SECONDS` (`GET /v1/send-jobs/{id}` with its messages, `GET /v1/validation-jobs/{id}` with its results).
+
+Running it every minute keeps retries prompt; polling still waits for the reconciliation interval.
+
+Output and safety:
+- It prints one line per pass that did or failed something (every pass with `-v`): counts only, never keys, secrets or content.
+- Exit status 1 means an item failed and stays for the next pass. Nothing to do, or another worker already running, is status 0.
+- Only one worker runs at a time per database (a PostgreSQL advisory lock), and every effect is idempotent besides.
+- Each pass is recorded for the status page.
 
 **Hard bounces and complaints** (from webhooks or polling, applied once per delivery). catto-mail already suppresses these addresses globally; ctnlist only keeps its business state:
 - A hard bounce sets the subscriber's delivery state to `hard_bounced`, adds to `s_bounces` and the message's `m_bounces`, and removes their queued deliveries. Consent and memberships are unchanged.
@@ -260,17 +310,42 @@ It processes stored webhook events not yet processed, retries unsealed send jobs
 - because they want no email at all, ctnlist also unsubscribes them from all its lists;
 - withdrawing it reports `POST /v1/global-suppressions/{id}/lift` and does not re-subscribe them.
 
-**Address validation.** **Admin → Subscribers → Address validation** submits a list's members, at most 10,000 addresses per job, each with the subscriber's UUID as `external_address_reference`. Results are mapped back by that reference and stored exactly as classified:
+**Address validation.** **Admin → Subscribers → Address validation** submits every member of a list who has not unsubscribed, each with the subscriber's UUID as `external_address_reference`. A list over 10,000 members (catto-mail's limit per job) becomes several jobs, "part 1 of N", and the administrator is told the total and the number of jobs; nobody is left out. Each job shows its counts per classification, the suggestions separately, and its submission, last-check and completion times. Results are mapped back by that reference and stored exactly as classified:
 - `unknown` stays unknown, and `temporarily_unverifiable` is not invalid;
 - a suggested address is shown, never applied;
 - a deliverable address says nothing about consent;
 - nothing about a subscriber changes automatically.
 
+**Webhook secret rotation** (nothing rotates automatically):
+1. When catto-mail rotates the endpoint's secret, it signs with both secrets during its overlap window.
+2. Put the new secret in `CATTOMAIL_WEBHOOK_SECRET` and the old one in `CATTOMAIL_WEBHOOK_SECRET_PREVIOUS`.
+3. Once the overlap has passed, remove the previous secret; from then on the old secret no longer validates.
+
+The status page shows which of the two are set.
+
+**Headers.** catto-mail accepts no arbitrary MIME headers:
+- It sets the envelope (VERP return path), `List-Id` (from the job's `list_id`) and `List-Unsubscribe` with `List-Unsubscribe-Post` (from each recipient's signed `unsubscribe_url`).
+- v5's `Sender`, `List-Owner`, `List-Post`, `List-Subscribe`, `List-Archive` and `X-ctnlist-*` headers are not sent.
+- None of them is needed for delivery or one-click unsubscribe. `List-Archive`/`List-Subscribe` would need a catto-mail contract change (see below).
+
+**What is stored.**
+- Rendered recipient content is kept only until its batch is accepted, then cleared.
+- Recipient rows keep the address, subject, states and references.
+- Webhook events are kept in full (`cattomail_webhook_events.cwe_payload`, which can contain recipient addresses and remote diagnostics) for diagnosis and de-duplication.
+- Address-validation results are kept per job.
+
+Nothing prunes these yet. A later change should remove processed webhook bodies after a retention period (e.g. 90 days), keeping the event id for de-duplication.
+
+**Possible catto-mail contract enhancements** (not needed for correct operation; not worked around):
+- an authenticated health or identity endpoint, instead of reading a job that cannot exist;
+- a way to cancel an empty `collecting` send job;
+- structured `List-Archive`/`List-Subscribe` values per job.
+
 ### catto-mail development route
 
 The development stacks are separate (catto-mail's pod is on an internal network, its API published on `127.0.0.1:8443`; its webhook worker only delivers to public addresses, or to private hosts listed in its `APP_WEBHOOK_ALLOWED_PRIVATE_HOSTS`). The route is a dedicated internal Podman network, `cattomail-dev`:
 
-1. `bin/dev cattomail-link` creates `cattomail-dev` and attaches ctnlist's web container (alias `ctnlist-web`) and app container. Run it again after `bin/dev up`, which recreates the containers.
+1. `bin/dev cattomail-link` creates `cattomail-dev` and attaches ctnlist's web container (alias `ctnlist-web`) and app container. `bin/dev up` re-attaches them by itself whenever the network exists; without it, `up` works as usual and catto-mail stays optional. `bin/dev cattomail-status` lists what the route has and lacks (it never prints secret values).
 2. `bin/dev cattomail-ca` saves catto-mail's self-signed development certificate (read from its public port) to `dev/podman/cattomail-ca.pem` (gitignored).
 3. catto-mail's side, done in the catto-mail repository:
    - attach its pod to `cattomail-dev` with an alias (e.g. `catto-mail`);
@@ -279,11 +354,17 @@ The development stacks are separate (catto-mail's pod is on an internal network,
 4. In `dev/podman/ctnlist.env`:
    - `CATTOMAIL_API_BASE_URL=https://localhost`;
    - `CATTOMAIL_API_CONNECT_HOST=catto-mail` (TLS is still verified for `localhost`);
-   - `CATTOMAIL_CA_FILE=/usr/local/lib/php/ctnlist/6.0.3/dev/podman/cattomail-ca.pem`;
+   - `CATTOMAIL_CA_FILE=/usr/local/lib/php/ctnlist/6.0.4/dev/podman/cattomail-ca.pem`;
    - the API key and webhook secret;
    - for subscription mail, `APP_BASE_URL=https://localhost:8543/` (ctnlist's development HTTPS listener).
 
-   Then run `bin/dev restart`, `bin/dev cattomail-link` and, in another terminal, `bin/dev console ctnlist:cattomail:work --loop 30`.
+   Then run `bin/dev restart` and, in another terminal, `bin/dev console ctnlist:cattomail:work --loop 30`.
+5. Check it: **Admin → Sending → Delivery → Check connection**, or `bin/dev console ctnlist:cattomail:check`.
+
+**Optional real end-to-end check:** `bin/dev test-cattomail [--to=address] [--muid=message] [--wait=120]`. It is never part of the normal test suite, which uses the deterministic fake catto-mail (`tests/Support/FakeCattoMail`).
+- **Safeguards:** it runs only with `APP_ENV` dev or test and a local development catto-mail (`CATTOMAIL_API_CONNECT_HOST` set, or a localhost/.test host). It refuses anything else, so production can't be targeted.
+- **What it does:** checks the connection, sends one proof of a message (default: the newest) to `--to` (default `MAIL_TEST_ADDRESS`), and starts a validation job for that subscriber if there is one. It then follows both until catto-mail has finished. The proof lands in catto-mail's development mail capture.
+- **Campaigns:** for a campaign check, queue a message to a small list of test subscribers and process the queue as usual. Then follow the run on the Delivery page and in catto-mail's capture, and check the one-click link from the `List-Unsubscribe` header.
 
 All development mail then ends up in catto-mail's Mailpit (catto-mail's own capture mode); nothing reaches the Internet. Production uses public HTTPS in both directions and none of the development settings.
 

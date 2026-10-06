@@ -1,0 +1,39 @@
+{% extends 'base.html.twig' %}
+{% import 'admin/_cattomail_macros.html.twig' as cm %}
+
+{% block title %}Send run{% endblock %}
+
+{% block content %}
+{% embed 'layout/_page_header.html.twig' with {title: 'Send run: ' ~ run.cr_kind, description: 'One run started in ctnlist and the catto-mail send jobs it became: one per list, each at most 10,000 recipients. Each job\'s external reference is the run and its number.'} %}
+  {% block actions %}
+    {% if run.cr_muid %}<a class="btn btn-outline-secondary" href="{{ path('admin_delivery_message', {muid: run.cr_muid}) }}"><i class="bi bi-envelope me-1" aria-hidden="true"></i>The message's delivery</a>{% endif %}
+    <a class="btn btn-outline-secondary" href="{{ path('admin_delivery') }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>Integration</a>
+  {% endblock %}
+{% endembed %}
+
+<dl class="row small">
+  <dt class="col-sm-3">Run</dt><dd class="col-sm-9 text-break"><code>{{ run.cr_uuid }}</code></dd>
+  <dt class="col-sm-3">Message</dt><dd class="col-sm-9">{{ run.m_subject ?: (run.cr_muid ?: '—') }}</dd>
+  <dt class="col-sm-3">Started</dt><dd class="col-sm-9">{{ run.cr_created_at|slice(0, 16) }}{{ run.cr_finished_at ? ', finished ' ~ run.cr_finished_at|slice(0, 16) : ', still staging' }}</dd>
+  <dt class="col-sm-3">Recipients</dt><dd class="col-sm-9">{{ run.recipients }} in {{ run.jobs }} job{{ run.jobs == 1 ? '' : 's' }}{% if run.failed %}, <span class="text-danger">{{ run.failed }} refused</span>{% endif %}{% if run.unsealed %}, {{ run.unsealed }} not yet sealed{% endif %}</dd>
+</dl>
+
+<div class="table-responsive">
+  <table class="table table-hover align-middle">
+    <thead class="table-light"><tr><th scope="col">Job</th><th scope="col">External reference</th><th scope="col">List</th><th scope="col">Status</th><th scope="col" class="text-end">Recipients</th><th scope="col">Submitted</th><th scope="col">Completed</th></tr></thead>
+    <tbody>
+    {% for job in jobs %}
+      <tr>
+        <td><a href="{{ path('admin_delivery_job', {id: job.csj_id}) }}">Job {{ job.csj_seq }}</a>{% if job.csj_remote_id %}<div class="small text-body-secondary text-break">{{ job.csj_remote_id }}</div>{% endif %}</td>
+        <td class="small text-break"><code>{{ run.cr_uuid }}/{{ job.csj_seq }}</code></td>
+        <td>{{ job.csj_list_shortcode ?: '—' }}</td>
+        <td>{{ cm.job_status(job.csj_status) }}{% if job.csj_error %}<div class="small text-danger text-break">{{ job.csj_error|slice(0, 200) }}</div>{% endif %}</td>
+        <td class="text-end">{{ job.csj_total }}</td>
+        <td class="small text-nowrap">{{ job.csj_submitted_at ? job.csj_submitted_at|slice(0, 16) : '—' }}</td>
+        <td class="small text-nowrap">{{ job.csj_completed_at ? job.csj_completed_at|slice(0, 16) : '—' }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

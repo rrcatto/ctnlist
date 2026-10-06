@@ -30,6 +30,8 @@ final class CattoMailConfig
 
     /** @var list<string> */
     private readonly array $webhookSecrets;
+    private readonly bool $currentSecret;
+    private readonly bool $previousSecret;
 
     public function __construct(
         public readonly string $baseUrl,
@@ -45,6 +47,8 @@ final class CattoMailConfig
         public readonly string $connectHost = '',
     ) {
         $this->webhookSecrets = array_values(array_filter([trim($webhookSecret), trim($previousWebhookSecret)], static fn(string $s): bool => $s !== ''));
+        $this->currentSecret = trim($webhookSecret) !== '';
+        $this->previousSecret = trim($previousWebhookSecret) !== '';
     }
 
     /** API calls are possible (an HTTPS base URL and a key). */
@@ -81,6 +85,17 @@ final class CattoMailConfig
     public function webhookSecrets(): array
     {
         return $this->webhookSecrets;
+    }
+
+    public function hasWebhookSecret(): bool
+    {
+        return $this->currentSecret;
+    }
+
+    /** A rotated-out secret is still accepted (the rotation overlap). */
+    public function hasPreviousWebhookSecret(): bool
+    {
+        return $this->previousSecret;
     }
 
     /** Keep secrets out of var_dump(), debug output and serialised logs. */

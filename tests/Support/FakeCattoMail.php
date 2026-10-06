@@ -38,6 +38,8 @@ final class FakeCattoMail
     /** @var array<string, array<string, true>> job id => accepted normalised addresses */
     private array $addresses = [];
     public bool $optOutCapability = true;
+    /** Finish sealed send jobs and validation jobs when they are read (a catto-mail that works instantly). */
+    public bool $finishOnRead = false;
     /** @var list<string> registered sender domains */
     public array $senderDomains = ['ctnlist.test', 'smarthost-dev.test'];
     /** @var array<string, array{hash: string, status: int, location: string, id: string, result: array<string, mixed>}> */
@@ -133,6 +135,24 @@ final class FakeCattoMail
         $this->validationJobs[$jobId]['classification_counts'] = self::counts($classes, self::CLASSIFICATIONS);
     }
 
+    /** @return array<string, mixed>|null */
+    private function finishSendJobOnRead(string $id): ?array
+    {
+        if ($this->finishOnRead && ($this->sendJobs[$id]['status'] ?? '') === 'queued') {
+            $this->deliver($id);
+        }
+        return $this->sendJobs[$id] ?? null;
+    }
+
+    /** @return array<string, mixed>|null */
+    private function finishValidationOnRead(string $id): ?array
+    {
+        if ($this->finishOnRead && in_array($this->validationJobs[$id]['status'] ?? '', ['queued', 'processing'], true)) {
+            $this->completeValidation($id);
+        }
+        return $this->validationJobs[$id] ?? null;
+    }
+
     public function lastSendJobId(): string
     {
         return (string) array_key_last($this->sendJobs);
@@ -150,17 +170,17 @@ final class FakeCattoMail
         $id = '([0-9a-f-]{36})';
         return match (true) {
             $method === 'POST' && $path === '/validation-jobs' => $this->idempotent('validation', $headers, $body, fn() => $this->createValidation($body)),
-            $method === 'GET' && preg_match("#^/validation-jobs/$id$#", $path, $m) === 1 => $this->found($this->validationJobs[$m[1]] ?? null),
+            $method === 'GET' && preg_match("#^/validation-jobs/$id$#", $path, $m) === 1 => $this->found($this->finishValidationOnRead($m[1])),
             $method === 'GET' && preg_match("#^/validation-jobs/$id/addresses$#", $path, $m) === 1 => $this->page($this->validationAddresses[$m[1]] ?? null),
             $method === 'POST' && $path === '/send-jobs' => $this->idempotent('send-jobs', $headers, $body, fn() => $this->createSendJob($body)),
             $method === 'POST' && preg_match("#^/send-jobs/$id/recipients$#", $path, $m) === 1 => $this->idempotent('batch:' . $m[1], $headers, $body, fn() => $this->addBatch($m[1], $body), replayResult: true),
             $method === 'POST' && preg_match("#^/send-jobs/$id/submit$#", $path, $m) === 1 => $this->submit($m[1]),
-            $method === 'GET' && preg_match("#^/send-jobs/$id$#", $path, $m) === 1 => $this->found($this->sendJobs[$m[1]] ?? null),
+            $method === 'GET' && preg_match("#^/send-jobs/$id$#", $path, $m) === 1 => $this->found($this->finishSendJobOnRead($m[1])),
             $method === 'GET' && preg_match("#^/send-jobs/$id/messages$#", $path, $m) === 1 => $this->page(isset($this->sendJobs[$m[1]]) ? ($this->messages[$m[1]] ?? []) : null),
             $method === 'GET' && preg_match("#^/messages/$id/events$#", $path, $m) === 1 => $this->page($this->events($m[1])),
             $method === 'POST' && $path === '/global-suppressions' => $this->optOutCapability
                 ? $this->idempotent('optout', $headers, $body, fn() => $this->createOptOut($body), replayResult: true)
-                : self::problem(403, 'global-suppression-forbidden', 'The client does not hold the global-opt-out capability.'),
+                : self::problem(403, 'forbidden', 'This client is not permitted to report recipient global opt-outs (an operator grants this capability).'),
             $method === 'GET' && preg_match("#^/global-suppressions/$id$#", $path, $m) === 1 => $this->found($this->optOuts[$m[1]] ?? null),
             $method === 'POST' && preg_match("#^/global-suppressions/$id/lift$#", $path, $m) === 1 => $this->lift($m[1]),
             default => self::problem(404, 'not-found', 'No such endpoint.'),
@@ -231,7 +251,9 @@ final class FakeCattoMail
             return [422, self::problemBody(422, 'validation-error', 'list_id is mandatory for subscription and not accepted for transactional.')];
         }
         if (!in_array($domain, $this->senderDomains, true)) {
-            return [422, self::problemBody(422, 'sending-domain-unknown', 'The sender identity domain is not a registered sending domain of the client.')];
+            // As catto-mail answers: the reason is in the field errors, not in the detail.
+            return [422, self::problemBody(422, 'validation-error', 'The send job cannot be created.',
+                [['pointer' => '/sender_identity/email', 'message' => 'The sender domain is not a registered, enabled sending domain of this client.']])];
         }
         $id = $this->uuid();
         $this->sendJobs[$id] = ['id' => $id, 'external_reference' => $body['external_reference'], 'message_class' => $class, 'list_id' => $body['list_id'] ?? null,
@@ -257,24 +279,25 @@ final class FakeCattoMail
         }
         $batch = $body['recipients'] ?? [];
         if (!is_array($batch) || $batch === [] || count($batch) > 500) {
-            return [422, self::problemBody(422, 'validation-error', 'A batch holds 1 to 500 recipients.')];
+            return [422, self::problemBody(422, 'batch-too-large', 'A batch holds 1 to 500 recipients.', [['pointer' => '/recipients', 'message' => sprintf('Contains %d recipients.', is_array($batch) ? count($batch) : 0)]])];
         }
         if (count($this->recipients[$jobId]) + count($batch) > 10000) {
-            return [422, self::problemBody(422, 'recipient-limit', 'The job would exceed 10000 recipients.')];
+            return [422, self::problemBody(422, 'recipient-limit-exceeded', 'The job would exceed 10000 recipients.')];
         }
         $seen = $this->addresses[$jobId] ?? [];
         foreach ($batch as $n => $recipient) {
             $address = self::normalise((string) ($recipient['email_address'] ?? ''));
             if (isset($seen[$address])) {
-                return [422, self::problemBody(422, 'duplicate-recipient', 'Duplicate address.', [['pointer' => "/recipients/$n/email_address", 'message' => 'duplicate']])];
+                return [422, self::problemBody(422, 'validation-error', 'The batch was rejected as a whole.',
+                    [['pointer' => "/recipients/$n/email_address", 'message' => 'Duplicate of a recipient in an earlier batch of this job (after normalisation).']])];
             }
             $seen[$address] = true;
             $unsubscribe = $recipient['unsubscribe_url'] ?? null;
             if ($job['message_class'] === 'subscription' && (!is_string($unsubscribe) || !str_starts_with($unsubscribe, 'https://'))) {
-                return [422, self::problemBody(422, 'unsubscribe-url-required', 'Subscription recipients need an https unsubscribe_url.')];
+                return [422, self::problemBody(422, 'validation-error', 'The batch was rejected as a whole.', [['pointer' => "/recipients/$n/unsubscribe_url", 'message' => 'Required for subscription jobs.']])];
             }
             if ($job['message_class'] === 'transactional' && $unsubscribe !== null) {
-                return [422, self::problemBody(422, 'unsubscribe-url-not-accepted', 'Transactional recipients do not accept unsubscribe_url.')];
+                return [422, self::problemBody(422, 'validation-error', 'The batch was rejected as a whole.', [['pointer' => "/recipients/$n/unsubscribe_url", 'message' => 'Not accepted for transactional jobs.']])];
             }
             if (!isset($recipient['html_body']) && !isset($recipient['text_body']) || ($recipient['subject'] ?? '') === '' || !isset($recipient['external_recipient_reference'])) {
                 return [422, self::problemBody(422, 'validation-error', 'Incomplete recipient.')];
@@ -298,6 +321,8 @@ final class FakeCattoMail
             }
             $this->sendJobs[$jobId]['status'] = 'queued';
             $this->sendJobs[$jobId]['queued_at'] = '2026-10-06T09:30:00Z';
+        } elseif (in_array($job['status'], ['failed', 'cancelled'], true)) {
+            return self::problem(409, 'job-not-submittable', 'A ' . $job['status'] . ' job cannot be submitted.');
         }
         return new MockResponse((string) json_encode($this->sendJobs[$jobId]), ['http_code' => 202, 'response_headers' => ['Content-Type' => 'application/json']]);
     }
@@ -323,7 +348,7 @@ final class FakeCattoMail
     private function lift(string $id): MockResponse
     {
         if (!$this->optOutCapability) {
-            return self::problem(403, 'global-suppression-forbidden', 'No capability.');
+            return self::problem(403, 'forbidden', 'This client is not permitted to report recipient global opt-outs (an operator grants this capability).');
         }
         if (!isset($this->optOuts[$id])) {
             return self::problem(404, 'not-found', 'Unknown opt-out.');

@@ -21,6 +21,7 @@ use App\Repository\SubscriberRepository;
 use App\Security\Csrf;
 use App\Security\SubscriberUser;
 use App\Subscriber\SubscriberAdmin;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\FormError;
 use Symfony\Component\Form\FormInterface;
@@ -92,11 +93,19 @@ final class SubscriberController extends AbstractController
     #[Route('/subscribers/{token}/delivery-ok', name: 'admin_subscriber_delivery_ok', requirements: ['token' => self::UUID], methods: ['POST'])]
     #[IsGranted('subscribers.manage')]
     #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
-    public function clearDeliveryProblem(string $token): Response
+    public function clearDeliveryProblem(string $token, #[CurrentUser] SubscriberUser $user, LoggerInterface $logger): Response
     {
         $identity = $this->subscribers->findIdentityByUuid($token) ?? throw $this->createNotFoundException('The subscriber does not exist.');
-        $this->subscribers->clearDeliveryProblem($identity['s_id']);
-        $this->addFlash('info', 'The subscriber can receive campaigns again (their list memberships are unchanged).');
+        $cleared = $this->subscribers->clearDeliveryProblem($identity['s_id']);
+        if ($cleared === 'ok') {
+            $this->addFlash('info', 'There was no delivery block to clear.');
+        } else {
+            // No address or other personal data in the log: the subscriber and the administrator by UUID.
+            $logger->notice('catto-mail delivery block ({state}) of subscriber {subscriber} cleared by {admin}.',
+                ['state' => $cleared, 'subscriber' => $identity['s_uuid'], 'admin' => $user->uuid]);
+            $this->addFlash('info', 'The ' . str_replace('_', ' ', $cleared) . ' block is cleared: this subscriber can be selected for campaigns again. '
+                . 'Their list memberships and consent are unchanged' . ($cleared === 'complained' ? ' (the lists they were unsubscribed from stay unsubscribed; only they can rejoin)' : '') . '.');
+        }
         return $this->redirectToRoute('admin_subscriber', ['token' => $identity['s_uuid']]);
     }
 
@@ -249,7 +258,7 @@ final class SubscriberController extends AbstractController
             'email' => $identity['s_email'],
             'form' => $form,
             'memberships' => $this->memberships->forSubscriber($identity['s_id']),
-            'delivery_state' => $this->subscribers->findRecipientByUuid($identity['s_uuid'])['s_delivery_state'] ?? 'ok',
+            'delivery' => $this->subscribers->deliveryState($identity['s_id']),
             'validation' => $this->validations->latestForSubscriber($identity['s_uuid']),
         ], new Response(status: $status));
     }

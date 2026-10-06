@@ -54,6 +54,45 @@ cattomail_link() {
     done
 }
 
+# After the containers are recreated (bin/dev up): re-attach them to the
+# shared catto-mail network, but only when it exists (catto-mail is optional
+# in development; nothing is created and up never fails because of it).
+cattomail_relink() {
+    if podman network exists "$CATTOMAIL_NETWORK" 2>/dev/null; then
+        cattomail_link | sed 's/^/catto-mail route: /'
+    fi
+}
+
+# What the catto-mail development route needs, and what is missing. Shows
+# which settings are present in dev/podman/ctnlist.env, never their values.
+cattomail_status() {
+    local env_file="dev/podman/ctnlist.env" ok=1
+    say() { printf '  %-44s %s\n' "$1" "$2"; }
+    echo "catto-mail development route"
+    if ! podman network exists "$CATTOMAIL_NETWORK" 2>/dev/null; then
+        say "network $CATTOMAIL_NETWORK" "missing (bin/dev cattomail-link creates it)"; ok=0
+    else
+        local members; members="$(podman network inspect "$CATTOMAIL_NETWORK" --format '{{range .Containers}}{{.Name}} {{end}}')"
+        say "network $CATTOMAIL_NETWORK" "exists: ${members:-no containers}"
+        for c in ctnlist_web_1 ctnlist_app_1; do
+            if grep -qw "$c" <<<"$members"; then say "  $c" "attached"; else say "  $c" "NOT attached (bin/dev cattomail-link)"; ok=0; fi
+        done
+    fi
+    local host; host="$(sed -n 's/^CATTOMAIL_API_CONNECT_HOST=//p' "$env_file" 2>/dev/null | tail -1)"
+    [ -n "$host" ] || { say "CATTOMAIL_API_CONNECT_HOST" "not set (expected: catto-mail)"; ok=0; host=catto-mail; }
+    if podman exec "$APP" getent hosts "$host" >/dev/null 2>&1; then say "catto-mail reachable as $host" "yes"
+    else say "catto-mail reachable as $host" "NO: catto-mail must join $CATTOMAIL_NETWORK with that alias (catto-mail side)"; ok=0; fi
+    for key in CATTOMAIL_API_BASE_URL CATTOMAIL_API_KEY CATTOMAIL_WEBHOOK_SECRET CATTOMAIL_CA_FILE; do
+        if grep -q "^$key=." "$env_file" 2>/dev/null; then say "$key" "set"; else say "$key" "not set in $env_file"; ok=0; fi
+    done
+    if grep -q '^APP_BASE_URL=https://' "$env_file" 2>/dev/null; then say "APP_BASE_URL" "https (subscription mail possible)"
+    else say "APP_BASE_URL" "not https: subscription mail needs https://localhost:8543/"; ok=0; fi
+    echo "  catto-mail side (not checkable from here): ctnlist-web in APP_WEBHOOK_ALLOWED_PRIVATE_HOSTS,"
+    echo "  an active client with the sending domain, its API key and the webhook endpoint http://ctnlist-web/cattomail/webhook."
+    echo "  Then: Admin > Delivery > Check connection, or bin/dev console ctnlist:cattomail:check."
+    [ "$ok" = 1 ]
+}
+
 # Save catto-mail's development certificate, read from its public HTTPS port,
 # for CATTOMAIL_CA_FILE (it is self-signed).
 cattomail_ca() {
@@ -143,7 +182,9 @@ Usage: bin/dev <command> [args]
   psql [args]        Open psql on the ctnlist database
   shell              Bash shell in the app container
   ensure-env         Create dev/podman/ctnlist.env if missing; add APP_SETTINGS_KEY only if absent (run by up)
-  cattomail-link     Attach web/app to the cattomail-dev network (catto-mail development route)
+  cattomail-link     Attach web/app to the cattomail-dev network (catto-mail development route; up re-attaches automatically when it exists)
+  cattomail-status   Show what the catto-mail development route has and lacks (never prints secret values)
+  test-cattomail     Optional real end-to-end check against the local development catto-mail (sends one proof)
   cattomail-ca [h:p] Save catto-mail's development certificate (default 127.0.0.1:8443) for CATTOMAIL_CA_FILE
   reset-db           DESTROY the database volume and re-run migrations
 
@@ -169,6 +210,7 @@ case "$cmd" in
         in_app composer migrate-paralegal
         psql_db -q -v email="$ADMIN_EMAIL_DEFAULT" < dev/podman/seed-admin.sql >/dev/null
         ensure_test_db
+        cattomail_relink
         echo
         echo "App:     http://localhost:8180  (log in as $ADMIN_EMAIL_DEFAULT; the link arrives in Mailpit)"
         echo "Mailpit: http://localhost:8125"
@@ -176,6 +218,8 @@ case "$cmd" in
     down) compose down ;;
     ensure-env) ensure_env ;;
     cattomail-link) cattomail_link ;;
+    cattomail-status) cattomail_status ;;
+    test-cattomail) "$0" console ctnlist:cattomail:check --e2e "$@" ;;
     cattomail-ca) cattomail_ca "$@" ;;
     restart) "$0" down && "$0" up ;;
     ps) compose ps ;;

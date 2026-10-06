@@ -25,11 +25,17 @@ use Psr\Log\LoggerInterface;
  *    state (or with results still to fetch) whose last check is older than
  *    CATTOMAIL_RECONCILE_AFTER_SECONDS (GET /v1/send-jobs/{id} and messages,
  *    GET /v1/validation-jobs/{id} and results).
+ *
+ * Webhooks are the primary path; this pass is the safety net. Only one
+ * worker runs at a time (WorkerLock); the time and summary of each pass are
+ * kept for the integration status page (CattoMailActivity).
  */
 final class CattoMailWorker
 {
     /** A run older than this whose process never finished it is treated as abandoned. */
     private const ABANDONED_RUN_SECONDS = 3600;
+
+    private int $failures = 0;
 
     public function __construct(
         private readonly CattoMailConfig $config,
@@ -43,15 +49,41 @@ final class CattoMailWorker
         private readonly GlobalOptOut $globalOptOut,
         private readonly ClockInterface $clock,
         private readonly LoggerInterface $logger,
+        private readonly WorkerLock $lock,
+        private readonly CattoMailActivity $activity,
     ) {
     }
 
-    /** @return array<string, int> what was done */
+    /**
+     * One pass. The report lists each task's count of items done, plus
+     * `failures` (items that could not be done now and stay for a later run).
+     * A pass that finds another worker running does nothing.
+     *
+     * @return array<string, int>
+     */
     public function run(): array
     {
-        $report = ['webhooks' => $this->webhooks->processPending()];
+        if (!$this->lock->acquire()) {
+            return ['skipped (another worker is running)' => 1];
+        }
+        try {
+            $report = $this->pass();
+            $this->activity->workerRan($report);
+            return $report;
+        } finally {
+            $this->lock->release();
+        }
+    }
+
+    /** @return array<string, int> */
+    private function pass(): array
+    {
+        $this->failures = 0;
+        $events = $this->webhooks->processPending();
+        $this->failures += $events['failed'];
+        $report = ['webhook events processed' => $events['processed']];
         if (!$this->config->isConfigured()) {
-            return $report + ['skipped (not configured)' => 1];
+            return $report + ['failures' => $this->failures, 'skipped (not configured)' => 1];
         }
         $now = $this->clock->now();
         $report['send jobs flushed'] = 0;
@@ -61,8 +93,11 @@ final class CattoMailWorker
         }
         $report['opt-outs reported'] = 0;
         foreach ($this->optOuts->unreported() as $optOut) {
-            $this->globalOptOut->report($optOut);
-            $report['opt-outs reported']++;
+            if ($this->globalOptOut->report($optOut)) {
+                $report['opt-outs reported']++;
+            } else {
+                $this->failures++;
+            }
         }
         $report['validation jobs submitted'] = 0;
         foreach ($this->validations->unsubmitted() as $job) {
@@ -77,6 +112,7 @@ final class CattoMailWorker
         foreach ($this->validations->unresolved($before) as $job) {
             $report['validation jobs reconciled'] += $this->attempt(fn() => $this->validation->refresh($job)) ? 1 : 0;
         }
+        $report['failures'] = $this->failures;
         return $report;
     }
 
@@ -87,6 +123,7 @@ final class CattoMailWorker
             return true;
         } catch (CattoMailException $e) {
             $this->logger->warning('catto-mail worker: {error}', ['error' => $e->getMessage()]);
+            $this->failures++;
             return false;
         }
     }

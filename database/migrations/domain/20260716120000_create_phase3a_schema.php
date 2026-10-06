@@ -516,6 +516,11 @@ CREATE TABLE cattomail_recipients (
         'deferred', 'outcome_unknown', 'remote_accepted', 'soft_bounced', 'hard_bounced', 'complained', 'failed', 'suppressed'))
 );
 CREATE UNIQUE INDEX uq_crp_job_email ON cattomail_recipients (crp_csj_id, LOWER(crp_email));
+-- At most one active campaign delivery of a message to a subscriber (queue
+-- runs). A refused job's rows ('not_sent') may be requeued; resends and
+-- forwards are separate deliveries by design.
+CREATE UNIQUE INDEX uq_crp_campaign_delivery ON cattomail_recipients (crp_muid, crp_s_uuid)
+    WHERE crp_type = 'MESSAGE' AND crp_s_uuid IS NOT NULL AND crp_status <> 'not_sent';
 CREATE INDEX idx_crp_batch ON cattomail_recipients (crp_cb_id);
 CREATE INDEX idx_crp_subscriber ON cattomail_recipients (crp_s_uuid);
 CREATE INDEX idx_crp_message ON cattomail_recipients (crp_muid);
@@ -558,6 +563,9 @@ CREATE TABLE cattomail_global_optouts (
     CONSTRAINT ck_cgo_status CHECK (cgo_status IN ('pending', 'active', 'lift_pending', 'lifted', 'rejected'))
 );
 CREATE INDEX idx_cgo_subscriber ON cattomail_global_optouts (cgo_s_id);
+-- At most one opt-out in progress or in force per subscriber (a double submit
+-- cannot report two); lifted and refused ones are history.
+CREATE UNIQUE INDEX uq_cgo_open_per_subscriber ON cattomail_global_optouts (cgo_s_id) WHERE cgo_status IN ('pending', 'active', 'lift_pending');
 SQL);
 
         $this->seedSystemData();

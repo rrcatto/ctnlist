@@ -58,7 +58,7 @@
 
 {% if global_optout %}
   <div class="alert alert-warning mt-4 d-flex flex-wrap align-items-center gap-3" role="status">
-    <div class="me-auto"><i class="bi bi-slash-circle me-1" aria-hidden="true"></i>You asked to receive <strong>no email from any sender</strong> using our mail service{{ global_optout.cgo_status == 'lift_pending' ? ' (withdrawal in progress)' : '' }}.</div>
+    <div class="me-auto"><i class="bi bi-slash-circle me-1" aria-hidden="true"></i>You asked to receive <strong>no email from any sender</strong> using our mail service{{ {lift_pending: ' (withdrawal being passed on to the mail service)', pending: ' (being passed on to the mail service)'}[global_optout.cgo_status] ?? '' }}. Withdrawing it does not re-subscribe you to our lists.</div>
     {% if global_optout.cgo_status != 'lift_pending' %}
       <form method="post" action="{{ path('global_optout_withdraw') }}">
         <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">

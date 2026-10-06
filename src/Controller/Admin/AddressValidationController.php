@@ -51,8 +51,15 @@ final class AddressValidationController extends AbstractController
             $list = $this->lists->findById($data['listId']);
             try {
                 $ids = $list === null ? [] : $validation->createForList($list['l_id'], $list['l_name'], $user->id);
-                $this->addFlash('info', $ids === [] ? 'The list has no members to validate.' : count($ids) . ' validation job(s) created.');
-                return $ids === [] ? $this->redirectToRoute('admin_validation') : $this->redirectToRoute('admin_validation_job', ['id' => $ids[0]]);
+                $total = array_sum(array_map(fn(int $id): int => $this->validations->job($id)['cvj_total'] ?? 0, $ids));
+                $this->addFlash('info', match (count($ids)) {
+                    0 => 'The list has no members to validate.',
+                    1 => 'Validating ' . $total . ' address(es) of ' . $list['l_name'] . '.',
+                    // catto-mail takes at most 10,000 addresses per job: every member is submitted, in parts.
+                    default => 'Validating all ' . $total . ' addresses of ' . $list['l_name'] . ' in ' . count($ids) . ' jobs of at most '
+                        . CattoMailConfig::MAX_VALIDATION_ADDRESSES . ' (catto-mail\'s limit per job).',
+                });
+                return count($ids) === 1 ? $this->redirectToRoute('admin_validation_job', ['id' => $ids[0]]) : $this->redirectToRoute('admin_validation');
             } catch (CattoMailException $e) {
                 $form->addError(new FormError($e->getMessage()));
             }
@@ -77,6 +84,7 @@ final class AddressValidationController extends AbstractController
             'class' => $class,
             'classifications' => self::CLASSIFICATIONS,
             'results' => $this->validations->results($id, $class, $pagination->offset(), $pagination->perPage),
+            'suggestions' => $this->validations->suggestionCount($id),
             'pagination' => $pagination,
         ]);
     }

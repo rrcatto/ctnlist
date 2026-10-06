@@ -31,6 +31,17 @@ final class WebhookSignatureTest extends TestCase
         self::assertSame(WebhookSignature::VALID, $this->verifier($now, self::CURRENT, '')->verify(self::BODY, self::header(self::BODY, $now, [self::CURRENT, self::PREVIOUS])));
     }
 
+    /** Rotation: the old secret works only while CATTOMAIL_WEBHOOK_SECRET_PREVIOUS holds it; nothing rotates automatically. */
+    public function testTheOldSecretStopsWorkingOnceThePreviousSecretIsRemoved(): void
+    {
+        $now = 1767225600;
+        $oldOnly = self::header(self::BODY, $now, [self::PREVIOUS]);
+        self::assertSame(WebhookSignature::VALID, $this->verifier($now)->verify(self::BODY, $oldOnly), 'during the overlap');
+        self::assertSame(WebhookSignature::MISMATCH, $this->verifier($now, self::CURRENT, '')->verify(self::BODY, $oldOnly), 'after removing it');
+        self::assertSame(WebhookSignature::MISMATCH, $this->verifier($now, self::CURRENT, 'whsec_wrong_previous')->verify(self::BODY, $oldOnly), 'a wrong previous secret');
+        self::assertSame(WebhookSignature::VALID, $this->verifier($now, self::CURRENT, '')->verify(self::BODY, self::header(self::BODY, $now, [self::CURRENT])));
+    }
+
     public function testAlteredBodyOrTimestampIsRejected(): void
     {
         $now = 1767225600;

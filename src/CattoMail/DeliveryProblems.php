@@ -64,18 +64,25 @@ final class DeliveryProblems
             return 'status ' . $status;
         }
         $subscriber = $this->subscribers->findIdentityByUuid($recipient['crp_s_uuid']);
-        if ($subscriber === null || !$this->outbox->claimEffect($recipient['crp_id'], $status)) {
-            return 'status ' . $status . ' (already applied)';
+        if ($subscriber === null) {
+            return 'status ' . $status . ' (subscriber no longer exists)';
         }
-        $now = $this->clock->now()->format('Y-m-d H:i:s');
-        $this->subscribers->recordDeliveryProblem($subscriber['s_id'], $status, $now);
-        if ($status === 'hard_bounced') {
-            $this->messages->incrementBounces($recipient['crp_muid']);
-        } else {
-            $this->memberships->unsubscribeAll($subscriber['s_id'], self::COMPLAINT_REASON, $now);
-        }
-        $this->queue->deleteForSubscriber($subscriber['s_uuid']);
-        return $status . ' applied to subscriber ' . $subscriber['s_uuid'];
+        // The claim and its effects commit together: a crash in between leaves the claim
+        // unmade, so a repeated event (or the worker's polling) applies it later, still once.
+        return $this->outbox->transactional(function () use ($recipient, $status, $subscriber): string {
+            if (!$this->outbox->claimEffect($recipient['crp_id'], $status)) {
+                return 'status ' . $status . ' (already applied)';
+            }
+            $now = $this->clock->now()->format('Y-m-d H:i:s');
+            $this->subscribers->recordDeliveryProblem($subscriber['s_id'], $status, $now);
+            if ($status === 'hard_bounced') {
+                $this->messages->incrementBounces($recipient['crp_muid']);
+            } else {
+                $this->memberships->unsubscribeAll($subscriber['s_id'], self::COMPLAINT_REASON, $now);
+            }
+            $this->queue->deleteForSubscriber($subscriber['s_uuid']);
+            return $status . ' applied to subscriber ' . $subscriber['s_uuid'];
+        });
     }
 
     /** catto-mail timestamps are RFC 3339 UTC; store them in PHP's timezone like every other ctnlist timestamp. */

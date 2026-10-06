@@ -28,11 +28,16 @@ final class CattoMailOptOutRepository
     /** @return OptOut */
     public function create(int $subscriberId, string $email): array
     {
-        $id = (int) $this->db->fetchOne(
-            'INSERT INTO cattomail_global_optouts (cgo_s_id, cgo_email, cgo_idempotency_key, cgo_requested_at) VALUES (?, ?, ?, ?) RETURNING cgo_id',
+        // A concurrent request for the same subscriber (double submit) finds the one already open.
+        $id = $this->db->fetchOne(
+            "INSERT INTO cattomail_global_optouts (cgo_s_id, cgo_email, cgo_idempotency_key, cgo_requested_at) VALUES (?, ?, ?, ?)
+             ON CONFLICT (cgo_s_id) WHERE cgo_status IN ('pending', 'active', 'lift_pending') DO NOTHING RETURNING cgo_id",
             [$subscriberId, $email, IdempotencyKey::generate(), $this->now()]
         );
-        return $this->find($id) ?? throw new \LogicException('Opt-out not stored.');
+        if ($id === false) {
+            return $this->currentForSubscriber($subscriberId) ?? throw new \LogicException('Opt-out not stored.');
+        }
+        return $this->find((int) $id) ?? throw new \LogicException('Opt-out not stored.');
     }
 
     /** @return OptOut|null */

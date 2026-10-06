@@ -36,8 +36,19 @@ final class OneClickUnsubscribeTest extends CattoMailTestCase
         self::assertSame(1, (int) $this->db->fetchOne('SELECT sml_unsubscribe FROM smlog WHERE sml_muid = ?', [$muid]));
         self::assertSame([], $this->fake->requests, 'ordinary unsubscribe state stays in ctnlist');
 
+        $again = $this->request('POST', $path, 'List-Unsubscribe=One-Click');
+        self::assertSame(200, $again->getStatusCode(), 'repeating it is harmless');
+        self::assertSame(1, (int) $this->db->fetchOne('SELECT sml_unsubscribe FROM smlog WHERE sml_muid = ?', [$muid]), 'and counted once');
+
         self::assertSame(404, $this->request('POST', substr($path, 0, -3) . 'AAA')->getStatusCode(), 'bad signature');
         self::assertSame(404, $this->request('POST', str_replace('/NEWS/', '/DEALS/', $path))->getStatusCode(), 'the signature is per list');
+        // Someone else's identity in the path with this signature unsubscribes nobody.
+        $other = $this->createSubscriber('ben@example.com');
+        $this->setMembership($other, $deals, true);
+        self::assertSame(404, $this->request('POST', str_replace($this->subscriberUuid($id), $this->subscriberUuid($other), str_replace('/NEWS/', '/DEALS/', $path)))->getStatusCode(), 'another subscriber');
+        self::assertSame(404, $this->request('POST', str_replace('/' . $muid . '/', '/' . str_repeat('b', 32) . '/', $path))->getStatusCode(), 'another message');
+        self::assertFalse((bool) $this->db->fetchOne('SELECT ls_unsubscribed FROM list_subscribers WHERE ls_s_id = ? AND ls_l_id = ?', [$other, $deals]));
+        self::assertSame([], $this->fake->requests, 'never a catto-mail opt-out');
     }
 
     private function request(string $method, string $path, string $body = ''): Response

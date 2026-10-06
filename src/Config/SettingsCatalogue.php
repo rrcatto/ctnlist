@@ -61,9 +61,8 @@ final class SettingsCatalogue
                 'MAIL_FROM_NAME' => ['width' => 'half', 'label' => 'From name', 'type' => 'text', 'optional' => true],
                 'MAIL_ADMIN_ADDRESS' => ['width' => 'half', 'label' => 'Administrator address', 'type' => 'email', 'optional' => true, 'help' => 'Receives copies of subscriber notifications and is shown in the footer.'],
                 'MAIL_ADMIN_NAME' => ['width' => 'half', 'default' => 'Administrator', 'label' => 'Administrator name', 'type' => 'text', 'optional' => true],
-                'MAIL_BOUNCE_ADDRESS' => ['width' => 'third', 'label' => 'Bounce address', 'type' => 'email', 'optional' => true, 'help' => 'Return path for campaign mail.'],
-                'MAIL_UNSUBSCRIBE_ADDRESS' => ['width' => 'third', 'label' => 'Unsubscribe address', 'type' => 'email', 'optional' => true],
-                'MAIL_TEST_ADDRESS' => ['width' => 'third', 'label' => 'Proof address', 'type' => 'email', 'optional' => true, 'help' => 'Default recipient of proof copies; any address will do.'],
+                'MAIL_BOUNCE_ADDRESS' => ['width' => 'half', 'label' => 'Bounce address', 'type' => 'email', 'optional' => true, 'help' => 'Return path of transactional mail (catto-mail sets its own for campaign content).'],
+                'MAIL_TEST_ADDRESS' => ['width' => 'half', 'label' => 'Proof address', 'type' => 'email', 'optional' => true, 'help' => 'Default recipient of proof copies; any address will do.'],
             ],
         ],
         'smtp' => [

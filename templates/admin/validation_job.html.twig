@@ -14,7 +14,12 @@
   {% endblock %}
 {% endembed %}
 
-<p>{{ cm.job_status(job.cvj_status) }} <span class="small text-body-secondary ms-2">{{ job.cvj_processed }} of {{ job.cvj_total }} processed{{ job.cvj_results_complete ? ' · results stored' }}{{ job.cvj_completed_at ? ' · completed ' ~ job.cvj_completed_at|slice(0, 16) }}</span></p>
+<p class="mb-1">{{ cm.job_status(job.cvj_status) }} <span class="small text-body-secondary ms-2">{{ job.cvj_processed }} of {{ job.cvj_total }} addresses processed{{ job.cvj_results_complete ? ' · results stored' }}</span></p>
+<p class="small text-body-secondary">Submitted {{ job.cvj_created_at|slice(0, 16) }}{{ job.cvj_last_checked_at ? ' · last checked ' ~ job.cvj_last_checked_at|slice(0, 16) }}{{ job.cvj_completed_at ? ' · completed ' ~ job.cvj_completed_at|slice(0, 16) }}</p>
+{% if job.cvj_counts %}
+  <p class="small mb-2">{% for c in classifications %}<span class="me-3 text-nowrap">{{ cm.classification(c) }} {{ job.cvj_counts[c] ?? 0 }}</span>{% endfor %}</p>
+{% endif %}
+{% if suggestions %}<p class="small"><i class="bi bi-lightbulb me-1" aria-hidden="true"></i>{{ suggestions }} suggested correction{{ suggestions == 1 ? '' : 's' }} (shown in the table; never applied: only the subscriber can change their address).</p>{% endif %}
 {% if job.cvj_error %}<div class="alert alert-danger small text-break" role="alert">{{ job.cvj_error }}</div>{% endif %}
 
 <form method="get" class="card card-body bg-body-tertiary mb-3" role="search" aria-label="Filter results">

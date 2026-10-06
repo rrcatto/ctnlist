@@ -190,19 +190,22 @@ final class CattoMailSendRepository
      */
     public function updateJobState(int $jobId, string $status, ?array $summary, ?string $completedAt = null): bool
     {
-        $job = $this->job($jobId);
-        if ($job === null) {
-            return false;
-        }
-        $order = ['open' => 0, 'ready' => 1, 'queued' => 2, 'processing' => 3, 'dispatched' => 4, 'completed' => 5, 'failed' => 5, 'cancelled' => 5];
-        $advance = isset($order[$status]) && $order[$status] > ($order[$job['csj_status']] ?? 0);
-        $this->db->executeStatement(
-            'UPDATE cattomail_send_jobs SET csj_status = ?, csj_summary = COALESCE(?, csj_summary), csj_last_checked_at = ?,
-                csj_completed_at = COALESCE(csj_completed_at, ?) WHERE csj_id = ?',
-            [$advance ? $status : $job['csj_status'], $summary === null ? null : json_encode($summary), $this->now(),
-                $advance && in_array($status, ['completed', 'failed', 'cancelled'], true) ? ($completedAt ?? $this->now()) : null, $jobId]
+        // One statement, compared against the row as it is now: a webhook and the worker updating the
+        // same job at once can never move it backwards. catto-mail's `collecting` (and any unknown
+        // value) ranks below everything, so it never replaces ctnlist's own open/ready.
+        $rank = static fn(string $column): string => "CASE {$column} WHEN 'open' THEN 1 WHEN 'ready' THEN 2 WHEN 'queued' THEN 3 WHEN 'processing' THEN 4
+            WHEN 'dispatched' THEN 5 WHEN 'completed' THEN 6 WHEN 'failed' THEN 6 WHEN 'cancelled' THEN 6 ELSE 0 END";
+        $terminal = in_array($status, ['completed', 'failed', 'cancelled'], true);
+        $row = $this->db->fetchAssociative(
+            'UPDATE cattomail_send_jobs SET
+                csj_status = CASE WHEN ' . $rank(':status') . ' > ' . $rank('csj_status') . ' THEN :status ELSE csj_status END,
+                csj_completed_at = CASE WHEN :terminal AND ' . $rank(':status') . ' > ' . $rank('csj_status') . ' THEN COALESCE(csj_completed_at, :completed) ELSE csj_completed_at END,
+                csj_summary = COALESCE(:summary, csj_summary), csj_last_checked_at = :now
+             WHERE csj_id = :id RETURNING csj_status',
+            ['status' => $status, 'terminal' => $terminal ? 'true' : 'false', 'completed' => $completedAt ?? $this->now(),
+                'summary' => $summary === null ? null : json_encode($summary), 'now' => $this->now(), 'id' => $jobId]
         );
-        return $advance;
+        return $row !== false && $row['csj_status'] === $status;
     }
 
     public function markJobSubmitted(int $jobId, string $remoteStatus): void

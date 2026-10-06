@@ -74,6 +74,52 @@ final class CattoMailWebhookRepository
         ));
     }
 
+    public const FILTERS = ['' => 'All', 'unprocessed' => 'Not processed yet', 'failed' => 'Failed', 'ignored' => 'Ignored (unknown type or test)'];
+
+    /**
+     * One page of received events for the diagnostic list. The raw body stays
+     * in the database; only the references needed to link an event to ctnlist
+     * (a send job, a validation job) are read from it.
+     *
+     * @return list<array{cwe_event_id: string, cwe_type: string, cwe_received_at: string, cwe_processed_at: ?string, cwe_outcome: ?string,
+     *     cwe_error: ?string, cwe_attempts: int, send_job_id: ?int, validation_job_id: ?int}>
+     */
+    public function page(string $filter, int $offset, int $limit): array
+    {
+        $rows = $this->db->fetchAllAssociative(
+            "SELECT e.cwe_event_id, e.cwe_type, e.cwe_received_at, e.cwe_processed_at, e.cwe_outcome, e.cwe_error, e.cwe_attempts,
+                    j.csj_id, v.cvj_id
+             FROM cattomail_webhook_events e
+             CROSS JOIN LATERAL (SELECT CASE WHEN pg_input_is_valid(e.cwe_payload, 'jsonb') THEN e.cwe_payload::jsonb END AS body) p
+             LEFT JOIN cattomail_send_jobs j ON e.cwe_type LIKE 'send.%' AND j.csj_remote_id::text = (p.body #>> '{data,id}')
+                 OR e.cwe_type LIKE 'message.%' AND j.csj_remote_id::text = (p.body #>> '{data,message,send_job_id}')
+             LEFT JOIN cattomail_validation_jobs v ON e.cwe_type LIKE 'validation.%' AND v.cvj_remote_id::text = (p.body #>> '{data,id}')"
+            . self::where($filter) . ' ORDER BY e.cwe_id DESC LIMIT ' . max(1, $limit) . ' OFFSET ' . max(0, $offset)
+        );
+        return array_map(static fn(array $r): array => [
+            'cwe_event_id' => (string) $r['cwe_event_id'], 'cwe_type' => (string) $r['cwe_type'], 'cwe_received_at' => (string) $r['cwe_received_at'],
+            'cwe_processed_at' => $r['cwe_processed_at'] === null ? null : (string) $r['cwe_processed_at'],
+            'cwe_outcome' => $r['cwe_outcome'] === null ? null : (string) $r['cwe_outcome'], 'cwe_error' => $r['cwe_error'] === null ? null : (string) $r['cwe_error'],
+            'cwe_attempts' => (int) $r['cwe_attempts'],
+            'send_job_id' => $r['csj_id'] === null ? null : (int) $r['csj_id'], 'validation_job_id' => $r['cvj_id'] === null ? null : (int) $r['cvj_id'],
+        ], $rows);
+    }
+
+    public function count(string $filter): int
+    {
+        return (int) $this->db->fetchOne('SELECT COUNT(*) FROM cattomail_webhook_events e' . self::where($filter));
+    }
+
+    private static function where(string $filter): string
+    {
+        return match ($filter) {
+            'unprocessed' => ' WHERE e.cwe_processed_at IS NULL',
+            'failed' => " WHERE e.cwe_outcome LIKE 'failed:%' OR (e.cwe_processed_at IS NULL AND e.cwe_error IS NOT NULL)",
+            'ignored' => " WHERE e.cwe_outcome LIKE 'ignored%' OR e.cwe_outcome = 'test event'",
+            default => '',
+        };
+    }
+
     private function now(): string
     {
         return $this->clock->now()->format('Y-m-d H:i:s');

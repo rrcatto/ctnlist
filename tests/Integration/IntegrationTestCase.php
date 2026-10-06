@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Tests\Integration;
 
+use App\CattoMail\CattoMailActivity;
 use App\CattoMail\CattoMailClient;
 use App\CattoMail\CattoMailConfig;
 use App\Tests\Support\FakeCattoMail;
@@ -53,6 +54,7 @@ abstract class IntegrationTestCase extends KernelTestCase
             new NullLogger(),
             static function (int $seconds): void {
             },
+            $this->service(CattoMailActivity::class),
         ));
         return $fake;
     }

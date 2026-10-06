@@ -200,6 +200,12 @@ final class CattoMailValidationRepository
         );
     }
 
+    /** Results with a suggested correction (shown to administrators, never applied). */
+    public function suggestionCount(int $jobId): int
+    {
+        return (int) $this->db->fetchOne('SELECT COUNT(*) FROM cattomail_validation_addresses WHERE cva_cvj_id = ? AND cva_suggested_address IS NOT NULL', [$jobId]);
+    }
+
     public function resultCount(int $jobId, string $classification): int
     {
         $params = ['job' => $jobId];
