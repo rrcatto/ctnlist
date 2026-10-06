@@ -1,4 +1,4 @@
-# ctnlist 6.0.1
+# ctnlist 6.0.2
 
 ctnlist is a web-based mailing-list application created by Richard Royston Catto in 2009. Versions 5.0.x and 6.0.x are an incremental modernisation of the working v5.0 application, not a replacement of its established workflows.
 
@@ -13,6 +13,8 @@ Version 5.0.5 moves every subscriber-facing page onto Symfony and the new servic
 Version 6.0 moves the administration pages (messages and templates, queueing, sending and proofs, subscribers, bulk operations, import, export, synchronisation and the Ecwid endpoint) and the Send Log, Site Log and message activity reports onto Symfony. All mail now goes through the Symfony mailers, the Fat-Free Framework, its bridge and the legacy code are removed, the Site Log again records every request, and the code passes PHPStan level 6. Import logs and export files are written to `APP_LOG_DIR` (default: the installation's `logs/`).
 
 Version 6.0.1 removes the defunct Ecwid store (the Store page, its links, `POST /ecwid-subscribe` and `APP_STORE_URL`; a leftover `{STORE}` placeholder renders as nothing) and rebuilds the frontend on plain Bootstrap 5.3: a sticky header with an administration bar that shows only the tools each user's permissions allow, a simple footer, Bootstrap Icons and the system font. Unify, Font Awesome, jQuery and the Google Fonts request are gone; the application's CSS and JavaScript are served by Symfony AssetMapper, and CKEditor loads only on the editors. Every administration screen follows one pattern (page header with the main actions, filter panels, responsive tables, status badges, empty states, confirmation before deleting, clearing or suppressing). `/subscribe` is now a subscribe form for visitors and a list of the subscriber's lists when signed in, with list descriptions. Custom roles can be renamed, deleted and removed from subscribers, each role lists its members, subscribers are found by search, and nobody but an administrator can hand out permissions they do not hold. Proofs go to any address without a subscriber record, and their subscriber links explain that a proof has no subscriber. Sign-in links sent to confirm a list say so. A new Settings page lets administrators override selected `.env` settings, with SMTP secrets encrypted by `APP_SETTINGS_KEY` (see [Settings page](#settings-page)).
+
+Version 6.0.2 arranges the Settings page as tabs, one per section, each with its own form and Save button; fields are laid out on a grid, the SMTP tab shows the main server and each failover server as its own block, and the URL (e.g. `/settings#smtp`) opens and returns to a tab.
 
 ## Platform and upgrades
 
@@ -133,7 +135,7 @@ dev/podman/     development container files
 
 ## Deployment
 
-The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.0.1/` (the path is set in `public_html/index.php`). Run `composer install --no-dev` there.
+The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.0.2/` (the path is set in `public_html/index.php`). Run `composer install --no-dev` there.
 
 Each installation has its own directory containing:
 

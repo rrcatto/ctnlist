@@ -72,9 +72,13 @@
     margin-inline: auto;
 }
 
-/* In-page section navigation below the sticky header (Settings). */
-.app-section-nav {
-    top: 7.5rem;
+/* Tabs scroll sideways on narrow screens instead of wrapping (Settings). */
+.app-tabs {
+    scrollbar-width: thin;
+}
+
+.app-tabs .nav-link {
+    white-space: nowrap;
 }
 
 .border-dashed {

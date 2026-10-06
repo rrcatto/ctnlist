@@ -73,9 +73,13 @@ final class LayoutTest extends SmokeTestCase
         self::assertMatchesRegularExpression('/<title>.+ \| Home<\/title>/', $body);
         self::assertMatchesRegularExpression('/<header class="[^"]*\bsticky-top\b/', $body, 'sticky header');
         self::assertStringContainsString('aria-label="Main navigation"', $body);
-        foreach (['/', '/subscribe', '/archives', '/contact-form', '/login'] as $href) {
+        foreach (['/', '/subscribe', '/contact-form', '/login'] as $href) {
             self::assertStringContainsString('href="' . $href . '"', $body, "public link {$href}");
         }
+        // Archives appear only while public archives are enabled: the Settings override, else .env.
+        $override = self::$db->query("SELECT o_value FROM options WHERE o_key = 'setting:APP_ARCHIVE_ENABLED'")->fetchColumn();
+        $archives = filter_var($override !== false ? $override : ($_ENV['APP_ARCHIVE_ENABLED'] ?? 'false'), FILTER_VALIDATE_BOOLEAN);
+        self::assertSame($archives, str_contains($body, 'href="/archives"'), 'Archives link follows APP_ARCHIVE_ENABLED');
         self::assertMatchesRegularExpression('/class="nav-link active" href="\/" aria-current="page"/', $body, 'current page marked');
         self::assertStringNotContainsString('aria-label="Administration"', $body);
         self::assertStringNotContainsString('href="/logout"', $body);

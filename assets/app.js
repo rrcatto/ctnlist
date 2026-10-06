@@ -20,3 +20,21 @@ document.addEventListener('submit', (event) => {
         event.preventDefault();
     }
 });
+
+// Tab sets marked data-remember-tab keep the active tab in the URL hash (the
+// tab button's data-tab-hash; panes have other ids, so the browser does not
+// jump), and opening the page at …#hash shows that tab with the tab bar just
+// below the sticky header.
+document.querySelectorAll('[data-remember-tab]').forEach((tabs) => {
+    const hash = window.location.hash.slice(1);
+    const button = hash ? tabs.querySelector(`[data-tab-hash="${CSS.escape(hash)}"]`) : null;
+    if (button) {
+        window.bootstrap?.Tab.getOrCreateInstance(button).show();
+        const header = document.querySelector('.app-header');
+        const top = tabs.getBoundingClientRect().top + window.scrollY - (header?.offsetHeight ?? 0) - 16;
+        window.scrollTo(0, Math.max(0, top));
+    }
+    tabs.addEventListener('shown.bs.tab', (event) => {
+        window.history.replaceState(null, '', '#' + event.target.dataset.tabHash);
+    });
+});
