@@ -1,0 +1,9 @@
+{# Flash messages (addFlash('info'|'danger', …)); they close themselves after a few seconds (assets/app.js). #}
+{% for type, messages in app.flashes %}
+  {% for message in messages %}
+    <div class="alert alert-{{ type }} alert-dismissible fade show" role="alert" data-autoclose>
+      {{ message }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+  {% endfor %}
+{% endfor %}

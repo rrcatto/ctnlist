@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Security;
 
+use App\Config\RuntimeSettings;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\Cookie;
 use Symfony\Component\HttpFoundation\Request;
@@ -17,10 +18,14 @@ final class AuthCookie
 {
     private const TOKEN_PATTERN = '/^[A-Za-z0-9_-]{43}$/';
 
+    /** Session lifetime in seconds (AUTH_SESSION_TTL, may be overridden in Settings). */
+    public readonly int $ttl;
+
     public function __construct(
         #[Autowire(env: 'AUTH_SESSION_COOKIE')] public readonly string $name,
-        #[Autowire(env: 'int:AUTH_SESSION_TTL')] public readonly int $ttl,
+        RuntimeSettings $settings,
     ) {
+        $this->ttl = $settings->int('AUTH_SESSION_TTL', 86400);
     }
 
     /** 32 random bytes, base64url without padding (43 characters). */

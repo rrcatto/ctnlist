@@ -13,7 +13,8 @@ use Symfony\Component\HttpKernel\Kernel as BaseKernel;
 /**
  * One shared code tree serves several installations. The project directory is
  * the shared tree; each installation (the directory above its public_html,
- * holding .env) gets its own writable var/ for the container cache and logs.
+ * holding .env) gets its own writable var/ for the container cache and logs,
+ * and its own public_html/ (web root, including compiled assets).
  */
 final class Kernel extends BaseKernel
 {
@@ -52,6 +53,25 @@ final class Kernel extends BaseKernel
 
     protected function build(ContainerBuilder $container): void
     {
+        // AssetMapper writes compiled assets below the public directory, which
+        // FrameworkBundle takes from the shared tree's composer.json. Each
+        // installation has its own web root, so point it there instead.
+        $container->addCompilerPass(new class implements CompilerPassInterface {
+            public function process(ContainerBuilder $container): void
+            {
+                if (!$container->hasDefinition('asset_mapper.local_public_assets_filesystem')) {
+                    return;
+                }
+                $publicDir = (string) $container->getParameter('kernel.instance_dir') . '/public_html';
+                $prefix = (string) $container->getDefinition('asset_mapper.public_assets_path_resolver')->getArgument(0);
+                $parameters = $container->getParameterBag();
+                $container->getDefinition('asset_mapper.local_public_assets_filesystem')
+                    ->setArgument(0, $parameters->escapeValue($publicDir));
+                $container->getDefinition('asset_mapper.compiled_asset_mapper_config_reader')
+                    ->setArgument(0, $parameters->escapeValue(rtrim($publicDir . '/' . ltrim($prefix, '/'), '/')));
+            }
+        });
+
         if ($this->environment === 'test') {
             // Integration tests fetch services that nothing uses yet; keep them
             // (and make them public) instead of letting the container prune them.

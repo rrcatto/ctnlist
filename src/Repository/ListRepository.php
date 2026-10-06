@@ -44,7 +44,7 @@ final class ListRepository
         return $row === false ? null : $this->hydrate($row);
     }
 
-    /** @return MailingList|null by id, shortcode or name (case-insensitive), as v5 integrations pass them */
+    /** @return MailingList|null by id, shortcode or name (case-insensitive), as SYNC_DATABASES_JSON entries name them */
     public function resolve(string $list): ?array
     {
         $list = trim($list);

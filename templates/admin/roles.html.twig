@@ -1,64 +1,143 @@
 {% extends 'base.html.twig' %}
+{% import 'admin/_macros.html.twig' as ui %}
 
 {% block title %}Roles and ACL{% endblock %}
 
 {% block content %}
-<h1 class="h4">Roles and access control</h1>
+{% include 'layout/_page_header.html.twig' with {title: 'Roles and access control', description: 'Roles grant permissions; subscribers hold roles. Pages and actions check permissions, so a custom role can be given exactly the tools it needs. System roles are fixed.'} %}
 
-{% for role in roles %}
-  <form action="{{ path('admin_roles_permissions') }}" method="post" class="card card-body mb-3">
-    <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-    <input type="hidden" name="role_id" value="{{ role.r_id }}">
-    <h2 class="h5">{{ role.r_name }}{% if role.r_system %} <span class="badge text-bg-secondary">System</span>{% endif %}</h2>
-    <p>{{ role.r_description }}</p>
-    <div class="row">
-      {% for permission in permissions %}
-        {% set id = 'rp-' ~ role.r_id ~ '-' ~ permission.ap_id %}
-        <div class="col-md-6">
-          <div class="form-check">
-            <input class="form-check-input" type="checkbox" name="permission_ids[]" value="{{ permission.ap_id }}" id="{{ id }}"
-              {{- permission.ap_id in (granted[role.r_id] ?? []) ? ' checked' }}{{ role.r_system ? ' disabled' }}>
-            <label class="form-check-label" for="{{ id }}">{{ permission.ap_key }}</label>
-          </div>
-        </div>
+<div class="card mb-4">
+  <div class="card-header fw-semibold">Roles</div>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light"><tr><th scope="col">Role</th><th scope="col">Type</th><th scope="col" class="text-end">Members</th><th scope="col" class="text-end">Permissions</th><th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th></tr></thead>
+      <tbody>
+      {% for role in roles %}
+        <tr>
+          <td>
+            <a class="fw-semibold" href="{{ path('admin_role', {id: role.r_id}) }}">{{ role.r_name }}</a> <code class="small">{{ role.r_key }}</code>
+            {% if role.r_description %}<div class="small text-body-secondary d-none d-md-block">{{ role.r_description }}</div>{% endif %}
+          </td>
+          <td>{{ ui.system_badge(role.r_system) }}</td>
+          <td class="text-end">{{ member_counts[role.r_id] ?? 0 }}</td>
+          <td class="text-end">{{ (granted[role.r_id] ?? [])|length }}</td>
+          <td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="{{ path('admin_role', {id: role.r_id}) }}">{{ role.r_system ? 'View' : 'Manage' }}</a></td>
+        </tr>
       {% endfor %}
-    </div>
-    {% if not role.r_system %}
-      <button class="btn btn-primary mt-3" type="submit">Save permissions</button>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card mb-4" id="assign">
+  <div class="card-header fw-semibold">Assign a role to a subscriber</div>
+  <div class="card-body">
+    <form method="get" action="{{ path('admin_roles') }}#assign" class="row g-2 align-items-end mb-3" role="search" aria-label="Find a subscriber">
+      <div class="col-md-8">
+        <label class="form-label" for="role-search">Find a subscriber</label>
+        <input class="form-control" id="role-search" type="search" name="q" value="{{ search }}" placeholder="Email, first or last name, or UUID" aria-describedby="role-search-help">
+        <div class="form-text" id="role-search-help">Shows up to 20 matching subscribers.</div>
+      </div>
+      <div class="col-md-4 d-flex gap-2 mb-md-4">
+        <button class="btn btn-primary" type="submit"><i class="bi bi-search me-1" aria-hidden="true"></i>Search</button>
+        {% if search %}<a class="btn btn-outline-secondary" href="{{ path('admin_roles') }}#assign">Clear</a>{% endif %}
+      </div>
+    </form>
+
+    {% if search %}
+      {% if results is empty %}
+        {% include 'layout/_empty_state.html.twig' with {icon: 'person', message: 'No subscriber matches “' ~ search ~ '”.'} %}
+      {% else %}
+        {% set back = path('admin_roles', {q: search}) %}
+        <ul class="list-group">
+          {% for subscriber in results %}
+            {% set current = held[subscriber.s_id] ?? [] %}
+            {% set current_keys = current|map(role => role.r_key) %}
+            {% set assignable = roles|filter(role => role.r_key not in current_keys) %}
+            <li class="list-group-item d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 py-3">
+              <div class="me-md-3 text-break">
+                <div class="fw-semibold">{{ subscriber.s_email }}</div>
+                {% if (subscriber.s_fname ~ subscriber.s_lname)|trim %}<div class="small text-body-secondary">{{ (subscriber.s_fname ~ ' ' ~ subscriber.s_lname)|trim }}</div>{% endif %}
+                <div class="mt-1"><span class="visually-hidden">Current roles:</span>{% for role in current %}<span class="badge {{ role.r_system ? 'text-bg-dark' : 'text-bg-info' }} me-1">{{ role.r_name }}</span>{% else %}<span class="small text-body-secondary">No roles</span>{% endfor %}</div>
+              </div>
+              {% if assignable is empty %}
+                <span class="small text-body-secondary">Holds every role</span>
+              {% else %}
+                <form method="post" action="{{ path('admin_roles_assign') }}" class="d-flex gap-2 flex-shrink-0">
+                  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+                  <input type="hidden" name="subscriber_id" value="{{ subscriber.s_id }}">
+                  <input type="hidden" name="back" value="{{ back }}">
+                  <label class="visually-hidden" for="assign-role-{{ subscriber.s_id }}">Role for {{ subscriber.s_email }}</label>
+                  <select class="form-select form-select-sm" id="assign-role-{{ subscriber.s_id }}" name="role_key" required>
+                    <option value="" selected disabled>Choose a role…</option>
+                    {% for role in assignable|sort((a, b) => a.r_system <=> b.r_system) %}<option value="{{ role.r_key }}">{{ role.r_name }}{{ role.r_system ? ' (system)' }}</option>{% endfor %}
+                  </select>
+                  <button class="btn btn-sm btn-primary" type="submit">Assign</button>
+                </form>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+        {% if more_results %}<p class="small text-body-secondary mt-2 mb-0">More subscribers match; refine the search to see them.</p>{% endif %}
+      {% endif %}
+    {% else %}
+      <p class="small text-body-secondary mb-0">Search for a subscriber to see the roles they hold and assign another. To remove a custom role from someone, open the role.</p>
     {% endif %}
-  </form>
-{% endfor %}
-
-<form action="{{ path('admin_roles_create') }}" method="post" class="card card-body mb-4">
-  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-  <h2 class="h5">Create custom role</h2>
-  <div class="row g-3">
-    <div class="col-md-4"><label class="form-label" for="role-key">Key</label><input class="form-control" id="role-key" name="key" pattern="[a-z0-9._-]+" maxlength="64" required></div>
-    <div class="col-md-4"><label class="form-label" for="role-name">Name</label><input class="form-control" id="role-name" name="name" maxlength="100" required></div>
-    <div class="col-md-4"><label class="form-label" for="role-description">Description</label><input class="form-control" id="role-description" name="description"></div>
-    <div class="col-12"><button class="btn btn-primary">Create role</button></div>
   </div>
-</form>
+</div>
 
-<form action="{{ path('admin_roles_assign') }}" method="post" class="card card-body">
-  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-  <h2 class="h5">Assign role to subscriber</h2>
-  <div class="row g-3">
-    <div class="col-md-6">
-      <select class="form-select" name="subscriber_id" aria-label="Subscriber">
-        {% for subscriber in subscribers %}
-          <option value="{{ subscriber.s_id }}">{{ subscriber.s_email }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="col-md-4">
-      <select class="form-select" name="role_key" aria-label="Role">
-        {% for role in roles %}
-          <option value="{{ role.r_key }}">{{ role.r_name }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="col-md-2"><button class="btn btn-primary">Assign</button></div>
+<div class="row g-4 mb-4">
+  <div class="col-lg-6">
+    <form action="{{ path('admin_roles_create') }}" method="post" class="card h-100">
+      <div class="card-header fw-semibold">Create custom role</div>
+      <div class="card-body">
+        <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+        <div class="mb-3">
+          <label class="form-label" for="role-key">Key <span class="text-danger" aria-hidden="true">*</span></label>
+          <input class="form-control" id="role-key" name="key" pattern="[a-z0-9._-]+" maxlength="64" required aria-describedby="role-key-help">
+          <div class="form-text" id="role-key-help">Lower-case letters, numbers, dots, dashes and underscores. The key cannot be changed later; the name and description can.</div>
+        </div>
+        <div class="mb-3"><label class="form-label" for="role-name">Name <span class="text-danger" aria-hidden="true">*</span></label><input class="form-control" id="role-name" name="name" maxlength="100" required></div>
+        <div class="mb-0"><label class="form-label" for="role-description">Description</label><input class="form-control" id="role-description" name="description"></div>
+      </div>
+      <div class="card-footer"><button class="btn btn-primary" type="submit"><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Create role</button></div>
+    </form>
   </div>
-</form>
+  <div class="col-lg-6">
+    <div class="card h-100">
+      <div class="card-header fw-semibold">Who can change what</div>
+      <div class="card-body small">
+        <p><code>roles.manage</code> opens these pages: create, rename and delete custom roles, assign roles and remove custom roles from subscribers.</p>
+        <p><code>acl.manage</code> additionally allows changing a custom role’s permissions (it needs <code>roles.manage</code> to reach them).</p>
+        <p class="mb-0">Only administrators can hand out permissions they do not hold themselves. System roles are fixed: <strong>Subscriber</strong> is held by everyone, and <strong>Administrator</strong> holds every permission.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<details>
+  <summary class="h5 mb-3">Permissions by role</summary>
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle">
+      <thead class="table-light">
+        <tr>
+          <th scope="col">Permission</th>
+          {% for role in roles %}<th scope="col" class="text-center">{{ role.r_name }}</th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+      {% for permission in permissions %}
+        <tr>
+          <th scope="row" class="fw-normal"><code>{{ permission.ap_key }}</code><div class="small text-body-secondary">{{ permission.ap_name }}</div></th>
+          {% for role in roles %}
+            <td class="text-center">
+              {% if permission.ap_id in (granted[role.r_id] ?? []) %}<i class="bi bi-check-circle-fill text-success" aria-hidden="true"></i><span class="visually-hidden">granted</span>{% else %}<span class="text-body-tertiary" aria-hidden="true">–</span><span class="visually-hidden">not granted</span>{% endif %}
+            </td>
+          {% endfor %}
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</details>
 {% endblock %}

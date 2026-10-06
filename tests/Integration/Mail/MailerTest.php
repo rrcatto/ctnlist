@@ -40,10 +40,17 @@ final class MailerTest extends IntegrationTestCase
 
         self::assertTrue($mailer->sendMagicLink('jane@example.com', $uuid, 'https://x/auth/verify?token=t', 1800));
         self::assertStringContainsString('expires in 30 minutes', (string) $this->email()->getTextBody());
+        self::assertStringContainsString('sign-in link', (string) $this->email()->getSubject());
         self::assertSame(['MAGIC-LINK', ''], $this->lastSendLog());
 
+        self::assertTrue($mailer->sendMagicLink('jane@example.com', $uuid, 'https://x/auth/verify?token=t', 1800, 'News & views'));
+        self::assertSame('Confirm your subscription to News & views', $this->email(1)->getSubject(), 'says why it was sent');
+        self::assertStringContainsString('confirm your subscription to News &amp; views', (string) $this->email(1)->getHtmlBody());
+        self::assertStringNotContainsString('Sign in', (string) $this->email(1)->getTextBody());
+        self::assertSame(['MAGIC-LINK', ''], $this->lastSendLog(), 'the same secure sign-in link');
+
         self::assertTrue($mailer->sendListConfirmationInvitation('jane@example.com', $uuid, 'news', 'News'));
-        self::assertStringContainsString('/confirm/' . $uuid . '/NEWS', (string) $this->email(1)->getTextBody());
+        self::assertStringContainsString('/confirm/' . $uuid . '/NEWS', (string) $this->email(2)->getTextBody());
         self::assertSame(['SUBSCRIBE', 'NEWS'], $this->lastSendLog());
     }
 

@@ -6,10 +6,13 @@
   "require": {
     "php": ">=8.4.1 <9.0",
     "ext-json": "*",
+    "ext-openssl": "*",
     "ext-pdo": "*",
     "doctrine/dbal": "^4.4",
     "doctrine/doctrine-bundle": "^3.3",
     "robmorgan/phinx": "^0.16.12",
+    "symfony/asset": "8.1.*",
+    "symfony/asset-mapper": "8.1.*",
     "symfony/console": "8.1.*",
     "symfony/dotenv": "8.1.*",
     "symfony/framework-bundle": "8.1.*",

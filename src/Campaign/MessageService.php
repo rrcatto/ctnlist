@@ -16,7 +16,8 @@ use Psr\Clock\ClockInterface;
 /**
  * Campaign message lifecycle: saving drafts exactly as the administrator
  * supplied them, preparing a message for its first queueing, and direct
- * sends of campaign content (proof, resend).
+ * sends of campaign content (proofs to any address; resends and forwards to
+ * subscribers).
  *
  * @phpstan-import-type Message from MessageRepository
  * @phpstan-import-type MessageInput from MessageRepository
@@ -79,12 +80,59 @@ final class MessageService
     }
 
     /**
-     * Send campaign content directly to the subscriber with this address,
-     * through the campaign mail path (Send Log and smlog are updated). The
-     * list context is the one given, else the one recorded when the message
-     * was sent to them, else the message's first list, else none.
+     * A proof copy to any valid address chosen by the administrator. The
+     * address needs no subscriber record and none is created or looked up:
+     * the message is rendered for TemplateRenderer::PROOF_RECIPIENT and
+     * logged only in the Send Log (type PROOF, no subscriber); queue, smlog,
+     * consent and list memberships are untouched.
      *
-     * @param string $type PROOF, RESEND or FORWARD-MESSAGE
+     * @return bool whether the mail server accepted it
+     * @throws \InvalidArgumentException for an invalid address
+     * @throws MessageNotFound
+     */
+    public function sendProof(string $muid, string $email): bool
+    {
+        $email = trim($email);
+        if (filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+            throw new \InvalidArgumentException('Enter a valid email address for the proof.');
+        }
+        $message = $this->messages->findByMuid($muid) ?? throw new MessageNotFound($muid);
+        $server = $this->servers->transactionalServer();
+        if ($server === null) {
+            return false;
+        }
+        $list = $this->messages->lists($message['m_id'])[0]['l_shortcode'] ?? '';
+        $rendered = $this->renderer->renderProof($message, $list);
+        $connection = $this->connections->create();
+        if (!$connection->open($server)) {
+            return false;
+        }
+        try {
+            return $this->mailer->send($connection, new CampaignDelivery(
+                $message['m_uniqid'],
+                $message['m_subject'],
+                $message['m_from_name'],
+                $message['m_from_address'],
+                null,
+                $email,
+                '',
+                $list,
+                $rendered->html,
+                $rendered->text,
+            ), 'PROOF');
+        } finally {
+            $connection->close();
+        }
+    }
+
+    /**
+     * Send campaign content directly to the subscriber with this address
+     * (resend, forward copy), through the campaign mail path (Send Log and
+     * smlog are updated). The list context is the one given, else the one
+     * recorded when the message was sent to them, else the message's first
+     * list, else none.
+     *
+     * @param string $type RESEND or FORWARD-MESSAGE
      */
     public function sendTo(string $muid, string $email, string $type = 'RESEND', string $listShortcode = ''): bool
     {

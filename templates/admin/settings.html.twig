@@ -1,0 +1,149 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Settings{% endblock %}
+
+{#
+  Settings page. Secret values are never written into the page: SMTP
+  passwords are shown only as set / not set, and an empty password field
+  keeps the current one.
+#}
+{% macro source(field) %}
+  {%- if field.source == 'database' -%}
+    <span class="badge text-bg-primary" title="{{ field.override.by ? 'Changed by ' ~ field.override.by : '' }}{{ field.override.at ? ' on ' ~ field.override.at|slice(0, 16) : '' }}">Database</span>
+  {%- elseif field.source == 'env' -%}
+    <span class="badge text-bg-light border">.env</span>
+  {%- else -%}
+    <span class="badge text-bg-secondary">Default</span>
+  {%- endif -%}
+{% endmacro %}
+
+{% block content %}
+{% import _self as s %}
+{% include 'layout/_page_header.html.twig' with {title: 'Settings', description: 'Each setting comes from the database (a value changed here), else the installation’s .env file, else a built-in default. Changes apply from the next page or email; .env is never changed. Setting a value back to .env, or resetting it, makes .env apply again. Secret keys, database settings, URLs and paths stay in .env.'} %}
+
+<div class="row g-4">
+  <nav class="col-lg-3 d-none d-lg-block" aria-label="Settings sections">
+    <div class="list-group sticky-top app-section-nav">
+      {% for key, group in groups %}<a class="list-group-item list-group-item-action" href="#{{ key }}">{{ group.label }}</a>{% endfor %}
+    </div>
+  </nav>
+
+  <div class="col-lg-9">
+    {% for key, group in groups %}
+      {% set overridden = group.settings|keys|filter(n => fields[n].source == 'database') %}
+      <section class="card mb-4" id="{{ key }}" aria-labelledby="{{ key }}-title">
+        <form method="post" action="{{ path('admin_settings_save', {group: key}) }}">
+          <div class="card-header">
+            <h2 class="h5 mb-0" id="{{ key }}-title">{{ group.label }}</h2>
+            <div class="small text-body-secondary">{{ group.description }}</div>
+          </div>
+          <div class="card-body">
+            <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+            {% if key == 'smtp' and cipher_problem %}
+              <div class="alert alert-warning small" role="note"><i class="bi bi-key me-1" aria-hidden="true"></i>SMTP settings can only be changed here once an encryption key is configured: {{ cipher_problem }}</div>
+            {% endif %}
+            {% for name, setting in group.settings %}
+              {% set field = fields[name] %}
+              {% set id = 'setting-' ~ name|lower %}
+              <div class="mb-4">
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                  <label class="form-label mb-0 fw-semibold" for="{{ setting.type == 'dsn' ? id ~ '-host' : (setting.type == 'servers' ? id ~ '-0-host' : id) }}">{{ setting.label }}</label>
+                  {{ s.source(field) }}
+                  <code class="small text-body-secondary">{{ name }}</code>
+                  {% if field.source == 'database' %}
+                    <button class="btn btn-link btn-sm p-0 ms-auto" type="submit" formaction="{{ path('admin_setting_reset', {name: name}) }}" formnovalidate><i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>Reset override</button>
+                  {% endif %}
+                </div>
+
+                {% if field.secret_problem %}
+                  <div class="alert alert-danger small py-2" role="alert"><i class="bi bi-exclamation-octagon me-1" aria-hidden="true"></i>The stored value cannot be used: {{ field.secret_problem }} Mail that needs it fails until it is entered again or the override is reset.</div>
+                {% endif %}
+
+                {% if setting.type == 'bool' %}
+                  <div class="form-check form-switch">
+                    <input type="hidden" name="{{ name }}" value="false">
+                    <input class="form-check-input" type="checkbox" role="switch" id="{{ id }}" name="{{ name }}" value="true"{{ field.value in ['true', '1', 'yes', 'on'] ? ' checked' }}>
+                    <label class="form-check-label small" for="{{ id }}">Enabled</label>
+                  </div>
+                {% elseif setting.type == 'textarea' %}
+                  <textarea class="form-control" id="{{ id }}" name="{{ name }}" rows="3"{% if field.default %} placeholder="Default: {{ field.default }}"{% endif %}>{{ field.value }}</textarea>
+                {% elseif setting.type == 'dsn' %}
+                  {% set dsn = field.dsn %}
+                  {% if dsn.other %}<div class="alert alert-secondary small py-2">Currently <code>{{ dsn.other }}</code>, which is not an SMTP server; enter a server to replace it.</div>{% endif %}
+                  <div class="row g-2">
+                    <div class="col-sm-4">
+                      <label class="form-label small" for="{{ id }}-scheme">Security</label>
+                      <select class="form-select" id="{{ id }}-scheme" name="smtp_scheme">
+                        <option value="smtp"{{ dsn.scheme == 'smtp' ? ' selected' }}>SMTP / STARTTLS</option>
+                        <option value="smtps"{{ dsn.scheme == 'smtps' ? ' selected' }}>SMTP over TLS</option>
+                      </select>
+                    </div>
+                    <div class="col-sm-5"><label class="form-label small" for="{{ id }}-host">Server</label><input class="form-control" id="{{ id }}-host" name="smtp_host" value="{{ dsn.host }}" placeholder="mail.example.com" autocomplete="off"></div>
+                    <div class="col-sm-3"><label class="form-label small" for="{{ id }}-port">Port</label><input class="form-control" id="{{ id }}-port" name="smtp_port" inputmode="numeric" value="{{ dsn.port }}" placeholder="587"></div>
+                    <div class="col-sm-6"><label class="form-label small" for="{{ id }}-user">Username</label><input class="form-control" id="{{ id }}-user" name="smtp_username" value="{{ dsn.username }}" autocomplete="off"></div>
+                    <div class="col-sm-6"><label class="form-label small" for="{{ id }}-password">Password <span class="badge {{ dsn.has_password ? 'text-bg-success' : 'text-bg-light border' }}">{{ dsn.has_password ? 'set' : 'not set' }}</span></label><input class="form-control" id="{{ id }}-password" type="password" name="smtp_password" autocomplete="new-password" placeholder="{{ dsn.has_password ? 'Leave empty to keep the current password' : 'Not set' }}"></div>
+                    <div class="col-12"><label class="form-label small" for="{{ id }}-options">Options</label><input class="form-control" id="{{ id }}-options" name="smtp_options" value="{{ dsn.options }}" placeholder="e.g. verify_peer=0"></div>
+                  </div>
+                  <div class="form-text">Clear the server to use the failover servers only.</div>
+                {% elseif setting.type == 'servers' %}
+                  {% set rows = field.servers|merge([
+                    {index: '', active: true, host: '', port: '', security: 'tls', username: '', has_password: false, batchsize: '600', delay: '10', sendrate: ''},
+                    {index: '', active: true, host: '', port: '', security: 'tls', username: '', has_password: false, batchsize: '600', delay: '10', sendrate: ''}
+                  ]) %}
+                  {% for row in rows %}
+                    {% set rid = id ~ '-' ~ loop.index0 %}
+                    {% set prefix = 'servers[' ~ loop.index0 ~ ']' %}
+                    <fieldset class="border rounded p-3 mb-2">
+                      <legend class="fs-6 fw-semibold mb-2 float-none w-auto px-1">{{ row.host ? 'Server ' ~ loop.index : 'Add a server' }}</legend>
+                      <input type="hidden" name="{{ prefix }}[index]" value="{{ row.index }}">
+                      <div class="row g-2">
+                        <div class="col-6 col-sm-2"><label class="form-label small" for="{{ rid }}-position">Order</label><input class="form-control" id="{{ rid }}-position" name="{{ prefix }}[position]" inputmode="numeric" value="{{ loop.index }}"></div>
+                        <div class="col-6 col-sm-4"><label class="form-label small" for="{{ rid }}-host">Server</label><input class="form-control" id="{{ rid }}-host" name="{{ prefix }}[host]" value="{{ row.host }}" autocomplete="off"></div>
+                        <div class="col-6 col-sm-2"><label class="form-label small" for="{{ rid }}-port">Port</label><input class="form-control" id="{{ rid }}-port" name="{{ prefix }}[port]" inputmode="numeric" value="{{ row.port }}"></div>
+                        <div class="col-6 col-sm-4">
+                          <label class="form-label small" for="{{ rid }}-security">Security</label>
+                          <select class="form-select" id="{{ rid }}-security" name="{{ prefix }}[security]">
+                            {% for value, label in {'': 'None', tls: 'STARTTLS (required)', ssl: 'SMTP over TLS'} %}<option value="{{ value }}"{{ row.security == value ? ' selected' }}>{{ label }}</option>{% endfor %}
+                          </select>
+                        </div>
+                        <div class="col-sm-6"><label class="form-label small" for="{{ rid }}-user">Username</label><input class="form-control" id="{{ rid }}-user" name="{{ prefix }}[username]" value="{{ row.username }}" autocomplete="off"></div>
+                        <div class="col-sm-6"><label class="form-label small" for="{{ rid }}-password">Password{% if row.host %} <span class="badge {{ row.has_password ? 'text-bg-success' : 'text-bg-light border' }}">{{ row.has_password ? 'set' : 'not set' }}</span>{% endif %}</label><input class="form-control" id="{{ rid }}-password" type="password" name="{{ prefix }}[password]" autocomplete="new-password"{% if row.has_password %} placeholder="Leave empty to keep the current password"{% endif %}></div>
+                        <div class="col-4"><label class="form-label small" for="{{ rid }}-batch">Batch size</label><input class="form-control" id="{{ rid }}-batch" name="{{ prefix }}[batchsize]" inputmode="numeric" value="{{ row.batchsize }}"></div>
+                        <div class="col-4"><label class="form-label small" for="{{ rid }}-delay">Delay (s)</label><input class="form-control" id="{{ rid }}-delay" name="{{ prefix }}[delay]" inputmode="numeric" value="{{ row.delay }}"></div>
+                        <div class="col-4"><label class="form-label small" for="{{ rid }}-rate">Per minute</label><input class="form-control" id="{{ rid }}-rate" name="{{ prefix }}[sendrate]" inputmode="numeric" value="{{ row.sendrate }}" placeholder="site rate"></div>
+                        <div class="col-12 d-flex flex-wrap gap-3">
+                          <div class="form-check"><input class="form-check-input" type="checkbox" id="{{ rid }}-active" name="{{ prefix }}[active]" value="1"{{ row.active ? ' checked' }}><label class="form-check-label small" for="{{ rid }}-active">Active</label></div>
+                          {% if row.host %}<div class="form-check"><input class="form-check-input" type="checkbox" id="{{ rid }}-remove" name="{{ prefix }}[remove]" value="1"><label class="form-check-label small text-danger" for="{{ rid }}-remove">Remove this server</label></div>{% endif %}
+                        </div>
+                      </div>
+                    </fieldset>
+                  {% endfor %}
+                {% else %}
+                  <input class="form-control" id="{{ id }}" name="{{ name }}"
+                    type="{{ setting.type == 'email' ? 'email' : (setting.type == 'url' ? 'url' : (setting.type == 'int' ? 'number' : 'text')) }}"
+                    {%- if setting.type == 'int' and setting.min is defined %} min="{{ setting.min }}"{% endif %}
+                    {%- if field.default and setting.type != 'int' %} placeholder="Default: {{ field.default }}"{% endif %} value="{{ field.value }}">
+                {% endif %}
+
+                {% if setting.help is defined %}<div class="form-text">{{ setting.help }}</div>{% endif %}
+                {% if field.source == 'database' and not (setting.secret ?? false) %}
+                  <div class="form-text">Without the override: {% if field.env is not same as('') %}<code>{{ field.env|length > 120 ? field.env|slice(0, 120) ~ '…' : field.env }}</code> (.env){% elseif field.default %}<code>{{ field.default }}</code> (default){% else %}<em>empty</em>{% endif %}</div>
+                {% elseif field.source == 'database' %}
+                  <div class="form-text">Without the override: {{ field.env_set ? 'the value in .env' : 'not set (.env has none)' }}.</div>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+          <div class="card-footer d-flex flex-wrap align-items-center gap-2">
+            <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>Save {{ group.label|lower }}</button>
+            {% if overridden is not empty %}
+              <button class="btn btn-outline-secondary" type="submit" formaction="{{ path('admin_settings_reset', {group: key}) }}" formnovalidate data-confirm="Reset every {{ group.label|lower }} override to .env or its default?"><i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>Reset section</button>
+              <span class="small text-body-secondary ms-auto">{{ overridden|length }} {{ overridden|length == 1 ? 'setting' : 'settings' }} set here</span>
+            {% endif %}
+          </div>
+        </form>
+      </section>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

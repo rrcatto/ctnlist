@@ -1,0 +1,17 @@
+{#
+  Layout for pages with the CKEditor HTML editor (message and template forms).
+  The editor attaches to the textarea with id "mt_html". CKEditor's prebuilt
+  bundle is a static file in public_html/vendor/ckeditor5/; its configuration
+  (assets/ckeditor/) goes through AssetMapper. Other pages load none of it.
+#}
+{% extends 'base.html.twig' %}
+
+{% block stylesheets %}
+  <link rel="stylesheet" href="{{ asset('vendor/ckeditor5/ckeditor5.css') }}">
+  <link rel="stylesheet" href="{{ asset('ckeditor/editor.css') }}">
+{% endblock %}
+
+{% block javascripts %}
+  <script src="{{ asset('vendor/ckeditor5/ckeditor5.umd.js') }}"></script>
+  <script src="{{ asset('ckeditor/editor.js') }}"></script>
+{% endblock %}

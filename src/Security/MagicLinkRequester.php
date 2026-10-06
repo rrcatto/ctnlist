@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Security;
 
+use App\Config\RuntimeSettings;
 use App\Config\SiteConfig;
 use App\Mail\TransactionalMailer;
 use App\Repository\AuthLoginTokenRepository;
@@ -11,7 +12,6 @@ use App\Repository\ListRepository;
 use App\Repository\SubscriberRepository;
 use App\Subscriber\EmailNormaliser;
 use Psr\Clock\ClockInterface;
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\RequestStack;
 
 /**
@@ -34,11 +34,7 @@ final class MagicLinkRequester
         private readonly SiteConfig $site,
         private readonly ClockInterface $clock,
         private readonly RequestStack $requestStack,
-        #[Autowire(env: 'int:AUTH_MAGIC_LINK_TTL')] private readonly int $ttl,
-        #[Autowire(env: 'int:AUTH_MAGIC_LINK_MAX_PER_EMAIL')] private readonly int $maxPerEmail,
-        #[Autowire(env: 'int:AUTH_MAGIC_LINK_EMAIL_WINDOW')] private readonly int $emailWindow,
-        #[Autowire(env: 'int:AUTH_MAGIC_LINK_MAX_PER_IP')] private readonly int $maxPerIp,
-        #[Autowire(env: 'int:AUTH_MAGIC_LINK_IP_WINDOW')] private readonly int $ipWindow,
+        private readonly RuntimeSettings $settings,
     ) {
     }
 
@@ -77,7 +73,7 @@ final class MagicLinkRequester
             $email,
             $hash,
             $now->format('Y-m-d H:i:s'),
-            date('Y-m-d H:i:s', $now->getTimestamp() + $this->ttl),
+            date('Y-m-d H:i:s', $now->getTimestamp() + $this->settings->int('AUTH_MAGIC_LINK_TTL', 1800)),
             $ip,
             (string) $request?->headers->get('User-Agent', ''),
             $returnAction,
@@ -85,7 +81,9 @@ final class MagicLinkRequester
             $returnListId
         );
         $url = rtrim($this->site->baseUrl, '/') . '/auth/verify?token=' . rawurlencode($token);
-        if (!$this->mailer->sendMagicLink($email, $found['identity']['s_uuid'], $url, $this->ttl)) {
+        // Asked for to confirm a list (subscribe form, consent link): the email says so.
+        $confirmList = $returnAction === 'confirm' && $returnListId !== null ? $this->lists->findById($returnListId) : null;
+        if (!$this->mailer->sendMagicLink($email, $found['identity']['s_uuid'], $url, $this->settings->int('AUTH_MAGIC_LINK_TTL', 1800), $confirmList['l_name'] ?? null)) {
             $this->tokens->delete($hash);
             return false;
         }
@@ -95,9 +93,9 @@ final class MagicLinkRequester
     private function rateLimited(string $email, string $ip, int $now): bool
     {
         $since = static fn(int $window): string => date('Y-m-d H:i:s', $now - max(60, $window));
-        if ($this->tokens->countForEmailSince($email, $since($this->emailWindow)) >= max(1, $this->maxPerEmail)) {
+        if ($this->tokens->countForEmailSince($email, $since($this->settings->int('AUTH_MAGIC_LINK_EMAIL_WINDOW', 900))) >= max(1, $this->settings->int('AUTH_MAGIC_LINK_MAX_PER_EMAIL', 5))) {
             return true;
         }
-        return $ip !== '' && $this->tokens->countForIpSince($ip, $since($this->ipWindow)) >= max(1, $this->maxPerIp);
+        return $ip !== '' && $this->tokens->countForIpSince($ip, $since($this->settings->int('AUTH_MAGIC_LINK_IP_WINDOW', 3600))) >= max(1, $this->settings->int('AUTH_MAGIC_LINK_MAX_PER_IP', 20));
     }
 }

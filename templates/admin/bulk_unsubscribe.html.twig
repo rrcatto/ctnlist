@@ -3,20 +3,43 @@
 {% block title %}Bulk unsubscribe{% endblock %}
 
 {% block content %}
-<form action="{{ path('admin_bulk_unsubscribe_submit') }}" method="post">
-  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-  <fieldset class="border rounded p-4">
-    <legend>Unsubscribe multiple emails</legend>
-    <div class="mb-3"><label class="form-label" for="list_id">List</label>{% include 'admin/_list_select.html.twig' with {name: 'list_id', selected: (lists|first).l_id ?? 0} %}</div>
-    {% for value, label in {list: 'Remove from selected list only', domain: 'Filter entire domains', bounce: 'These are bounces', spam: 'These are spam complainers'} %}
-      <div class="form-check{{ loop.last ? ' mb-3' }}">
-        <input class="form-check-input" type="radio" name="scope" value="{{ value }}" id="scope-{{ value }}"{{ loop.first ? ' checked' }}>
-        <label class="form-check-label" for="scope-{{ value }}">{{ label }}</label>
+{% include 'layout/_page_header.html.twig' with {title: 'Bulk unsubscribe', description: 'Removes many addresses from a list, or adds them to the global suppression list.'} %}
+
+{% set scopes = {
+  list: {label: 'Remove from the selected list only', help: 'Unsubscribes each address from the list above.'},
+  domain: {label: 'Suppress entire domains', help: 'Adds each address’s domain to the global suppression list.'},
+  bounce: {label: 'These are bounces', help: 'Adds each address to the global suppression list as a bounce.'},
+  spam: {label: 'These are spam complainers', help: 'Adds each address to the global suppression list as a spam complaint.'}
+} %}
+<form action="{{ path('admin_bulk_unsubscribe_submit') }}" method="post" class="card border-danger-subtle" data-confirm="Unsubscribe or suppress these addresses?">
+  <div class="card-body">
+    <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+    <div class="alert alert-warning small" role="note"><i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>Global suppression applies to every list and every installation that shares the suppression database: suppressed addresses lose their list memberships.</div>
+    <div class="row g-3">
+      <div class="col-md-8"><label class="form-label" for="list_id">List</label>{% include 'admin/_list_select.html.twig' with {name: 'list_id', selected: (lists|first).l_id ?? 0} %}</div>
+      <div class="col-12">
+        <fieldset>
+          <legend class="form-label fs-6 fw-normal">What to do</legend>
+          {% for value, scope in scopes %}
+            <div class="form-check mb-2">
+              <input class="form-check-input" type="radio" name="scope" value="{{ value }}" id="scope-{{ value }}"{{ loop.first ? ' checked' }} aria-describedby="scope-{{ value }}-help">
+              <label class="form-check-label" for="scope-{{ value }}">{{ scope.label }}</label>
+              <div class="form-text mt-0" id="scope-{{ value }}-help">{{ scope.help }}</div>
+            </div>
+          {% endfor %}
+        </fieldset>
       </div>
-    {% endfor %}
-    <div class="mb-3"><label class="form-label" for="b-reason">Reason</label><input class="form-control" id="b-reason" name="reason" value="Bulk unsubscribe"></div>
-    <div class="mb-3"><label class="form-label" for="b-emails">Email addresses</label><textarea class="form-control" id="b-emails" rows="12" name="bemail"></textarea></div>
-    <button class="btn btn-danger" type="submit">Unsubscribe Emails</button>
-  </fieldset>
+      <div class="col-md-8"><label class="form-label" for="b-reason">Reason</label><input class="form-control" id="b-reason" name="reason" value="Bulk unsubscribe"></div>
+      <div class="col-12">
+        <label class="form-label" for="b-emails">Email addresses</label>
+        <textarea class="form-control font-monospace" id="b-emails" rows="12" name="bemail" aria-describedby="b-emails-help"></textarea>
+        <div class="form-text" id="b-emails-help">Separate addresses with commas, spaces or new lines.</div>
+      </div>
+    </div>
+  </div>
+  <div class="card-footer d-flex flex-wrap gap-2">
+    <button class="btn btn-danger" type="submit"><i class="bi bi-person-dash me-1" aria-hidden="true"></i>Unsubscribe addresses</button>
+    <a class="btn btn-outline-secondary" href="{{ path('admin_subscribers') }}">Cancel</a>
+  </div>
 </form>
 {% endblock %}

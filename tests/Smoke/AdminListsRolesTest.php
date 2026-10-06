@@ -48,7 +48,7 @@ final class AdminListsRolesTest extends SmokeTestCase
 
         $page = self::post($client, '/lists', ['shortcode' => strtolower($shortcode), 'name' => $name, 'description' => 'd']);
         self::assertStringContainsString('List created with ID', $page);
-        self::assertStringContainsString('<td>' . $shortcode . '</td>', $page, 'shortcode stored in upper case');
+        self::assertStringContainsString('<code>' . $shortcode . '</code>', $page, 'shortcode stored in upper case');
 
         self::assertStringContainsString('must contain 3 to 6', self::post($client, '/lists', ['shortcode' => 'ab', 'name' => 'x']));
         self::assertStringContainsString('already exists', self::post($client, '/lists', ['shortcode' => $shortcode, 'name' => 'Smoke other ' . self::$suffix]));
@@ -109,7 +109,9 @@ final class AdminListsRolesTest extends SmokeTestCase
         self::request($editor, 'GET', '/auth/verify?token=' . self::issueLoginToken((int) $subscriberId));
         self::assertSame(200, self::request($editor, 'GET', '/lists')['status']);
         self::assertSame(403, self::request($editor, 'GET', '/roles')['status']);
-        self::assertStringNotContainsString('navbarDropdownAdminMenu', self::request($editor, 'GET', '/lists')['body']);
+        $nav = self::request($editor, 'GET', '/lists')['body'];
+        self::assertStringContainsString('href="/lists"', $nav, 'admin bar shows the granted tool');
+        self::assertStringNotContainsString('href="/roles"', $nav, 'and hides the others');
     }
 
     /**

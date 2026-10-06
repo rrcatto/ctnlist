@@ -1,0 +1,16 @@
+framework:
+    # Application-owned CSS and JavaScript live in assets/ (shared tree). In
+    # debug mode PHP serves /assets/* directly; in production run
+    # `bin/console asset-map:compile` once per installation, which writes the
+    # versioned files to <installation>/public_html/assets (see App\Kernel).
+    asset_mapper:
+        paths:
+            - assets/
+        missing_import_mode: strict
+        # Every supported browser has import maps; no polyfill from a third-party CDN.
+        importmap_polyfill: false
+
+when@prod:
+    framework:
+        asset_mapper:
+            missing_import_mode: warn

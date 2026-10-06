@@ -3,11 +3,19 @@
 {% block title %}Queue message{% endblock %}
 
 {% block content %}
-<form method="post" action="{{ path('admin_queue_message_submit') }}" class="card card-body">
-  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-  <input type="hidden" name="muid" value="{{ muid }}">
-  <label class="form-label" for="q-limit">Maximum subscribers to add in this operation</label>
-  <input class="form-control mb-3" id="q-limit" type="number" name="limit" value="{{ limit }}">
-  <button class="btn btn-primary">Queue this message</button>
+{% include 'layout/_page_header.html.twig' with {title: 'Queue message', description: 'Adds the confirmed members of this message’s lists to the delivery queue, once per subscriber. Nothing is sent until sending is started.'} %}
+
+<form method="post" action="{{ path('admin_queue_message_submit') }}" class="card app-narrow ms-0">
+  <div class="card-body">
+    <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+    <input type="hidden" name="muid" value="{{ muid }}">
+    <label class="form-label" for="q-limit">Maximum subscribers to add</label>
+    <input class="form-control" id="q-limit" type="number" min="0" name="limit" value="{{ limit }}" aria-describedby="q-limit-help">
+    <div class="form-text" id="q-limit-help">Subscribers already queued or sent this message are skipped.</div>
+  </div>
+  <div class="card-footer d-flex flex-wrap gap-2">
+    <button class="btn btn-primary" type="submit"><i class="bi bi-list-check me-1" aria-hidden="true"></i>Queue this message</button>
+    <a class="btn btn-outline-secondary" href="{{ path('admin_messages') }}">Cancel</a>
+  </div>
 </form>
 {% endblock %}

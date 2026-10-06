@@ -1,0 +1,47 @@
+{# Site navigation: public pages on the left, sign-in or the subscriber's account menu on the right. #}
+{% set route = app.request.attributes.get('_route') %}
+{% macro link(label, icon, href, active) %}
+  <li class="nav-item">
+    <a class="nav-link{{ active ? ' active' }}" href="{{ href }}"{% if active %} aria-current="page"{% endif %}><i class="bi bi-{{ icon }} me-1" aria-hidden="true"></i>{{ label }}</a>
+  </li>
+{% endmacro %}
+{% import _self as nav %}
+<nav class="navbar navbar-expand-lg bg-body app-navbar" aria-label="Main navigation">
+  <div class="container">
+    <a class="navbar-brand" href="{{ path('home') }}"><i class="bi bi-envelope-paper me-2" aria-hidden="true"></i>{{ site.listName }}</a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#site-nav" aria-controls="site-nav" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="site-nav">
+      <ul class="navbar-nav me-auto">
+        {{ nav.link('Home', 'house', path('home'), route in ['home', 'home_index', 'home_home']) }}
+        {{ nav.link('Subscribe', 'person-plus', path('subscribe'), route == 'subscribe') }}
+        {% if site.archiveEnabled %}
+          {{ nav.link('Archives', 'archive', path('archives'), route in ['archives', 'archive']) }}
+        {% endif %}
+        {{ nav.link('Contact', 'chat-left-text', path('contact'), route in ['contact', 'contact_subscriber']) }}
+      </ul>
+      <ul class="navbar-nav">
+        {% if app.user %}
+          {% set account_routes = ['profile', 'profile_messages', 'profile_edit'] %}
+          <li class="nav-item dropdown">
+            <a class="nav-link dropdown-toggle{{ route in account_routes ? ' active' }}" href="#" id="account-menu" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+              <i class="bi bi-person-circle me-1" aria-hidden="true"></i>{{ (app.user.firstName ~ ' ' ~ app.user.lastName)|trim ?: app.user.email }}
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="account-menu">
+              <li><a class="dropdown-item{{ route == 'profile' ? ' active' }}" href="{{ path('profile') }}"><i class="bi bi-person me-2" aria-hidden="true"></i>My profile</a></li>
+              <li><a class="dropdown-item{{ route == 'profile_messages' ? ' active' }}" href="{{ path('profile_messages') }}"><i class="bi bi-envelope me-2" aria-hidden="true"></i>My messages</a></li>
+              <li><a class="dropdown-item{{ route == 'profile_edit' ? ' active' }}" href="{{ path('profile_edit') }}"><i class="bi bi-pencil me-2" aria-hidden="true"></i>Edit profile</a></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item" href="{{ path('app_logout') }}"><i class="bi bi-box-arrow-right me-2" aria-hidden="true"></i>Log out</a></li>
+            </ul>
+          </li>
+        {% else %}
+          <li class="nav-item">
+            <a class="btn btn-primary btn-sm my-2 my-lg-0{{ route == 'login' ? ' active' }}" href="{{ path('login') }}"><i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i>Log in</a>
+          </li>
+        {% endif %}
+      </ul>
+    </div>
+  </div>
+</nav>

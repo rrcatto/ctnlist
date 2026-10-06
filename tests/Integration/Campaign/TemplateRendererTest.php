@@ -47,6 +47,32 @@ final class TemplateRendererTest extends IntegrationTestCase
         self::assertSame('|UNSUBSCRIBE|<a href="http://localhost:8180/archive/7">ARCHIVE</a>|{booking}|', $html, 'v5 leaves {booking} in archives');
     }
 
+    public function testObsoleteStorePlaceholderRendersNothing(): void
+    {
+        $muid = $this->createMessage('Hi');
+        $this->db->executeStatement('UPDATE messages SET m_html = ?, m_text = ? WHERE m_uniqid = ?', ['<p>Shop: {STORE}.</p>', 'Shop: {store}.', $muid]);
+
+        $rendered = $this->render($muid, null, '');
+        self::assertSame('<p>Shop: .</p>', $rendered->html);
+        self::assertSame('Shop: .', $rendered->text);
+    }
+
+    /** Proof copies have no subscriber: subscriber links lead to /proof-link, no tracking pixel, empty {suid}. */
+    public function testProofLinksAreExplicit(): void
+    {
+        $news = $this->createList('NEWS', 'News');
+        $muid = $this->createMessage('Hi', [$news]);
+        $this->db->executeStatement('UPDATE messages SET m_html = ? WHERE m_uniqid = ?', ['{firstname}|{unsubscribe}|{forward}|{preferences}|{confirm}|{like}|{dislike}|{usertrack}|{suid}|{subscribe}', $muid]);
+        $message = $this->service(MessageRepository::class)->findByMuid($muid);
+        self::assertNotNull($message);
+
+        $html = $this->service(TemplateRenderer::class)->renderProof($message, 'NEWS')->html;
+        $proof = '<a href="http://localhost:8180/proof-link">';
+        self::assertSame('Test|' . $proof . 'UNSUBSCRIBE</a>|' . $proof . 'FORWARD</a>|' . $proof . 'UPDATE</a>|' . $proof . 'YES</a>|' . $proof . 'YES</a>|' . $proof . 'NO</a>|||'
+            . '<a href="http://localhost:8180/subscribe?m=' . $muid . '&amp;l=NEWS">SUBSCRIBE</a>', $html, 'the public subscribe link stays real');
+        self::assertStringNotContainsString(TemplateRenderer::PROOF_RECIPIENT['s_uuid'], $html);
+    }
+
     private function render(string $muid, ?string $uuid, string $list): \App\Campaign\RenderedMessage
     {
         $message = $this->service(MessageRepository::class)->findByMuid($muid);

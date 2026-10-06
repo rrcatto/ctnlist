@@ -18,6 +18,18 @@ use App\Repository\TemplateRepository;
  */
 final class TemplateRenderer
 {
+    /** Merge values for proofs (no real subscriber; normal, not confirmation-level, subscription text). */
+    public const PROOF_RECIPIENT = [
+        's_id' => 0,
+        's_uuid' => '00000000-0000-0000-0000-000000000000',
+        's_email' => '',
+        's_fname' => 'Test',
+        's_lname' => 'Recipient',
+        's_emailsleft' => PHP_INT_MAX,
+        's_priority' => 0,
+        's_last_interacted' => null,
+    ];
+
     public function __construct(
         private readonly TemplateRepository $templates,
         private readonly SiteConfig $site,
@@ -28,10 +40,13 @@ final class TemplateRenderer
      * @param Message $message
      * @param Recipient|null $recipient null renders anonymously (archive copy)
      * @param string $listShortcode the delivery's list ('' for an audience-less proof)
+     * @param bool $proof a proof copy (see renderProof()): subscriber-specific links go to /proof-link
      */
-    public function render(array $message, ?array $recipient, string $listShortcode = ''): RenderedMessage
+    public function render(array $message, ?array $recipient, string $listShortcode = '', bool $proof = false): RenderedMessage
     {
         $base = $this->site->baseUrl;
+        // In a proof, links that act for a subscriber explain that proofs have no subscriber.
+        $link = static fn(string $url): string => $proof ? $base . 'proof-link' : $url;
         $muid = $message['m_uniqid'];
         $list = strtoupper(trim($listShortcode));
         $archive = $message['m_a_id'];
@@ -50,7 +65,8 @@ final class TemplateRenderer
         $r('{advertise}', '<a href="' . $this->site->advertiseUrl . '">ADVERTISE</a>', $this->site->advertiseUrl);
         $r('{facebook}', '<a href="' . $this->site->facebookUrl . '">FACEBOOK</a>', $this->site->facebookUrl);
         $r('{twitter}', '<a href="' . $this->site->xUrl . '">TWITTER</a>', $this->site->xUrl);
-        $r('{STORE}', '<a href="' . $this->site->storeUrl . '">STORE</a>', $this->site->storeUrl);
+        // The Ecwid store is gone; old content that still contains {STORE} renders nothing.
+        $r('{STORE}', '', '');
 
         $subscribeUrl = $base . 'subscribe?m=' . rawurlencode($muid) . ($list !== '' ? '&l=' . rawurlencode($list) : '');
         $r('{subscribe}', '<a href="' . htmlspecialchars($subscribeUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">SUBSCRIBE</a>', $subscribeUrl);
@@ -86,18 +102,20 @@ final class TemplateRenderer
         $archiveLink();
 
         if ($list !== '') {
-            $unsubscribe = $base . 'unsubscribe/' . $suid . '/' . $list . '/' . $muid;
+            $unsubscribe = $link($base . 'unsubscribe/' . $suid . '/' . $list . '/' . $muid);
             $r('{unsubscribe}', '<a href="' . $unsubscribe . '">UNSUBSCRIBE</a>', $unsubscribe);
         } else {
             // A proof of an audience-less draft has no list to unsubscribe from.
             $r('{unsubscribe}', 'UNSUBSCRIBE', 'UNSUBSCRIBE');
         }
-        $r('{forward}', '<a href="' . $base . 'forward/' . $suid . '/' . $muid . '">FORWARD</a>', $base . 'forward/' . $suid . '/' . $muid);
-        $r('{preferences}', '<a href="' . $base . 'profile/subscriber/' . $suid . '">UPDATE</a>', $base . 'profile/subscriber/' . $suid);
+        $forward = $link($base . 'forward/' . $suid . '/' . $muid);
+        $r('{forward}', '<a href="' . $forward . '">FORWARD</a>', $forward);
+        $preferences = $link($base . 'profile/subscriber/' . $suid);
+        $r('{preferences}', '<a href="' . $preferences . '">UPDATE</a>', $preferences);
 
-        $booking = $this->linkTemplate($this->site->bookingUrl, $suid, $muid);
+        $booking = $link($this->linkTemplate($this->site->bookingUrl, $suid, $muid));
         $r('{booking}', '<a href="' . $booking . '">BOOKING FORM</a>', $booking);
-        $contact = $this->linkTemplate($this->site->contactUrl, $suid, $muid);
+        $contact = $link($this->linkTemplate($this->site->contactUrl, $suid, $muid));
         $r('{contact}', '<a href="' . $contact . '">CONTACT FORM</a>', $contact);
 
         $r('{firstname}', $recipient['s_fname'], $recipient['s_fname']);
@@ -105,20 +123,37 @@ final class TemplateRenderer
         $r('{emailsleft}', (string) $recipient['s_emailsleft'], (string) $recipient['s_emailsleft']);
 
         if ($list !== '') {
-            $confirm = $base . 'confirm/' . $suid . '/' . $list . '/' . $muid;
+            $confirm = $link($base . 'confirm/' . $suid . '/' . $list . '/' . $muid);
             $r('{confirm}', '<a href="' . $confirm . '">YES</a>', $confirm);
         } else {
             $r('{confirm}', 'OPT IN', 'OPT IN');
         }
-        $r('{like}', '<a href="' . $base . 'like/' . $suid . '/' . $muid . '">YES</a>', $base . 'like/' . $suid . '/' . $muid);
-        $r('{dislike}', '<a href="' . $base . 'dislike/' . $suid . '/' . $muid . '">NO</a>', $base . 'dislike/' . $suid . '/' . $muid);
-        $r('{usertrack}', '<img src="' . $base . 'ut/' . $suid . '/' . $muid . '" width="0" height="0">');
+        $like = $link($base . 'like/' . $suid . '/' . $muid);
+        $r('{like}', '<a href="' . $like . '">YES</a>', $like);
+        $dislike = $link($base . 'dislike/' . $suid . '/' . $muid);
+        $r('{dislike}', '<a href="' . $dislike . '">NO</a>', $dislike);
+        $r('{usertrack}', $proof ? '' : '<img src="' . $base . 'ut/' . $suid . '/' . $muid . '" width="0" height="0">');
         $r('{baseurl}', $base, $base);
         $r('{listshortcode}', $list, $list);
         $r('{muid}', $muid, $muid);
-        $r('{suid}', $suid, $suid);
+        $r('{suid}', $proof ? '' : $suid, $proof ? '' : $suid);
 
         return new RenderedMessage($html, $text);
+    }
+
+    /**
+     * A proof copy: rendered as for a subscriber, so the layout looks as it
+     * will, with test merge values (PROOF_RECIPIENT, no real subscriber).
+     * Links that would act for a subscriber (unsubscribe, confirm, forward,
+     * preferences, reactions, booking and contact forms) lead to /proof-link,
+     * which explains they are unavailable in a proof; there is no tracking
+     * pixel and {suid} is empty.
+     *
+     * @param Message $message
+     */
+    public function renderProof(array $message, string $listShortcode = ''): RenderedMessage
+    {
+        return $this->render($message, self::PROOF_RECIPIENT, $listShortcode, true);
     }
 
     /** Fill {BaseURL}, {suid} and {muid} in a configured link (BookingURL, ContactURL). */

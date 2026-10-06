@@ -1,6 +1,6 @@
-# ctnlist 6.0
+# ctnlist 6.0.1
 
-ctnlist is a web-based mailing-list application created by Richard Royston Catto in 2009. Versions 5.0.x and 6.0 are an incremental modernisation of the working v5.0 application, not a replacement of its established workflows.
+ctnlist is a web-based mailing-list application created by Richard Royston Catto in 2009. Versions 5.0.x and 6.0.x are an incremental modernisation of the working v5.0 application, not a replacement of its established workflows.
 
 Versions 5.0.2 to 6.0 keep the behaviour of 5.0.1-restored and move the application from the Fat-Free Framework to Symfony 8.1. Version 6.0 completes the migration: every route is a Symfony controller and Fat-Free has been removed (see [Migration status](#migration-status)).
 
@@ -11,6 +11,8 @@ Version 5.0.4 ports list, role and ACL administration to Symfony and adds the Sy
 Version 5.0.5 moves every subscriber-facing page onto Symfony and the new services: sign-in link requests, the profile pages, the confirm/unsubscribe links and `/subscribe`, forwarding, likes and dislikes, resends, the open-tracking pixel, the archives and the contact form. Sign-in links, consent notifications, forwards, resends and contact acknowledgements are now sent through the Symfony mailers. Administration (subscribers, bulk operations, import/export, messages, templates, the queue) and the reports still run on Fat-Free and the legacy mailer.
 
 Version 6.0 moves the administration pages (messages and templates, queueing, sending and proofs, subscribers, bulk operations, import, export, synchronisation and the Ecwid endpoint) and the Send Log, Site Log and message activity reports onto Symfony. All mail now goes through the Symfony mailers, the Fat-Free Framework, its bridge and the legacy code are removed, the Site Log again records every request, and the code passes PHPStan level 6. Import logs and export files are written to `APP_LOG_DIR` (default: the installation's `logs/`).
+
+Version 6.0.1 removes the defunct Ecwid store (the Store page, its links, `POST /ecwid-subscribe` and `APP_STORE_URL`; a leftover `{STORE}` placeholder renders as nothing) and rebuilds the frontend on plain Bootstrap 5.3: a sticky header with an administration bar that shows only the tools each user's permissions allow, a simple footer, Bootstrap Icons and the system font. Unify, Font Awesome, jQuery and the Google Fonts request are gone; the application's CSS and JavaScript are served by Symfony AssetMapper, and CKEditor loads only on the editors. Every administration screen follows one pattern (page header with the main actions, filter panels, responsive tables, status badges, empty states, confirmation before deleting, clearing or suppressing). `/subscribe` is now a subscribe form for visitors and a list of the subscriber's lists when signed in, with list descriptions. Custom roles can be renamed, deleted and removed from subscribers, each role lists its members, subscribers are found by search, and nobody but an administrator can hand out permissions they do not hold. Proofs go to any address without a subscriber record, and their subscriber links explain that a proof has no subscriber. Sign-in links sent to confirm a list say so. A new Settings page lets administrators override selected `.env` settings, with SMTP secrets encrypted by `APP_SETTINGS_KEY` (see [Settings page](#settings-page)).
 
 ## Platform and upgrades
 
@@ -24,7 +26,8 @@ Version 6.0 moves the administration pages (messages and templates, queueing, se
 - application-owned database sessions
 - multiple mailing lists and per-list consent
 - immutable `ALL` system list as an optional audience
-- roles, permissions and ACL
+- a Settings page for overriding selected `.env` settings (site identity, contact details, mail sender, SMTP servers, contact form, subscription messages, archives, sign-in limits), with SMTP secrets encrypted by `APP_SETTINGS_KEY`
+- roles, permissions and ACL: custom roles can be created, renamed, deleted and given permissions; subscribers are found by search to assign roles, and each role lists its members (`roles.manage` manages roles and membership, `acl.manage` additionally changes permissions; system roles are fixed)
 - CSRF protection for state-changing actions
 - separate PostgreSQL global email/domain suppression database
 
@@ -60,7 +63,7 @@ The delivery system restores:
 
 The ordinary campaign workflow sends a message once to a subscriber. The unique `(subscriber UUID, message MUID)` record in `smlog` is used as the delivery guard.
 
-All campaign-content paths—including queue delivery, forwarding, proof copies and deliberate resends—use the campaign mail path and update both `sendlog` and `smlog`.
+All campaign-content paths—including queue delivery, forwarding, proof copies and deliberate resends—use the campaign mail path and update `sendlog`; deliveries to subscribers also update `smlog`. A proof can go to any valid address (by default `MAIL_TEST_ADDRESS`), which needs no subscriber record: it is logged as PROOF in `sendlog` only and does not affect the queue, consent, memberships or the once-only guard.
 
 `smlog` again records list context, sent/read activity, likes, dislikes, forwards, profile updates, confirmations, subscriptions, unsubscriptions and bookings/contact activity.
 
@@ -90,7 +93,6 @@ Restored administrator workflows include:
 - file import
 - active/removal exports
 - cross-installation synchronisation
-- Ecwid subscription endpoint
 - contextual contact/order forms
 
 ### Archives, reports and logs
@@ -120,29 +122,34 @@ A message can be saved without any audience. `ALL` is available for general camp
 bin/            console (Symfony), dev (podman development environment)
 config/         Symfony configuration; phinx/ (migration configs, default ban.env location)
 database/       Phinx migrations (domain/, banlist/), destructive development reset scripts
-public_html/    per-installation front controller (index.php), css/, js/
+assets/         application CSS and JavaScript for Symfony AssetMapper (app.js, styles/app.css, ckeditor/ editor configuration, images/)
+importmap.php   AssetMapper import map (entry point: assets/app.js)
+public_html/    per-installation web root: front controller (index.php) and vendor/ckeditor5/ (prebuilt CKEditor 5 bundle)
 src/            application code, namespace App\ (Controller/, Repository/ and domain folders: Campaign/, Queue/, Mail/, Log/, Subscriber/, Security/, Suppression/)
-templates/      Twig templates (base.html.twig is the site layout)
+templates/      Twig templates: base.html.twig and layout/ (navbar, admin bar, flash messages, footer) form the site layout
 tests/          PHPUnit: Unit/, Integration/ (application against the ctnlist_test database), Smoke/ (HTTP against the running stack)
 dev/podman/     development container files
 ```
 
 ## Deployment
 
-The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.0/` (the path is set in `public_html/index.php`). Run `composer install --no-dev` there.
+The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.0.1/` (the path is set in `public_html/index.php`). Run `composer install --no-dev` there.
 
 Each installation has its own directory containing:
 
-- `public_html/`: a copy of the repository's `public_html/`, used as the web server's document root. nginx serves `css/` and `js/` directly and passes everything else to `index.php` (see `dev/podman/nginx.conf`);
+- `public_html/`: a copy of the repository's `public_html/`, used as the web server's document root. nginx serves existing files directly and passes everything else to `index.php` (see `dev/podman/nginx.conf`);
 - `.env`, one level above `public_html/` (start from `.env.example`);
 - writable `var/` (Symfony cache and logs) and `logs/` (contact log, import log and export files) directories.
 
 The compiled Symfony container embeds absolute paths, so clear each installation's cache after deploying a new version (or empty its `var/cache/`).
 
+The application's CSS, JavaScript and images (`assets/`) are served by Symfony AssetMapper. In production compile them once per installation after copying `public_html/`; the versioned files are written to that installation's `public_html/assets/` and nginx serves them as static files. Without this step the pages load without their styles and scripts. In development (`APP_DEBUG=true`) PHP serves them directly and no compile step is needed. Bootstrap and Bootstrap Icons come from the jsDelivr CDN with subresource integrity; there is no Node or npm build.
+
 Console commands and migrations act on one installation, selected with `CTNLIST_INSTANCE_DIR`:
 
 ```bash
 CTNLIST_INSTANCE_DIR=/var/www/example bin/console cache:clear
+CTNLIST_INSTANCE_DIR=/var/www/example bin/console asset-map:compile
 CTNLIST_INSTANCE_DIR=/var/www/example composer migrate-paralegal
 ```
 
@@ -155,6 +162,18 @@ The main application uses `DB_*` settings. The separate global suppression datab
 SMTP can be configured with a single `MAILER_DSN` or an optional `MAIL_SMTP_SERVERS_JSON` array for per-server batching, delay, rate and failover. Optional legacy synchronisation targets use `SYNC_DATABASES_JSON`.
 
 Sign-in links expire after `AUTH_MAGIC_LINK_TTL` seconds and are rate-limited per address (`AUTH_MAGIC_LINK_MAX_PER_EMAIL` within `AUTH_MAGIC_LINK_EMAIL_WINDOW`) and per client IP (`AUTH_MAGIC_LINK_MAX_PER_IP` within `AUTH_MAGIC_LINK_IP_WINDOW`); a signed-in session lasts `AUTH_SESSION_TTL` seconds. Contact-form submissions are appended to `CONTACT_LOG_FILE` (default: the installation's `logs/contact.log`). Bulk-subscribe and import logs (`emails_added.txt`) and the export files (`export-subscribers.txt`, `export-remove.txt`) are written to `APP_LOG_DIR` (default: the installation's `logs/`).
+
+### Settings page
+
+Administrators, and any role given the `settings.manage` permission, can change a selected set of settings at **Admin → Settings** without editing `.env`: site identity, contact details and message links, the mail sender and proof address, the SMTP servers (the main server and the campaign failover servers, in order) and sending pace, the contact form, the subscription messages, the archive and the sign-in limits.
+
+- Each setting resolves as **database override → `.env` → built-in default**, and the page shows which one is in effect (Database, .env or Default). Overrides are stored in the `options` table; nothing is written to `.env`. Database overrides are optional: an installation without any runs exactly from its `.env`.
+- Saving a value equal to the inherited one, or "Reset override" / "Reset section", removes the override so `.env` (or the default) applies again. Changes apply from the next page or email; a send that is already running keeps the SMTP settings it started with.
+- SMTP passwords are encrypted in the database with AES-256-GCM using the dedicated `APP_SETTINGS_KEY` from `.env` (32 random bytes, Base64; generate with `openssl rand -base64 32`). The key is needed only once a secret is saved there; without it the SMTP section explains what to add. Passwords are never sent to the browser (leave the field empty to keep the current one) and never logged.
+- **Do not change `APP_SETTINGS_KEY` while encrypted settings exist**: they become unreadable, and mail that needs them fails (the Settings page reports it) until they are entered again or reset. A future key rotation must decrypt with the old key and re-encrypt with the new key before the new key is deployed.
+- Stay in `.env` only: `APP_SECRET`, `APP_SETTINGS_KEY`, `APP_ENV`/`APP_DEBUG`, `APP_INSTANCE_ID`, the database and suppression-database settings, `TRUSTED_PROXIES`, `APP_BASE_URL`/`APP_DOMAIN`, `APP_TIMEZONE`, file paths (`CONTACT_LOG_FILE`, `APP_LOG_DIR`), the auth cookie name, `APP_ADMIN_EMAIL` and the synchronisation targets.
+
+Deployment is otherwise unchanged (including `asset-map:compile` per installation).
 
 ## Database setup
 

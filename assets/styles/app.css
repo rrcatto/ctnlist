@@ -1,0 +1,90 @@
+/*
+ * ctnlist application styles: a thin layer over Bootstrap 5.3. Prefer
+ * Bootstrap classes in templates; add rules here only for the shared layout
+ * and for patterns Bootstrap has no utility for.
+ */
+
+:root {
+    --app-font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", "Liberation Sans", Arial, sans-serif;
+    --bs-body-font-family: var(--app-font-sans);
+}
+
+/* Header: the site navbar plus, for staff, the administration bar. */
+.app-header .navbar-brand {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+.app-header .navbar-brand .bi {
+    color: var(--bs-primary);
+}
+
+.app-header .nav-link.active {
+    font-weight: 600;
+}
+
+.app-navbar .nav-link.active {
+    color: var(--bs-primary);
+}
+
+@media (min-width: 992px) {
+    .app-navbar .nav-link.active {
+        box-shadow: inset 0 -2px 0 var(--bs-primary);
+    }
+}
+
+.app-adminbar {
+    font-size: 0.875rem;
+}
+
+.app-adminbar .navbar-nav .nav-link {
+    padding-top: 0.375rem;
+    padding-bottom: 0.375rem;
+}
+
+/* Long menus stay reachable inside the sticky header on small screens. */
+@media (max-width: 991.98px) {
+    .app-header .navbar-collapse {
+        max-height: calc(100vh - 4rem);
+        overflow-y: auto;
+    }
+}
+
+/* Page content. Forms are grouped in bordered fieldsets or cards. */
+.app-content fieldset > legend {
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+/* Data tables: compact, readable headings. */
+.app-content .table {
+    font-size: 0.9375rem;
+}
+
+.app-content .table > thead th {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* Single-purpose forms (sign-in, consent, confirmations) stay readable on wide screens. */
+.app-narrow {
+    max-width: 40rem;
+    margin-inline: auto;
+}
+
+/* In-page section navigation below the sticky header (Settings). */
+.app-section-nav {
+    top: 7.5rem;
+}
+
+.border-dashed {
+    border-style: dashed !important;
+}
+
+.app-footer a {
+    text-decoration: none;
+}
+
+.app-footer a:hover {
+    text-decoration: underline;
+}

@@ -1,32 +1,71 @@
 {% extends 'base.html.twig' %}
+{% import 'admin/_macros.html.twig' as ui %}
 
 {% block title %}{{ active ? 'Active subscribers' : 'Subscribers' }}{% endblock %}
 
 {% block content %}
 {% set base = path(active ? 'admin_subscribers_active' : 'admin_subscribers') %}
-<form method="get" action="{{ base }}" class="row g-3 mb-4">
-  <div class="col-md-4"><label class="form-label" for="f-e">Email address</label><input class="form-control" id="f-e" type="search" name="e" value="{{ filters.e }}"></div>
-  <div class="col-md-3"><label class="form-label" for="l">List</label>{% include 'admin/_list_select.html.twig' with {name: 'l', selected: filters.l, blank: 'All lists'} %}</div>
-  <div class="col-md-2"><label class="form-label" for="f-r">Rows</label><input class="form-control" id="f-r" type="number" name="r" value="{{ pagination.perPage }}"></div>
-  <div class="col-md-2 form-check align-self-end mb-2"><input class="form-check-input" type="checkbox" name="u" value="1" id="include-unsubscribed"{{ filters.u ? ' checked' }}><label class="form-check-label" for="include-unsubscribed">Include unsubscribed</label></div>
-  <div class="col-md-1 align-self-end"><button class="btn btn-primary" type="submit">Search</button></div>
+{% embed 'layout/_page_header.html.twig' with {
+  title: active ? 'Active readers' : 'Subscribers',
+  description: active ? 'Subscribers who have interacted with a message, most recent first.' : 'Subscriber identities and their list memberships, most recently engaged first.'
+} %}
+  {% block actions %}
+    {% if is_granted('subscribers.manage') %}
+      <a class="btn btn-primary" href="{{ path('admin_bulk_subscribe') }}"><i class="bi bi-person-plus me-1" aria-hidden="true"></i>Bulk subscribe</a>
+      <a class="btn btn-outline-secondary" href="{{ path('admin_import') }}"><i class="bi bi-upload me-1" aria-hidden="true"></i>Import</a>
+      <a class="btn btn-outline-secondary" href="{{ path('admin_export') }}" title="Writes export files to the installation's logs/ directory"><i class="bi bi-download me-1" aria-hidden="true"></i>Export</a>
+    {% endif %}
+  {% endblock %}
+{% endembed %}
+
+<form method="get" action="{{ base }}" class="card card-body bg-body-tertiary mb-4" role="search" aria-label="Filter subscribers">
+  <div class="row g-3 align-items-end">
+    <div class="col-md-4"><label class="form-label" for="f-e">Email address contains</label><input class="form-control" id="f-e" type="search" name="e" value="{{ filters.e }}"></div>
+    <div class="col-md-3"><label class="form-label" for="l">List</label>{% include 'admin/_list_select.html.twig' with {name: 'l', selected: filters.l, blank: 'All lists'} %}</div>
+    <div class="col-6 col-md-2"><label class="form-label" for="f-r">Rows per page</label><input class="form-control" id="f-r" type="number" min="1" max="200" name="r" value="{{ pagination.perPage }}"></div>
+    <div class="col-6 col-md-3">
+      <div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="u" value="1" id="include-unsubscribed"{{ filters.u ? ' checked' }}><label class="form-check-label" for="include-unsubscribed">Include unsubscribed</label></div>
+    </div>
+    <div class="col-12 d-flex gap-2">
+      <button class="btn btn-primary" type="submit"><i class="bi bi-search me-1" aria-hidden="true"></i>Search</button>
+      <a class="btn btn-outline-secondary" href="{{ base }}">Clear</a>
+    </div>
+  </div>
 </form>
+
 {% if rows is empty %}
-  <p>There are no matching subscribers.</p>
+  {% include 'layout/_empty_state.html.twig' with {icon: 'people', message: 'There are no matching subscribers.', hint: 'Try a different search, or include unsubscribed subscribers.'} %}
 {% else %}
+  {% set can_edit = is_granted('subscribers.manage') %}
   <div class="table-responsive">
-    <table class="table table-striped table-hover table-bordered">
-      <thead><tr><th>Email</th><th>Name</th><th>Lists</th><th>Priority</th><th>Bounces</th><th>Emails left</th><th>Last interaction</th></tr></thead>
+    <table class="table table-hover align-middle">
+      <thead class="table-light">
+        <tr>
+          <th scope="col">Email</th>
+          <th scope="col">Name</th>
+          <th scope="col">Lists</th>
+          <th scope="col" class="text-end">Priority</th>
+          <th scope="col" class="text-end">Bounces</th>
+          <th scope="col" class="text-end">Emails left</th>
+          <th scope="col">Last interaction</th>
+        </tr>
+      </thead>
       <tbody>
       {% for row in rows %}
         <tr>
-          <td><a href="{{ path('admin_subscriber', {token: row.s_uuid}) }}">{{ row.s_email }}</a></td>
+          <td>{% if can_edit %}<a href="{{ path('admin_subscriber', {token: row.s_uuid}) }}">{{ row.s_email }}</a>{% else %}{{ row.s_email }}{% endif %}</td>
           <td>{{ (row.s_fname ~ ' ' ~ row.s_lname)|trim }}</td>
-          <td>{{ row.memberships }}</td>
-          <td>{{ row.s_priority }}</td>
-          <td>{{ row.s_bounces }}</td>
-          <td>{{ row.s_emailsleft }}</td>
-          <td>{{ row.s_last_interacted }}</td>
+          <td>
+            {% for membership in row.memberships %}
+              <span class="text-nowrap me-2">{{ membership.name }} {{ ui.membership_badge(membership.state) }}</span>
+            {% else %}
+              <span class="text-body-secondary">–</span>
+            {% endfor %}
+          </td>
+          <td class="text-end">{{ row.s_priority }}</td>
+          <td class="text-end">{{ row.s_bounces }}</td>
+          <td class="text-end">{{ row.s_emailsleft }}</td>
+          <td class="text-nowrap">{{ row.s_last_interacted ?: '–' }}</td>
         </tr>
       {% endfor %}
       </tbody>

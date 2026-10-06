@@ -139,20 +139,21 @@ final class SubscriberRepository
     }
 
     /**
-     * A page of the administrator's subscriber list: engaged first, with a
-     * "List:state" summary of every membership.
+     * A page of the administrator's subscriber list: engaged first, with every
+     * membership as a list name and state (confirmed, unsubscribed or
+     * pending), ordered by list name.
      *
-     * @return list<array<string, mixed>>
+     * @return list<array<string, mixed>> rows; `memberships` is a list<array{name: string, state: string}>
      */
     public function reportPage(string $email, bool $activeOnly, bool $includeUnsubscribed, int $listId, int $offset, int $limit): array
     {
         [$where, $params] = self::reportFilter($email, $activeOnly, $includeUnsubscribed, $listId);
-        return $this->db->fetchAllAssociative(
+        $rows = $this->db->fetchAllAssociative(
             "SELECT s.s_id, s.s_uuid, s.s_email, s.s_fname, s.s_lname, s.s_priority, s.s_last_interacted, s.s_bounces, s.s_emailsleft,
-                    STRING_AGG(l.l_name || ':' || CASE
+                    COALESCE(JSON_AGG(JSON_BUILD_OBJECT('name', l.l_name, 'state', CASE
                         WHEN ls.ls_confirmed AND NOT ls.ls_unsubscribed THEN 'confirmed'
                         WHEN ls.ls_unsubscribed THEN 'unsubscribed'
-                        ELSE 'pending' END, ', ' ORDER BY l.l_name) AS memberships
+                        ELSE 'pending' END) ORDER BY l.l_name) FILTER (WHERE l.l_id IS NOT NULL), '[]') AS memberships
              FROM subscribers s
              LEFT JOIN list_subscribers ls ON ls.ls_s_id = s.s_id
              LEFT JOIN lists l ON l.l_id = ls.ls_l_id
@@ -162,6 +163,13 @@ final class SubscriberRepository
              LIMIT " . max(1, min(200, $limit)) . ' OFFSET ' . max(0, $offset),
             $params
         );
+        foreach ($rows as &$row) {
+            $row['memberships'] = array_map(
+                static fn(array $m): array => ['name' => (string) $m['name'], 'state' => (string) $m['state']],
+                (array) json_decode((string) $row['memberships'], true, flags: JSON_THROW_ON_ERROR)
+            );
+        }
+        return $rows;
     }
 
     /**
@@ -226,18 +234,39 @@ final class SubscriberRepository
         );
     }
 
+    /**
+     * Find subscribers for a picker: email, first or last name containing the
+     * term (case-insensitive), or the exact UUID. Returns at most $limit rows.
+     *
+     * @return list<array{s_id: int, s_uuid: string, s_email: string, s_fname: string, s_lname: string}>
+     */
+    public function search(string $term, int $limit): array
+    {
+        $term = trim($term);
+        if ($term === '') {
+            return [];
+        }
+        $uuid = strtolower($term);
+        $like = '%' . addcslashes($term, '%_\\') . '%';
+        return array_map(static fn(array $row): array => [
+            's_id' => (int) $row['s_id'],
+            's_uuid' => (string) $row['s_uuid'],
+            's_email' => (string) $row['s_email'],
+            's_fname' => (string) $row['s_fname'],
+            's_lname' => (string) $row['s_lname'],
+        ], $this->db->fetchAllAssociative(
+            'SELECT s_id, s_uuid, s_email, COALESCE(s_fname, \'\') AS s_fname, COALESCE(s_lname, \'\') AS s_lname FROM subscribers
+             WHERE s_email ILIKE :like OR s_fname ILIKE :like OR s_lname ILIKE :like'
+            . (preg_match(self::UUID_PATTERN, $uuid) ? ' OR s_uuid = CAST(:uuid AS UUID)' : '') . '
+             ORDER BY s_email
+             LIMIT ' . max(1, $limit),
+            ['like' => $like] + (preg_match(self::UUID_PATTERN, $uuid) ? ['uuid' => $uuid] : [])
+        ));
+    }
+
     public function exists(int $id): bool
     {
         return $this->db->fetchOne('SELECT 1 FROM subscribers WHERE s_id = ?', [$id]) !== false;
-    }
-
-    /** @return list<array{s_id: int, s_email: string}> the first subscribers by email, for pickers */
-    public function emails(int $limit): array
-    {
-        return array_map(
-            static fn(array $row): array => ['s_id' => (int) $row['s_id'], 's_email' => (string) $row['s_email']],
-            $this->db->fetchAllAssociative('SELECT s_id, s_email FROM subscribers ORDER BY s_email LIMIT ' . max(1, $limit))
-        );
     }
 
     public function recordLogin(int $id, string $at, string $ip): void

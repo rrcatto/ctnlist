@@ -32,9 +32,9 @@
         <td>{{ active ? 'Confirmed' : (membership.unsubscribed ? 'Unsubscribed' : 'Awaiting confirmation') }}</td>
         <td>
           {% if active %}
-            <a class="btn btn-sm btn-outline-danger" href="{{ site.baseUrl }}unsubscribe/{{ profile.s_uuid }}/{{ membership.l_shortcode|url_encode }}">Unsubscribe</a>
+            <a class="btn btn-sm btn-outline-danger" href="{{ path('consent_unsubscribe', {token: profile.s_uuid, shortcode: membership.l_shortcode}) }}">Unsubscribe</a>
           {% else %}
-            <a class="btn btn-sm btn-outline-success" href="{{ site.baseUrl }}confirm/{{ profile.s_uuid }}/{{ membership.l_shortcode|url_encode }}">Confirm</a>
+            <a class="btn btn-sm btn-outline-success" href="{{ path('consent_confirm', {token: profile.s_uuid, shortcode: membership.l_shortcode}) }}">Confirm</a>
           {% endif %}
         </td>
       </tr>

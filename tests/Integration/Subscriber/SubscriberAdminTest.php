@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Tests\Integration\Subscriber;
 
 use App\Log\MessageLog;
+use App\Repository\SubscriberRepository;
 use App\Subscriber\SubscriberAdmin;
 use App\Tests\Integration\IntegrationTestCase;
 
@@ -47,6 +48,22 @@ final class SubscriberAdminTest extends IntegrationTestCase
 
         $this->service(SubscriberAdmin::class)->save($uuid, ['s_priority' => '999'], '', false);
         self::assertSame(100, (int) $this->db->fetchOne('SELECT s_priority FROM subscribers WHERE s_id = ?', [$id]), 'subscribers cannot set their priority');
+    }
+
+    public function testReportListsMembershipsAsStructuredData(): void
+    {
+        $id = $this->createSubscriber('jane@example.com');
+        $this->setMembership($id, $this->createList('NEWS', 'News, views: daily'), true);
+        $this->setMembership($id, $this->createList('OLD', 'Old'), false, true);
+
+        $rows = $this->service(SubscriberRepository::class)->reportPage('jane@example.com', false, true, 0, 0, 10);
+
+        self::assertCount(1, $rows);
+        self::assertSame([
+            ['name' => 'ALL', 'state' => 'pending'],
+            ['name' => 'News, views: daily', 'state' => 'confirmed'],
+            ['name' => 'Old', 'state' => 'unsubscribed'],
+        ], $rows[0]['memberships'], 'names exactly as stored, states separately');
     }
 
     public function testExportWritesBothFiles(): void

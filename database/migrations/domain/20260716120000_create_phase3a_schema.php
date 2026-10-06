@@ -56,12 +56,6 @@ CREATE TABLE templates (
     t_text TEXT
 );
 
-CREATE TABLE options (
-    o_id SERIAL PRIMARY KEY,
-    o_key VARCHAR(100) NOT NULL UNIQUE,
-    o_value VARCHAR(255)
-);
-
 CREATE TABLE subscribers (
     s_id BIGSERIAL PRIMARY KEY,
     s_uuid UUID NOT NULL DEFAULT ctn_uuid_v7(),
@@ -334,6 +328,17 @@ CREATE TABLE auth_sessions (
 CREATE INDEX idx_auth_sessions_subscriber ON auth_sessions (as_s_id);
 CREATE INDEX idx_auth_sessions_expiry ON auth_sessions (as_expires_at);
 
+-- Application state (queue flags) and administrator overrides of selected
+-- .env settings (keys 'setting:<ENV_NAME>'); secret values are encrypted.
+CREATE TABLE options (
+    o_id SERIAL PRIMARY KEY,
+    o_key VARCHAR(100) NOT NULL UNIQUE,
+    o_value TEXT,
+    o_secret BOOLEAN NOT NULL DEFAULT FALSE,
+    o_updated_at TIMESTAMP WITHOUT TIME ZONE,
+    o_updated_by_s_id BIGINT REFERENCES subscribers (s_id) ON DELETE SET NULL
+);
+
 CREATE TABLE sessions (
     ses_id VARCHAR(255) PRIMARY KEY,
     ses_data TEXT NOT NULL DEFAULT '',
@@ -372,6 +377,7 @@ SQL);
             ['logs.view', 'View logs', 'View send and interaction logs.'],
             ['roles.manage', 'Manage roles', 'Create roles and assign them to subscribers.'],
             ['acl.manage', 'Manage ACL', 'Assign permissions to roles.'],
+            ['settings.manage', 'Manage settings', 'Change the site, mail and sign-in settings that override .env.'],
             ['system.admin', 'System administration', 'Full administrative access.'],
         ];
 

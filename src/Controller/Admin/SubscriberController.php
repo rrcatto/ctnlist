@@ -12,10 +12,8 @@ use App\Security\Csrf;
 use App\Security\SubscriberUser;
 use App\Subscriber\ProfileOptions;
 use App\Subscriber\SubscriberAdmin;
-use App\Subscriber\SubscriptionService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
-use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -23,7 +21,7 @@ use Symfony\Component\Security\Http\Attribute\CurrentUser;
 use Symfony\Component\Security\Http\Attribute\IsCsrfTokenValid;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
-/** Subscriber administration (search, edit, bulk operations, import/export, sync) and the Ecwid hook. */
+/** Subscriber administration: search, edit, bulk operations, import/export and sync. */
 final class SubscriberController extends AbstractController
 {
     public function __construct(
@@ -161,10 +159,7 @@ final class SubscriberController extends AbstractController
     #[IsGranted('subscribers.manage')]
     public function export(int $offset, int $limit, Request $request): Response
     {
-        return $this->render('page/result.html.twig', [
-            'title' => 'Export subscribers',
-            'message' => implode(' ', $this->admin->export($offset, $limit, $request->query->getInt('l'))),
-        ]);
+        return $this->result('Export subscribers', implode(' ', $this->admin->export($offset, $limit, $request->query->getInt('l'))));
     }
 
     #[Route('/sync', name: 'admin_sync', methods: ['GET'])]
@@ -173,15 +168,6 @@ final class SubscriberController extends AbstractController
     {
         set_time_limit(86400);
         return $this->result('Synchronise subscribers', 'Number synchronised: ' . $this->admin->synchronise());
-    }
-
-    /** v5 integration endpoint (no session or CSRF): adds a pending member; JSON {success}. */
-    #[Route('/ecwid-subscribe', name: 'ecwid_subscribe', methods: ['POST'])]
-    public function ecwid(Request $request, SubscriptionService $subscriptions): JsonResponse
-    {
-        $list = $this->lists->resolve($request->request->getString('list_shortcode') ?: 'ALL');
-        $ok = $list !== null && $subscriptions->subscribe($request->request->getString('email'), 0, $list['l_id']);
-        return new JsonResponse(['success' => $ok], $ok ? Response::HTTP_OK : Response::HTTP_BAD_REQUEST);
     }
 
     private function report(int $page, Request $request, bool $activeOnly): Response
@@ -202,6 +188,8 @@ final class SubscriberController extends AbstractController
 
     private function result(string $title, string $message): Response
     {
-        return $this->render('page/result.html.twig', ['title' => $title, 'message' => $message]);
+        return $this->render('page/result.html.twig', ['title' => $title, 'message' => $message, 'links' => [
+            ['label' => 'Back to subscribers', 'route' => 'admin_subscribers', 'permission' => 'subscribers.view'],
+        ]]);
     }
 }

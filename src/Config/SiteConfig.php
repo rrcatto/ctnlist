@@ -10,7 +10,7 @@ namespace App\Config;
  */
 final class SiteConfig
 {
-    public const VERSION = '6.0';
+    public const VERSION = '6.0.1';
 
     /**
      * @param list<array<string, mixed>> $smtpServers MAIL_SMTP_SERVERS_JSON entries
@@ -29,7 +29,6 @@ final class SiteConfig
         public readonly string $advertiseUrl,
         public readonly string $facebookUrl,
         public readonly string $xUrl,
-        public readonly string $storeUrl,
         public readonly string $bookingUrl,
         public readonly string $contactUrl,
         public readonly string $instanceId,
@@ -87,7 +86,6 @@ final class SiteConfig
             advertiseUrl: $string('APP_ADVERTISE_URL'),
             facebookUrl: $string('APP_FACEBOOK_URL'),
             xUrl: $string('APP_X_URL'),
-            storeUrl: $string('APP_STORE_URL'),
             bookingUrl: $string('APP_BOOKING_URL'),
             contactUrl: $string('APP_CONTACT_URL', '{BaseURL}contact-form/{suid}/{muid}'),
             instanceId: $string('APP_INSTANCE_ID'),

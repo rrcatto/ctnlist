@@ -43,6 +43,23 @@ final class MagicLinkRequesterTest extends IntegrationTestCase
         );
     }
 
+    /** The email says why it was sent: confirming a list (subscribe form, consent link) or signing in. */
+    public function testEmailWordingFollowsThePurpose(): void
+    {
+        $news = $this->createList('NEWS', 'News');
+        $this->createSubscriber('jane@example.com');
+        $requester = $this->service(MagicLinkRequester::class);
+
+        self::assertTrue($requester->request('jane@example.com', 'confirm', null, $news));
+        $confirm = $this->getMailerMessage(0);
+        self::assertInstanceOf(\Symfony\Component\Mime\Email::class, $confirm);
+        self::assertSame('Confirm your subscription to News', $confirm->getSubject());
+        self::assertTrue($requester->request('jane@example.com', 'messages'));
+        $signIn = $this->getMailerMessage(1);
+        self::assertInstanceOf(\Symfony\Component\Mime\Email::class, $signIn);
+        self::assertStringEndsWith('sign-in link', (string) $signIn->getSubject());
+    }
+
     public function testRateLimitAndUnusableAddresses(): void
     {
         $requester = $this->service(MagicLinkRequester::class);

@@ -47,6 +47,11 @@ services:
     App\Config\SiteConfig:
         factory: '@App\Config\SiteConfigFactory'
 
+    # Lazy: stored SMTP secrets are decrypted only when mail is actually sent.
+    App\Mail\SmtpServerPool:
+        factory: '@App\Mail\SmtpServerPoolFactory'
+        lazy: true
+
     # One open transport per use (queue run, single send); never shared.
     App\Mail\MailConnection:
         shared: false

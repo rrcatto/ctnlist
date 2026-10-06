@@ -21,7 +21,7 @@ final class MembershipRepository
      * Every active list with this subscriber's membership, if any (system
      * lists first): the profile's membership report.
      *
-     * @return list<array{l_id: int, l_shortcode: string, l_name: string, ls_uuid: ?string, ls_subscribed_at: ?string, confirmed: bool, unsubscribed: bool}>
+     * @return list<array{l_id: int, l_shortcode: string, l_name: string, l_description: string, ls_uuid: ?string, ls_subscribed_at: ?string, confirmed: bool, unsubscribed: bool}>
      */
     public function forSubscriber(int $subscriberId): array
     {
@@ -29,12 +29,13 @@ final class MembershipRepository
             'l_id' => (int) $row['l_id'],
             'l_shortcode' => (string) $row['l_shortcode'],
             'l_name' => (string) $row['l_name'],
+            'l_description' => (string) $row['l_description'],
             'ls_uuid' => $row['ls_uuid'] === null ? null : (string) $row['ls_uuid'],
             'ls_subscribed_at' => $row['ls_subscribed_at'] === null ? null : (string) $row['ls_subscribed_at'],
             'confirmed' => (bool) $row['ls_confirmed'],
             'unsubscribed' => (bool) $row['ls_unsubscribed'],
         ], $this->db->fetchAllAssociative(
-            'SELECT l.l_id, l.l_shortcode, l.l_name, ls.ls_uuid, ls.ls_subscribed_at, ls.ls_confirmed, ls.ls_unsubscribed
+            'SELECT l.l_id, l.l_shortcode, l.l_name, l.l_description, ls.ls_uuid, ls.ls_subscribed_at, ls.ls_confirmed, ls.ls_unsubscribed
              FROM lists l
              LEFT JOIN list_subscribers ls ON ls.ls_l_id = l.l_id AND ls.ls_s_id = ?
              WHERE l.l_active = TRUE

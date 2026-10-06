@@ -3,14 +3,24 @@
 {% block title %}Import subscribers{% endblock %}
 
 {% block content %}
-<form action="{{ path('admin_import_submit') }}" method="post" enctype="multipart/form-data">
-  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-  <fieldset class="border rounded p-4">
-    <legend>Import subscriber file</legend>
-    <div class="mb-3"><label class="form-label" for="list_id">List</label>{% include 'admin/_list_select.html.twig' with {name: 'list_id', selected: (lists|first).l_id ?? 0} %}</div>
-    <div class="mb-3"><label class="form-label" for="i-priority">Priority</label><input class="form-control" id="i-priority" type="number" name="s_priority" value="0"></div>
-    <div class="mb-3"><label class="form-label" for="i-file">File</label><input class="form-control" id="i-file" type="file" name="subscriber_file"></div>
-    <button class="btn btn-primary" type="submit">Import</button>
-  </fieldset>
+{% include 'layout/_page_header.html.twig' with {title: 'Import subscribers', description: 'Adds the addresses in a file to a list as pending members, exactly like bulk subscribe.'} %}
+
+<form action="{{ path('admin_import_submit') }}" method="post" enctype="multipart/form-data" class="card">
+  <div class="card-body">
+    <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+    <div class="row g-3">
+      <div class="col-md-8"><label class="form-label" for="list_id">List</label>{% include 'admin/_list_select.html.twig' with {name: 'list_id', selected: (lists|first).l_id ?? 0} %}</div>
+      <div class="col-md-4"><label class="form-label" for="i-priority">Priority</label><input class="form-control" id="i-priority" type="number" name="s_priority" value="0"></div>
+      <div class="col-12">
+        <label class="form-label" for="i-file">File</label>
+        <input class="form-control" id="i-file" type="file" name="subscriber_file" aria-describedby="i-file-help">
+        <div class="form-text" id="i-file-help">A text file of email addresses, separated by commas, spaces or new lines.</div>
+      </div>
+    </div>
+  </div>
+  <div class="card-footer d-flex flex-wrap gap-2">
+    <button class="btn btn-primary" type="submit"><i class="bi bi-upload me-1" aria-hidden="true"></i>Import</button>
+    <a class="btn btn-outline-secondary" href="{{ path('admin_subscribers') }}">Cancel</a>
+  </div>
 </form>
 {% endblock %}

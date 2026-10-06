@@ -11,15 +11,15 @@
       <thead><tr><th>Subject</th><th>Sent</th><th>Actions</th></tr></thead>
       <tbody>
       {% for message in messages %}
-        {% set suffix = app.user.uuid ~ '/' ~ message.m_uniqid %}
+        {% set ids = {token: app.user.uuid, muid: message.m_uniqid} %}
         <tr>
           <td>{{ message.m_subject }}</td>
           <td>{{ message.sml_date_sent }}</td>
           <td class="d-flex flex-wrap gap-1">
-            <a class="btn btn-sm btn-outline-primary" href="{{ site.baseUrl }}resend/{{ suffix }}">Send again</a>
-            <a class="btn btn-sm btn-outline-secondary" href="{{ site.baseUrl }}forward/{{ suffix }}">Forward</a>
-            <a class="btn btn-sm btn-outline-success" href="{{ site.baseUrl }}like/{{ suffix }}">Like</a>
-            <a class="btn btn-sm btn-outline-danger" href="{{ site.baseUrl }}dislike/{{ suffix }}">Dislike</a>
+            <a class="btn btn-sm btn-outline-primary" href="{{ path('message_resend', ids) }}">Send again</a>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ path('message_forward', ids) }}">Forward</a>
+            <a class="btn btn-sm btn-outline-success" href="{{ path('message_reaction', ids|merge({reaction: 'like'})) }}">Like</a>
+            <a class="btn btn-sm btn-outline-danger" href="{{ path('message_reaction', ids|merge({reaction: 'dislike'})) }}">Dislike</a>
           </td>
         </tr>
       {% endfor %}

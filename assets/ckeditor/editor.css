@@ -112,3 +112,8 @@
 .ck-content .button--black {
 	background-color: #141517;
 }
+
+/* ctnlist: give the editing area a usable height in the message and template forms. */
+.ck-editor__editable_inline {
+	min-height: 24rem;
+}

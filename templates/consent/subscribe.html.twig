@@ -1,0 +1,77 @@
+{#
+  Subscribe page.
+  Visitors: `lists` (one list when coming from a message, with `message_id`)
+  and a form that emails a confirmation link (POST /login, return action
+  "confirm"); nothing is subscribed until the link is used and confirmed.
+  Signed-in subscribers: `memberships`, each with a subscribe/unsubscribe link.
+#}
+{% extends 'base.html.twig' %}
+{% import 'admin/_macros.html.twig' as ui %}
+
+{% block title %}Subscribe{% endblock %}
+
+{% block content %}
+{% if memberships is defined %}
+  {% embed 'layout/_page_header.html.twig' with {title: 'Subscribe', description: 'Choose the lists you want to receive. Each list needs its own confirmation, and you can unsubscribe at any time.'} %}
+    {% block actions %}<a class="btn btn-outline-secondary" href="{{ path('profile') }}"><i class="bi bi-person me-1" aria-hidden="true"></i>My profile</a>{% endblock %}
+  {% endembed %}
+  <div class="list-group app-narrow ms-0">
+    {% for membership in memberships %}
+      {% set state = ui.membership_state(membership)|trim %}
+      <div class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2 py-3">
+        <div class="me-auto">
+          <div class="fw-semibold">{{ membership.l_name }} {{ ui.membership_badge(state) }}</div>
+          {% if membership.l_description %}<div class="small text-body-secondary">{{ membership.l_description }}</div>{% endif %}
+        </div>
+        {% if state == 'confirmed' %}
+          <a class="btn btn-sm btn-outline-secondary" href="{{ path('consent_unsubscribe', {token: app.user.uuid, shortcode: membership.l_shortcode}) }}">Unsubscribe</a>
+        {% else %}
+          <a class="btn btn-sm btn-primary" href="{{ path('consent_confirm', {token: app.user.uuid, shortcode: membership.l_shortcode}) }}">{{ state == 'pending' ? 'Confirm' : 'Subscribe' }}</a>
+        {% endif %}
+      </div>
+    {% else %}
+      <div class="list-group-item text-body-secondary">There are no lists to subscribe to.</div>
+    {% endfor %}
+  </div>
+{% else %}
+  {% set single = lists|length == 1 %}
+  {% include 'layout/_page_header.html.twig' with {
+    title: single ? 'Subscribe to ' ~ (lists|first).l_name : 'Subscribe',
+    description: 'Enter your email address and we will send you a link to confirm your subscription. You are only subscribed once you confirm.'
+  } %}
+  {% if single and (lists|first).l_description %}<p class="app-narrow ms-0">{{ (lists|first).l_description }}</p>{% endif %}
+  {% if lists is empty %}
+    {% include 'layout/_empty_state.html.twig' with {icon: 'envelope', message: 'There are no lists to subscribe to.'} %}
+  {% else %}
+    <form action="{{ path('login_request') }}" method="post" class="card app-narrow ms-0">
+      <div class="card-body">
+        <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+        <input type="hidden" name="return_action" value="confirm">
+        {% if message_id %}<input type="hidden" name="return_message_id" value="{{ message_id }}">{% endif %}
+        <div class="mb-3">
+          <label class="form-label" for="subscribe-email">Email address</label>
+          <input class="form-control" id="subscribe-email" name="email" type="email" maxlength="254" autocomplete="email" required>
+        </div>
+        {% if single %}
+          <input type="hidden" name="return_list_id" value="{{ (lists|first).l_id }}">
+        {% else %}
+          <fieldset class="mb-0">
+            <legend class="form-label fs-6">List</legend>
+            {% for list in lists %}
+              <div class="form-check mb-2">
+                <input class="form-check-input" type="radio" name="return_list_id" value="{{ list.l_id }}" id="subscribe-list-{{ list.l_id }}"{{ loop.first ? ' checked' }}{% if list.l_description %} aria-describedby="subscribe-list-{{ list.l_id }}-help"{% endif %}>
+                <label class="form-check-label fw-semibold" for="subscribe-list-{{ list.l_id }}">{{ list.l_name }}</label>
+                {% if list.l_description %}<div class="form-text mt-0" id="subscribe-list-{{ list.l_id }}-help">{{ list.l_description }}</div>{% endif %}
+              </div>
+            {% endfor %}
+          </fieldset>
+        {% endif %}
+      </div>
+      <div class="card-footer d-flex flex-wrap align-items-center gap-3">
+        <button class="btn btn-primary" type="submit"><i class="bi bi-envelope-check me-1" aria-hidden="true"></i>Subscribe</button>
+        <a class="small" href="{{ path('login') }}">Already subscribed? Sign in to manage your lists</a>
+      </div>
+    </form>
+  {% endif %}
+{% endif %}
+{% endblock %}

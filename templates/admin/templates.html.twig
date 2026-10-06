@@ -3,15 +3,24 @@
 {% block title %}Templates{% endblock %}
 
 {% block content %}
+{% embed 'layout/_page_header.html.twig' with {title: 'Templates', description: 'Layouts that wrap a message: the message body replaces {content}.'} %}
+  {% block actions %}
+    <a class="btn btn-primary" href="{{ path('admin_template') }}"><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>New template</a>
+  {% endblock %}
+{% endembed %}
+
 {% if templates is empty %}
-  <p>There are no templates.</p>
+  {% include 'layout/_empty_state.html.twig' with {icon: 'file-earmark-text', message: 'There are no templates.', hint: 'Messages can be sent without a template.'} %}
 {% else %}
   <div class="table-responsive">
-    <table class="table table-striped table-hover table-bordered">
-      <thead class="table-info"><tr><th>Template <i class="fa fa-pencil" aria-hidden="true"></i></th></tr></thead>
+    <table class="table table-hover align-middle">
+      <thead class="table-light"><tr><th scope="col">Name</th><th scope="col" class="text-end">Actions</th></tr></thead>
       <tbody>
       {% for template in templates %}
-        <tr><td><a href="{{ path('admin_template', {id: template.t_id}) }}">{{ template.t_name }}</a></td></tr>
+        <tr>
+          <td><a class="fw-semibold" href="{{ path('admin_template', {id: template.t_id}) }}">{{ template.t_name }}</a></td>
+          <td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="{{ path('admin_template', {id: template.t_id}) }}"><i class="bi bi-pencil me-1" aria-hidden="true"></i>Edit</a></td>
+        </tr>
       {% endfor %}
       </tbody>
     </table>

@@ -7,7 +7,7 @@
   <h1 class="h4">{{ heading }}</h1>
   <p>{{ intro }}</p>
 {% endif %}
-<form name="loginform" action="{{ path('login_request') }}" method="post" role="form" class="mx-auto" style="max-width: 520px;">
+<form name="loginform" action="{{ path('login_request') }}" method="post" class="app-narrow">
   <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
   <input type="hidden" name="return_action" value="{{ return_action }}">
   {% if return_message_id is defined %}<input type="hidden" name="return_message_id" value="{{ return_message_id }}">{% endif %}

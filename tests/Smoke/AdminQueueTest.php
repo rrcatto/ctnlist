@@ -50,7 +50,7 @@ final class AdminQueueTest extends SmokeTestCase
         self::assertSame($rows, (int) self::$db->query("SELECT COUNT(*) FROM sendlog WHERE sl_muid = '{$muid}' AND sl_type = 'MESSAGE'")->fetchColumn());
 
         $proof = self::submit($client, '/sendtome/' . $muid, '/sendtome/' . $muid, []);
-        self::assertStringContainsString('Proof message sent.', $proof, 'MAIL_TEST_ADDRESS is the administrator');
+        self::assertMatchesRegularExpression('/Proof message sent to [^<]+@[^<]+\./', $proof, 'to MAIL_TEST_ADDRESS when no address is entered');
 
         self::assertStringContainsString('The stop request has been recorded.', self::submit($client, '/stop-send', '/stop-send', []));
         self::assertSame('N', self::$db->query("SELECT o_value FROM options WHERE o_key = 'SendQueue'")->fetchColumn());

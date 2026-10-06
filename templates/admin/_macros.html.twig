@@ -1,0 +1,21 @@
+{# Status badges shared by the administration pages. #}
+
+{# A list membership state: confirmed, pending, unsubscribed or not joined. #}
+{% macro membership_badge(state) %}
+  {%- set styles = {confirmed: 'text-bg-success', pending: 'text-bg-warning', unsubscribed: 'text-bg-secondary'} -%}
+  <span class="badge {{ styles[state] ?? 'text-bg-light border' }}">{{ state }}</span>
+{%- endmacro %}
+
+{# State of a membership row from MembershipRepository::forSubscriber(). #}
+{% macro membership_state(membership) %}
+  {{- membership.ls_uuid is null ? 'not joined' : (membership.unsubscribed ? 'unsubscribed' : (membership.confirmed ? 'confirmed' : 'pending')) -}}
+{% endmacro %}
+
+{% macro system_badge(system) %}
+  {%- if system %}<span class="badge text-bg-dark"><i class="bi bi-lock-fill me-1" aria-hidden="true"></i>System</span>{% else %}<span class="badge text-bg-light border">Custom</span>{% endif -%}
+{% endmacro %}
+
+{% macro active_badge(active) %}
+  {%- if active %}<span class="badge text-bg-success">Active</span>{% else %}<span class="badge text-bg-secondary">Inactive</span>{% endif -%}
+{% endmacro %}
+

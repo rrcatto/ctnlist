@@ -1,27 +1,34 @@
 {% extends 'base.html.twig' %}
+{% import 'admin/_macros.html.twig' as ui %}
 
 {% block title %}Lists{% endblock %}
 
 {% block content %}
+{% include 'layout/_page_header.html.twig' with {title: 'Lists', description: 'Mailing lists subscribers can join. Each membership needs its own confirmation. System lists such as ALL are protected.'} %}
+
 <div class="row g-4">
   <div class="col-lg-7">
-    <h1 class="h4">Lists</h1>
     <div class="table-responsive">
-      <table class="table table-striped">
-        <thead><tr><th>Shortcode</th><th>Name</th><th>Type</th><th>Status</th><th></th></tr></thead>
+      <table class="table table-hover align-middle">
+        <thead class="table-light"><tr><th scope="col">Shortcode</th><th scope="col">Name</th><th scope="col">Type</th><th scope="col">Status</th><th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th></tr></thead>
         <tbody>
         {% for list in lists %}
           <tr>
-            <td>{{ list.l_shortcode }}</td>
-            <td>{{ list.l_name }}</td>
-            <td>{{ list.l_system ? 'System' : 'Custom' }}</td>
-            <td>{{ list.l_active ? 'Active' : 'Inactive' }}</td>
+            <td><code>{{ list.l_shortcode }}</code></td>
             <td>
-              {% if not list.l_system %}
-                <form action="{{ path('admin_lists_delete') }}" method="post" onsubmit="return confirm('Delete this list?')">
+              <div class="fw-semibold">{{ list.l_name }}</div>
+              {% if list.l_description %}<div class="small text-body-secondary d-none d-md-block">{{ list.l_description }}</div>{% endif %}
+            </td>
+            <td>{{ ui.system_badge(list.l_system) }}</td>
+            <td>{{ ui.active_badge(list.l_active) }}</td>
+            <td class="text-end">
+              {% if list.l_system %}
+                <span class="small text-body-secondary" title="System lists cannot be deleted"><i class="bi bi-shield-lock" aria-hidden="true"></i> Protected</span>
+              {% else %}
+                <form action="{{ path('admin_lists_delete') }}" method="post" data-confirm="Delete the list {{ list.l_name }}?">
                   <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
                   <input type="hidden" name="list_id" value="{{ list.l_id }}">
-                  <button class="btn btn-sm btn-outline-danger">Delete</button>
+                  <button class="btn btn-sm btn-outline-danger" type="submit" aria-label="Delete the list {{ list.l_name }}"><i class="bi bi-trash" aria-hidden="true"></i><span class="d-none d-md-inline ms-1">Delete</span></button>
                 </form>
               {% endif %}
             </td>
@@ -32,23 +39,25 @@
     </div>
   </div>
   <div class="col-lg-5">
-    <form action="{{ path('admin_lists_create') }}" method="post" class="card card-body">
-      <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-      <h2 class="h5">Create a topic list</h2>
-      <div class="mb-3">
-        <label class="form-label" for="list-shortcode">Shortcode</label>
-        <input class="form-control" id="list-shortcode" name="shortcode" minlength="3" maxlength="6" pattern="[A-Za-z0-9]{3,6}" required>
-        <div class="form-text">3–6 letters or numbers.</div>
+    <form action="{{ path('admin_lists_create') }}" method="post" class="card">
+      <div class="card-header fw-semibold">Create a topic list</div>
+      <div class="card-body">
+        <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+        <div class="mb-3">
+          <label class="form-label" for="list-shortcode">Shortcode <span class="text-danger" aria-hidden="true">*</span></label>
+          <input class="form-control text-uppercase" id="list-shortcode" name="shortcode" minlength="3" maxlength="6" pattern="[A-Za-z0-9]{3,6}" required aria-describedby="list-shortcode-help">
+          <div class="form-text" id="list-shortcode-help">3–6 letters or numbers, stored in upper case. Used in links and headers.</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="list-name">Name <span class="text-danger" aria-hidden="true">*</span></label>
+          <input class="form-control" id="list-name" name="name" maxlength="100" required>
+        </div>
+        <div class="mb-0">
+          <label class="form-label" for="list-description">Description</label>
+          <textarea class="form-control" id="list-description" name="description" rows="4"></textarea>
+        </div>
       </div>
-      <div class="mb-3">
-        <label class="form-label" for="list-name">Name</label>
-        <input class="form-control" id="list-name" name="name" maxlength="100" required>
-      </div>
-      <div class="mb-3">
-        <label class="form-label" for="list-description">Description</label>
-        <textarea class="form-control" id="list-description" name="description" rows="5"></textarea>
-      </div>
-      <button class="btn btn-primary" type="submit">Create list</button>
+      <div class="card-footer"><button class="btn btn-primary" type="submit"><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Create list</button></div>
     </form>
   </div>
 </div>

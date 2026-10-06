@@ -1,0 +1,101 @@
+{#
+  Administration bar. Every item names the ACL permission its controller
+  requires (#[IsGranted]); only items the signed-in user is granted are shown,
+  so custom roles see exactly the tools they may use (administrators get all
+  permissions through AclVoter). This only hides links: the controllers still
+  enforce the permissions. A group with one visible item becomes a plain link.
+  `routes` lists the pages that highlight the group; an item with `badge`
+  also shows its counter on the group.
+#}
+{% set admin_groups = [
+  {label: 'Messages', icon: 'envelope', routes: ['admin_messages', 'admin_message', 'admin_proof', 'report_message_views', 'message_forward_admin'], items: [
+    {label: 'All messages', route: 'admin_messages', permission: 'messages.manage', counter: 'messages'},
+    {label: 'New message', route: 'admin_message', permission: 'messages.manage'},
+  ]},
+  {label: 'Templates', icon: 'file-earmark-text', routes: ['admin_templates', 'admin_template'], items: [
+    {label: 'All templates', route: 'admin_templates', permission: 'templates.manage', counter: 'templates'},
+    {label: 'New template', route: 'admin_template', permission: 'templates.manage'},
+  ]},
+  {label: 'Sending', icon: 'send', routes: ['admin_queue', 'admin_queue_message', 'admin_queue_rotation', 'admin_queue_process', 'admin_queue_stop'], items: [
+    {label: 'Queue', route: 'admin_queue', permission: 'queue.process', counter: 'queue', badge: true},
+    {label: 'Queue multiple messages', route: 'admin_queue_rotation', permission: 'messages.queue'},
+    {label: 'Start sending', route: 'admin_queue_process', permission: 'queue.process'},
+    {label: 'Stop sending', route: 'admin_queue_stop', permission: 'queue.process'},
+  ]},
+  {label: 'Subscribers', icon: 'people', routes: ['admin_subscribers', 'admin_subscribers_active', 'admin_subscriber', 'admin_bulk_subscribe', 'admin_bulk_unsubscribe', 'admin_import', 'admin_export', 'admin_sync'], items: [
+    {label: 'All subscribers', route: 'admin_subscribers', permission: 'subscribers.view', counter: 'subscribers'},
+    {label: 'Active readers', route: 'admin_subscribers_active', permission: 'subscribers.view', counter: 'activeReaders'},
+    {label: 'Bulk subscribe', route: 'admin_bulk_subscribe', permission: 'subscribers.manage'},
+    {label: 'Bulk unsubscribe', route: 'admin_bulk_unsubscribe', permission: 'subscribers.manage'},
+    {label: 'Import', route: 'admin_import', permission: 'subscribers.manage'},
+    {label: 'Export', route: 'admin_export', permission: 'subscribers.manage'},
+    {label: 'Synchronise', route: 'admin_sync', permission: 'subscribers.manage'},
+  ]},
+  {label: 'Lists', icon: 'list-ul', routes: ['admin_lists'], items: [
+    {label: 'Lists', route: 'admin_lists', permission: 'lists.manage'},
+  ]},
+  {label: 'Reports', icon: 'bar-chart', routes: ['report_sendlog', 'report_sitelog'], items: [
+    {label: 'Send Log', route: 'report_sendlog', permission: 'logs.view', counter: 'sendlog'},
+    {label: 'Site Log', route: 'report_sitelog', permission: 'logs.view'},
+  ]},
+  {label: 'Roles & ACL', icon: 'shield-lock', routes: ['admin_roles', 'admin_role'], items: [
+    {label: 'Roles & ACL', route: 'admin_roles', permission: 'roles.manage'},
+  ]},
+  {label: 'Settings', icon: 'sliders', routes: ['admin_settings'], items: [
+    {label: 'Settings', route: 'admin_settings', permission: 'settings.manage'},
+  ]},
+] %}
+{% set route = app.request.attributes.get('_route') %}
+{% set visible_groups = [] %}
+{% if app.user %}
+  {% for group in admin_groups %}
+    {% set items = group.items|filter(item => is_granted(item.permission)) %}
+    {% if items is not empty %}
+      {% set visible_groups = visible_groups|merge([group|merge({items: items})]) %}
+    {% endif %}
+  {% endfor %}
+{% endif %}
+{% if visible_groups is not empty %}
+<nav class="navbar navbar-expand-lg bg-dark app-adminbar" data-bs-theme="dark" aria-label="Administration">
+  <div class="container">
+    <span class="navbar-text text-white-50 me-3 d-none d-lg-inline"><i class="bi bi-gear me-1" aria-hidden="true"></i>Admin</span>
+    <button class="navbar-toggler border-0 px-0 fs-6 text-white-50" type="button" data-bs-toggle="collapse" data-bs-target="#admin-nav" aria-controls="admin-nav" aria-expanded="false" aria-label="Toggle administration menu">
+      <i class="bi bi-gear me-1" aria-hidden="true"></i>Administration
+    </button>
+    <div class="collapse navbar-collapse" id="admin-nav">
+      <ul class="navbar-nav">
+        {% for group in visible_groups %}
+          {% set group_active = route in group.routes %}
+          {% if group.items|length == 1 %}
+            {% set item = group.items|first %}
+            <li class="nav-item">
+              <a class="nav-link{{ group_active ? ' active' }}" href="{{ path(item.route) }}"{% if route == item.route %} aria-current="page"{% endif %}><i class="bi bi-{{ group.icon }} me-1" aria-hidden="true"></i>{{ item.label }}</a>
+            </li>
+          {% else %}
+            {% set menu_id = 'admin-menu-' ~ loop.index %}
+            <li class="nav-item dropdown">
+              <a class="nav-link dropdown-toggle{{ group_active ? ' active' }}" href="#" id="{{ menu_id }}" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="bi bi-{{ group.icon }} me-1" aria-hidden="true"></i>{{ group.label }}
+                {%- set badge_item = group.items|filter(item => item.badge ?? false)|first %}
+                {%- if badge_item %}
+                  <span class="badge rounded-pill text-bg-secondary ms-1">{{ attribute(counters, badge_item.counter) }}</span>
+                {%- endif %}
+              </a>
+              <ul class="dropdown-menu" aria-labelledby="{{ menu_id }}">
+                {% for item in group.items %}
+                  <li>
+                    <a class="dropdown-item d-flex justify-content-between align-items-center gap-3{{ route == item.route ? ' active' }}" href="{{ path(item.route) }}"{% if route == item.route %} aria-current="page"{% endif %}>
+                      <span>{{ item.label }}</span>
+                      {% if item.counter is defined %}<span class="badge rounded-pill text-bg-light">{{ attribute(counters, item.counter) }}</span>{% endif %}
+                    </a>
+                  </li>
+                {% endfor %}
+              </ul>
+            </li>
+          {% endif %}
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+</nav>
+{% endif %}

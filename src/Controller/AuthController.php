@@ -38,7 +38,9 @@ final class AuthController extends AbstractController
             $messageId > 0 ? $messageId : null,
             $listId > 0 ? $listId : null
         );
-        return $this->render('auth/link_sent.html.twig', ['message' => 'If the address is valid, a secure sign-in link has been sent.']);
+        return $this->render('auth/link_sent.html.twig', ['message' => $request->request->getString('return_action') === 'confirm'
+            ? 'If the address is valid, we have emailed you a link to confirm your subscription. You are subscribed once you confirm.'
+            : 'If the address is valid, a secure sign-in link has been sent.']);
     }
 
     /** From the authentication prompt on a subscriber link. */

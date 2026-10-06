@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller\Admin;
 
+use App\Campaign\MessageNotFound;
 use App\Campaign\MessageService;
 use App\Config\SiteConfig;
 use App\Http\Pagination;
@@ -31,6 +32,10 @@ final class QueueController extends AbstractController
     private const ROTATION_VOLUME = 1000000;
     private const SEND_LIMIT = 250000;
     private const ROTATION_SLOTS = 4;
+
+    /** Next steps offered on the result pages (shown when the user holds the permission). */
+    private const QUEUE_LINK = ['label' => 'View the queue', 'route' => 'admin_queue', 'permission' => 'queue.process'];
+    private const MESSAGES_LINK = ['label' => 'Back to messages', 'route' => 'admin_messages', 'permission' => 'messages.manage'];
 
     public function __construct(
         private readonly QueueRepository $queue,
@@ -122,7 +127,7 @@ final class QueueController extends AbstractController
     {
         set_time_limit(86400);
         $sent = $processor->process($request->request->getString('muid'), $request->request->getInt('limit') ?: self::SEND_LIMIT);
-        return $this->result('Process queue', 'Sent ' . $sent . ' message(s).');
+        return $this->result('Process queue', 'Sent ' . $sent . ' message(s).', [self::QUEUE_LINK]);
     }
 
     #[Route('/stop-send', name: 'admin_queue_stop', methods: ['GET'])]
@@ -138,33 +143,46 @@ final class QueueController extends AbstractController
     public function stop(QueueProcessor $processor): Response
     {
         $processor->requestStop();
-        return $this->result('Stop sending', 'The stop request has been recorded.');
+        return $this->result('Stop sending', 'The stop request has been recorded.', [self::QUEUE_LINK]);
     }
 
-    /** Proof copy to MAIL_TEST_ADDRESS (which must be a subscriber). */
+    /** Proof copy to any address, by default MAIL_TEST_ADDRESS (no subscriber record needed). */
     #[Route('/sendtome/{muid}', name: 'admin_proof', methods: ['GET'])]
     #[IsGranted('messages.manage')]
     public function proofForm(string $muid, SiteConfig $site): Response
     {
-        return $this->render('admin/proof.html.twig', ['muid' => $muid, 'test_email' => $site->testEmail]);
+        return $this->render('admin/proof.html.twig', [
+            'muid' => $muid,
+            'test_email' => $site->testEmail,
+            'test_email_valid' => filter_var(trim($site->testEmail), FILTER_VALIDATE_EMAIL) !== false,
+        ]);
     }
 
     #[Route('/sendtome/{muid}', name: 'admin_proof_submit', methods: ['POST'])]
     #[IsGranted('messages.manage')]
     #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
-    public function proof(string $muid, SiteConfig $site, MessageService $messages): Response
+    public function proof(string $muid, Request $request, SiteConfig $site, MessageService $messages): Response
     {
-        $sent = $messages->sendTo($muid, $site->testEmail, 'PROOF');
-        return $this->result('Proof send', $sent ? 'Proof message sent.' : 'Proof message could not be sent.');
+        $email = trim($request->request->getString('email')) ?: $site->testEmail;
+        try {
+            $sent = $messages->sendProof($muid, $email);
+        } catch (\InvalidArgumentException $e) {
+            $this->addFlash('danger', $e->getMessage());
+            return $this->redirectToRoute('admin_proof', ['muid' => $muid]);
+        } catch (MessageNotFound $e) {
+            throw $this->createNotFoundException($e->getMessage(), $e);
+        }
+        return $this->result('Proof send', $sent ? 'Proof message sent to ' . $email . '.' : 'Proof message could not be sent.', [self::MESSAGES_LINK]);
     }
 
     private function outcome(string $title, QueueOutcome $outcome): Response
     {
-        return $this->result($title, $outcome->problem ?? 'Finished queueing: ' . $outcome->queued);
+        return $this->result($title, $outcome->problem ?? 'Finished queueing: ' . $outcome->queued, [self::QUEUE_LINK, self::MESSAGES_LINK]);
     }
 
-    private function result(string $title, string $message): Response
+    /** @param list<array{label: string, route: string, permission: string}> $links */
+    private function result(string $title, string $message, array $links = []): Response
     {
-        return $this->render('page/result.html.twig', ['title' => $title, 'message' => $message]);
+        return $this->render('page/result.html.twig', ['title' => $title, 'message' => $message, 'links' => $links]);
     }
 }

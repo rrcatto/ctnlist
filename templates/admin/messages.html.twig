@@ -3,28 +3,54 @@
 {% block title %}Messages{% endblock %}
 
 {% block content %}
+{% embed 'layout/_page_header.html.twig' with {title: 'Messages', description: 'Campaign messages, newest first. Send a proof to check a message, queue it to add its audience to the delivery queue, then start sending.'} %}
+  {% block actions %}
+    <a class="btn btn-primary" href="{{ path('admin_message') }}"><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>New message</a>
+    {% if is_granted('messages.queue') %}<a class="btn btn-outline-secondary" href="{{ path('admin_queue_rotation') }}">Queue multiple messages</a>{% endif %}
+  {% endblock %}
+{% endembed %}
+
 {% if messages is empty %}
-  <p>There are no messages.</p>
+  {% include 'layout/_empty_state.html.twig' with {icon: 'envelope', message: 'There are no messages.', hint: 'Create a message to get started.'} %}
 {% else %}
+  {% set can_queue = is_granted('messages.queue') %}
+  {% set can_send = is_granted('queue.process') %}
+  {% set can_view_activity = is_granted('logs.view') %}
   <div class="table-responsive">
-    <table class="table table-striped table-hover table-bordered">
-      <thead><tr><th>Subject</th><th>Lists</th><th>Sent</th><th>Q:S</th><th>Last read</th><th>Last like</th><th>Reads</th><th>Likes</th><th>Dislikes</th><th>Add2Q</th><th>SendQ</th><th>Proof</th></tr></thead>
+    <table class="table table-hover align-middle">
+      <thead class="table-light">
+        <tr>
+          <th scope="col">Subject</th>
+          <th scope="col">Lists</th>
+          <th scope="col">First sent</th>
+          <th scope="col" class="text-end" title="Queued : sent">Q:S</th>
+          <th scope="col">Last read</th>
+          <th scope="col">Last like</th>
+          <th scope="col" class="text-end">Reads</th>
+          <th scope="col" class="text-end">Likes</th>
+          <th scope="col" class="text-end">Dislikes</th>
+          <th scope="col" class="text-end">Actions</th>
+        </tr>
+      </thead>
       <tbody>
       {% for message in messages %}
-        {% set muid = message.m_uniqid|url_encode %}
         <tr>
-          <td><a href="{{ path('admin_message', {muid: message.m_uniqid}) }}" title="{{ message.m_subject }}">{{ message.m_subject|length > 60 ? message.m_subject|slice(0, 60) ~ '…' : message.m_subject }}</a></td>
-          <td>{% if message.list_names is empty %}<em>None selected</em>{% else %}{{ message.list_names }}{% endif %}</td>
-          <td>{{ message.m_datesent }}</td>
-          <td>{{ message.m_queued }}:{{ message.m_sent }}</td>
-          <td>{{ message.m_last_read }}</td>
-          <td>{{ message.m_last_like }}</td>
-          <td><a href="{{ site.baseUrl }}message-views/{{ muid }}">{{ message.m_reads }}</a></td>
-          <td>{{ message.m_likes }}</td>
-          <td>{{ message.m_dislikes }}</td>
-          <td><a class="btn btn-sm u-btn-deeporange" href="{{ site.baseUrl }}queuelist/{{ muid }}">Queue</a></td>
-          <td><a class="btn btn-sm u-btn-yellow" href="{{ site.baseUrl }}processqueue/{{ muid }}">SendQ</a></td>
-          <td><a class="btn btn-sm u-btn-indigo" href="{{ site.baseUrl }}sendtome/{{ muid }}">Proof</a></td>
+          <td><a class="fw-semibold" href="{{ path('admin_message', {muid: message.m_uniqid}) }}" title="{{ message.m_subject }}">{{ message.m_subject|length > 60 ? message.m_subject|slice(0, 60) ~ '…' : message.m_subject }}</a></td>
+          <td>{% if message.list_names is empty %}<span class="text-body-secondary"><em>None selected</em></span>{% else %}{{ message.list_names }}{% endif %}</td>
+          <td class="text-nowrap">{{ message.m_datesent ?: '–' }}</td>
+          <td class="text-end text-nowrap">{{ message.m_queued }}:{{ message.m_sent }}</td>
+          <td class="text-nowrap">{{ message.m_last_read ?: '–' }}</td>
+          <td class="text-nowrap">{{ message.m_last_like ?: '–' }}</td>
+          <td class="text-end">{% if can_view_activity %}<a href="{{ path('report_message_views', {muid: message.m_uniqid}) }}" title="Message activity">{{ message.m_reads }}</a>{% else %}{{ message.m_reads }}{% endif %}</td>
+          <td class="text-end">{{ message.m_likes }}</td>
+          <td class="text-end">{{ message.m_dislikes }}</td>
+          <td class="text-end">
+            <div class="btn-group btn-group-sm" role="group" aria-label="Actions for {{ message.m_subject }}">
+              <a class="btn btn-outline-secondary" href="{{ path('admin_proof', {muid: message.m_uniqid}) }}">Proof</a>
+              {% if can_queue %}<a class="btn btn-outline-primary" href="{{ path('admin_queue_message', {muid: message.m_uniqid}) }}">Queue</a>{% endif %}
+              {% if can_send %}<a class="btn btn-outline-success" href="{{ path('admin_queue_process', {muid: message.m_uniqid}) }}" title="Send this message's queued entries">Send</a>{% endif %}
+            </div>
+          </td>
         </tr>
       {% endfor %}
       </tbody>

@@ -5,21 +5,27 @@ declare(strict_types=1);
 namespace App\Mail;
 
 use App\Config\SiteConfig;
-use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
  * The configured transports. Campaign queues fail over across the active
  * MAIL_SMTP_SERVERS_JSON entries (or MAILER_DSN alone); transactional mail
- * prefers MAILER_DSN and falls back to the first JSON entry.
+ * prefers MAILER_DSN and falls back to the first JSON entry. Built by
+ * SmtpServerPoolFactory from the effective settings.
  */
 final class SmtpServerPool
 {
+    /** @var list<array<string, mixed>> MAIL_SMTP_SERVERS_JSON entries */
+    private readonly array $servers;
+
+    /** @param list<array<string, mixed>>|null $servers the failover servers; null uses SiteConfig's (.env) */
     public function __construct(
         private readonly SiteConfig $site,
-        #[Autowire(env: 'MAILER_DSN')] private readonly string $mailerDsn,
-        #[Autowire(env: 'int:MAIL_BATCH_SIZE')] private readonly int $batchSize,
-        #[Autowire(env: 'int:MAIL_BATCH_DELAY')] private readonly int $batchDelay,
+        private readonly string $mailerDsn,
+        private readonly int $batchSize,
+        private readonly int $batchDelay,
+        ?array $servers = null,
     ) {
+        $this->servers = $servers ?? $site->smtpServers;
     }
 
     /** @return list<SmtpServer> in failover order */
@@ -37,7 +43,7 @@ final class SmtpServerPool
         if (trim($this->mailerDsn) !== '') {
             return $this->mailerDsnServer();
         }
-        $first = $this->site->smtpServers[0] ?? null;
+        $first = $this->servers[0] ?? null;
         return is_array($first) && (int) ($first['active'] ?? 0) === 1
             ? SmtpServer::fromConfig($first, $this->site->emailsPerMinute)
             : null;
@@ -47,7 +53,7 @@ final class SmtpServerPool
     private function activeJsonServers(): array
     {
         $servers = [];
-        foreach ($this->site->smtpServers as $entry) {
+        foreach ($this->servers as $entry) {
             if ((int) ($entry['active'] ?? 0) === 1) {
                 $servers[] = SmtpServer::fromConfig($entry, $this->site->emailsPerMinute);
             }

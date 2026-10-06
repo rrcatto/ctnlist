@@ -41,7 +41,7 @@ Restored or retained:
 - Every successful email handoff is written to `sendlog`.
 - Every campaign-content delivery is written to `smlog`.
 - A normal queue send is blocked when the `(subscriber UUID, MUID)` `smlog` record already exists.
-- Resends, proofs and administrator copies are deliberate exceptions but remain audited.
+- Resends, proofs and administrator copies are deliberate exceptions but remain audited (proofs in the Send Log only).
 - Forwarded campaign copies use the campaign mail path and retain list context.
 
 ## Subscriber actions
@@ -65,7 +65,6 @@ Transactional notification email and Send Log recording are restored for:
 - import and export
 - subscriber synchronisation
 - v5 email typo/domain correction and address-change handling
-- Ecwid subscription endpoint
 - queue inspection and management
 - message activity report
 - Send Log report
@@ -102,6 +101,12 @@ Made while porting to Symfony, where the v5 behaviour was a defect rather than a
 - Forms on the Symfony pages redirect after a successful change and show the outcome as a message, so reloading does not resubmit.
 - Saving the subscriber form as a subscriber ignores a posted priority: v5 added 100 to whatever priority the request carried, so a crafted request could raise one's own send priority. Subscribers still get the v5 result of 100.
 - The Site Log records every request again, including Symfony pages and unknown paths (5.0.2–5.0.5 recorded only requests that reached the Fat-Free bridge; fixed in 6.0). The row is written after the response is sent, so the reverse DNS lookup no longer delays pages; its time is PHP time like the rest of the application (it was the database's UTC default), and the IP is the client address as Symfony determines it (`X-Forwarded-For` is honoured only from `TRUSTED_PROXIES`; the raw header is still recorded in its own column).
+- The Ecwid store page (`/store`), the Ecwid subscription endpoint (`POST /ecwid-subscribe`) and the `{STORE}` merge tag (`APP_STORE_URL`) are removed in 6.0.1: the store is defunct. Old content that still contains `{STORE}` renders it as nothing.
+- `/subscribe` no longer shows a sign-in form. Signed-in subscribers see every list with their membership and a subscribe or unsubscribe action (v5 asked them to sign in again). Visitors get a subscribe form (email address and list) that emails them a link to confirm; as before, nothing is subscribed until they confirm.
+- Proofs go to any valid address (by default `MAIL_TEST_ADDRESS`, editable on the proof page) without needing a subscriber record. v5 required the test address to be a subscriber and marked the proof as that subscriber's delivery in `smlog`, which could make the queue skip them for the real campaign. A proof is now rendered with test merge values (first name "Test", last name "Recipient", links that belong to no subscriber, no tracking pixel) and logged in the Send Log only.
+- Links in a proof copy that would act for a subscriber (unsubscribe, confirm, forward, preferences, reactions, booking and contact forms) lead to a page explaining that a proof has no subscriber; proofs have no tracking pixel.
+- A sign-in link requested to confirm a list (the subscribe form, a confirmation link) is sent as "Confirm your subscription to …" instead of a sign-in email; it is the same secure link.
+- Role administration is complete: custom roles can be renamed, described, deleted and removed from subscribers, each role lists its members, and subscribers are found by search instead of a picker limited to the first 500. Non-administrators cannot hand out permissions they do not hold.
 - Opening another person's subscriber form, or one that does not exist, gives the 403 or 404 page instead of a 200 page reading "Access denied." or "The subscriber does not exist.".
 
 ## Review and deployment

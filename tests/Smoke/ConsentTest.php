@@ -71,8 +71,11 @@ final class ConsentTest extends SmokeTestCase
 
     public function testSubscribeEntryPoint(): void
     {
-        $general = self::request(self::client(), 'GET', '/subscribe');
-        self::assertStringContainsString('Manage subscriptions', $general['body']);
+        $general = self::request(self::client(), 'GET', '/subscribe')['body'];
+        self::assertMatchesRegularExpression('#<h1 class="h3 mb-1">Subscribe( to [^<]+)?</h1>#', $general, 'a subscribe form, not a sign-in page');
+        self::assertStringContainsString('name="return_action" value="confirm"', $general);
+        self::assertStringContainsString('name="return_list_id"', $general, 'visitors choose a list');
+        self::assertStringNotContainsString('Sign in by email', $general);
 
         $anonymous = self::request(self::client(), 'GET', '/subscribe?m=' . self::$muid);
         self::assertStringContainsString('Subscribe to ALL', $anonymous['body'], 'the message\'s only list');
@@ -80,6 +83,11 @@ final class ConsentTest extends SmokeTestCase
 
         $client = self::client();
         self::loginAsAdmin($client);
+        $page = self::request($client, 'GET', '/subscribe');
+        self::assertSame(200, $page['status'], 'signed-in subscribers are not asked to sign in');
+        self::assertStringNotContainsString('name="email"', $page['body']);
+        self::assertMatchesRegularExpression('#href="/(confirm|unsubscribe)/' . self::$admin['s_uuid'] . '/ALL"#', $page['body'], 'their lists with actions');
+
         $signedIn = self::request($client, 'GET', '/subscribe?m=' . self::$muid);
         self::assertSame(302, $signedIn['status']);
         self::assertStringEndsWith('/confirm/' . self::$admin['s_uuid'] . '/ALL/' . self::$muid, $signedIn['location']);

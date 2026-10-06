@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Repository\ListRepository;
+use App\Repository\MembershipRepository;
 use App\Repository\MessageRepository;
 use App\Repository\SubscriberRepository;
 use App\Security\AuthenticationPrompt;
@@ -95,13 +96,16 @@ final class ConsentController extends AbstractController
     }
 
     /**
-     * From the {subscribe} placeholder and the List-Subscribe header:
-     * ?m=MUID[&l=SHORTCODE]. Resolves the list (asking when the message has
-     * several), then confirms it for a signed-in subscriber or offers a
-     * sign-in link that returns to the confirmation.
+     * The subscribe page. From the {subscribe} placeholder and the
+     * List-Subscribe header it carries ?m=MUID[&l=SHORTCODE]: the list is
+     * resolved (asking when the message has several) and a signed-in
+     * subscriber goes straight to its confirmation. Otherwise signed-in
+     * subscribers see every list with their membership, and visitors get a
+     * subscribe form that emails them a link to confirm (double opt-in;
+     * nothing is subscribed until they confirm).
      */
     #[Route('/subscribe', name: 'subscribe', methods: ['GET'])]
-    public function subscribe(Request $request, #[CurrentUser] ?SubscriberUser $user): Response
+    public function subscribe(Request $request, #[CurrentUser] ?SubscriberUser $user, MembershipRepository $memberships): Response
     {
         $muid = trim($request->query->getString('m'));
         $shortcode = strtoupper(trim($request->query->getString('l')));
@@ -128,22 +132,13 @@ final class ConsentController extends AbstractController
             if ($user !== null) {
                 return $this->redirectToRoute('consent_confirm', ['token' => $user->uuid, 'shortcode' => $list['l_shortcode'], 'muid' => $muid]);
             }
-            return $this->render('auth/login.html.twig', [
-                'heading' => 'Subscribe to ' . $list['l_name'],
-                'intro' => 'Sign in by email to confirm this list subscription.',
-                'return_action' => 'confirm',
-                'return_message_id' => $message['m_id'],
-                'return_list_id' => $list['l_id'],
-                'title' => 'Subscribe',
-            ]);
+            return $this->render('consent/subscribe.html.twig', ['lists' => [$list], 'message_id' => $message['m_id']]);
         }
 
-        return $this->render('auth/login.html.twig', [
-            'heading' => 'Manage subscriptions',
-            'intro' => 'Sign in to manage your list memberships.',
-            'return_action' => 'profile',
-            'title' => 'Subscribe',
-        ]);
+        if ($user !== null) {
+            return $this->render('consent/subscribe.html.twig', ['memberships' => $memberships->forSubscriber($user->id)]);
+        }
+        return $this->render('consent/subscribe.html.twig', ['lists' => $this->lists->all(), 'message_id' => null]);
     }
 
     /** @return MailingList the list of a consent link; 404 for an unknown subscriber or list */

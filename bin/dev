@@ -16,14 +16,24 @@ in_app_tty() { if [ -t 0 ]; then podman exec -it "$APP" "$@"; else podman exec -
 psql_db() { podman exec -i "$DB" psql -v ON_ERROR_STOP=1 -U ctnlist -d ctnlist "$@"; }
 
 random_hex() { od -An -tx1 -N"$1" /dev/urandom | tr -d ' \n'; }
+random_base64() { head -c "$1" /dev/urandom | base64 | tr -d '\n'; }
 
 # Generate the instance .env from the template on first use, with secrets
 # that are random per checkout and never committed.
 ensure_env() {
     local env_file=dev/podman/ctnlist.env
-    [ -f "$env_file" ] && return 0
+    if [ -f "$env_file" ]; then
+        # Instances created before APP_SETTINGS_KEY existed get one.
+        if ! grep -q '^APP_SETTINGS_KEY=.' "$env_file"; then
+            sed -i '/^APP_SETTINGS_KEY=/d' "$env_file"
+            echo "APP_SETTINGS_KEY=$(random_base64 32)" >> "$env_file"
+            echo "Added APP_SETTINGS_KEY to $env_file"
+        fi
+        return 0
+    fi
     sed -e "s/^APP_SECRET=$/APP_SECRET=$(random_hex 32)/" \
         -e "s/^APP_INSTANCE_ID=$/APP_INSTANCE_ID=$(random_hex 16)/" \
+        -e "s|^APP_SETTINGS_KEY=$|APP_SETTINGS_KEY=$(random_base64 32)|" \
         dev/podman/ctnlist.env.dist > "$env_file"
     # Readable by www-data, which maps to an unrelated host UID under rootless podman.
     chmod 644 "$env_file"

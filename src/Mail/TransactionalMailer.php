@@ -62,16 +62,29 @@ final class TransactionalMailer
         return true;
     }
 
-    public function sendMagicLink(string $toEmail, string $subscriberUuid, string $loginUrl, int $ttlSeconds): bool
+    /**
+     * The one-time sign-in link. When it was requested to confirm a list
+     * subscription ($confirmListName), the email says so: the link is the same
+     * secure sign-in link and leads to that list's confirmation.
+     */
+    public function sendMagicLink(string $toEmail, string $subscriberUuid, string $loginUrl, int $ttlSeconds, ?string $confirmListName = null): bool
     {
         $minutes = max(1, (int) ceil($ttlSeconds / 60));
         $list = $this->site->listName;
-        $subject = $list . ' sign-in link';
-        $html = '<p>Use the link below to sign in to ' . self::e($list) . '.</p>'
-            . '<p><a href="' . self::e($loginUrl) . '">Sign in to ' . self::e($list) . '</a></p>'
+        if ($confirmListName !== null) {
+            $subject = 'Confirm your subscription to ' . $confirmListName;
+            $intro = 'Use the link below to confirm your subscription to ' . $confirmListName . ' on ' . $list . '. You are subscribed once you confirm.';
+            $action = 'Confirm my subscription';
+        } else {
+            $subject = $list . ' sign-in link';
+            $intro = 'Use the link below to sign in to ' . $list . '.';
+            $action = 'Sign in to ' . $list;
+        }
+        $html = '<p>' . self::e($intro) . '</p>'
+            . '<p><a href="' . self::e($loginUrl) . '">' . self::e($action) . '</a></p>'
             . '<p>This link expires in ' . $minutes . ' minutes and can be used only once.</p>'
             . '<p>If you did not request this link, you can ignore this email.</p>';
-        $text = "Use this link to sign in to {$list}:\n\n{$loginUrl}\n\n"
+        $text = "{$intro}\n\n{$loginUrl}\n\n"
             . "This link expires in {$minutes} minutes and can be used only once.\n"
             . "If you did not request this link, you can ignore this email.\n";
         return $this->sendPlain($toEmail, $subject, $html, $text, 'MAGIC-LINK', '', $subscriberUuid);

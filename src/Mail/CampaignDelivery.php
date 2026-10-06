@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Mail;
 
-/** One campaign message, rendered for one subscriber, with its list context. */
+/** One campaign message, rendered for one recipient (a subscriber, or a proof address), with its list context. */
 final class CampaignDelivery
 {
     public function __construct(
@@ -12,7 +12,8 @@ final class CampaignDelivery
         public readonly string $subject,
         public readonly string $fromName,
         public readonly string $fromAddress,
-        public readonly string $subscriberUuid,
+        /** The subscriber it was rendered for; null for a proof to an arbitrary test address. */
+        public readonly ?string $subscriberUuid,
         public readonly string $email,
         public readonly string $name,
         /** List context ('' for a proof of a draft without lists: no List-Unsubscribe). */

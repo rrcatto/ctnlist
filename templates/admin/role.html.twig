@@ -1,0 +1,137 @@
+{% extends 'base.html.twig' %}
+{% import 'admin/_macros.html.twig' as ui %}
+
+{% block title %}Role: {{ role.r_name }}{% endblock %}
+
+{% block content %}
+{% set custom = not role.r_system %}
+{% set can_edit_permissions = custom and is_granted('acl.manage') %}
+{% set here = path('admin_role', {id: role.r_id}) %}
+{% set group_labels = {acl: 'Access control', archives: 'Archives', lists: 'Lists', logs: 'Logs', messages: 'Messages', profile: 'Profile', queue: 'Queue', roles: 'Roles', subscribers: 'Subscribers', system: 'System', templates: 'Templates'} %}
+{% set groups = {} %}
+{% for permission in permissions %}
+  {% set prefix = permission.ap_key|split('.')|first %}
+  {% set groups = groups|merge({(prefix): (groups[prefix] ?? [])|merge([permission])}) %}
+{% endfor %}
+{% set granted_permissions = permissions|filter(permission => permission.ap_id in granted) %}
+
+{% embed 'layout/_page_header.html.twig' with {title: role.r_name, description: role.r_description ?: (custom ? 'Custom role.' : 'System role.')} %}
+  {% block actions %}<a class="btn btn-outline-secondary" href="{{ path('admin_roles') }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>All roles</a>{% endblock %}
+{% endembed %}
+<p class="mb-4">{{ ui.system_badge(role.r_system) }} <span class="ms-2 small text-body-secondary">Key <code>{{ role.r_key }}</code> · {{ pagination.total }} {{ pagination.total == 1 ? 'member' : 'members' }} · {{ granted|length }} {{ granted|length == 1 ? 'permission' : 'permissions' }}</span></p>
+
+{% if not custom %}
+  <div class="alert alert-secondary small" role="note"><i class="bi bi-lock me-1" aria-hidden="true"></i>
+    System roles are fixed: they cannot be renamed or deleted, their permissions are set by the schema, and their assignments are not removed here.
+    {% if role.r_key == 'subscriber' %}Every subscriber holds this role.{% elseif role.r_key == 'administrator' %}Administrators hold every permission.{% endif %}
+  </div>
+{% endif %}
+
+<div class="row g-4 mb-4">
+  {% if custom %}
+    <div class="col-lg-5">
+      <form method="post" action="{{ path('admin_role_update', {id: role.r_id}) }}" class="card h-100">
+        <div class="card-header fw-semibold">Details</div>
+        <div class="card-body">
+          <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+          <div class="mb-3">
+            <label class="form-label" for="role-key">Key</label>
+            <input class="form-control" id="role-key" value="{{ role.r_key }}" readonly aria-describedby="role-key-help">
+            <div class="form-text" id="role-key-help">The key identifies the role and cannot be changed.</div>
+          </div>
+          <div class="mb-3"><label class="form-label" for="role-name">Name <span class="text-danger" aria-hidden="true">*</span></label><input class="form-control" id="role-name" name="name" value="{{ role.r_name }}" maxlength="100" required></div>
+          <div class="mb-0"><label class="form-label" for="role-description">Description</label><input class="form-control" id="role-description" name="description" value="{{ role.r_description }}"></div>
+        </div>
+        <div class="card-footer"><button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>Save details</button></div>
+      </form>
+    </div>
+  {% endif %}
+
+  <div class="{{ custom ? 'col-lg-7' : 'col-12' }}">
+    <form method="post" action="{{ path('admin_roles_permissions') }}" class="card h-100">
+      <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+        <span>Permissions</span>
+        {% if custom and not can_edit_permissions %}<span class="small fw-normal text-body-secondary">Read only: changing them needs <code>acl.manage</code></span>{% endif %}
+      </div>
+      <div class="card-body">
+        <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+        <input type="hidden" name="role_id" value="{{ role.r_id }}">
+        <fieldset{{ can_edit_permissions ? '' : ' disabled' }}>
+          <legend class="visually-hidden">Permissions for {{ role.r_name }}</legend>
+          <div class="row g-3">
+            {% for prefix, group in groups %}
+              <div class="col-sm-6">
+                <div class="small fw-semibold text-uppercase text-body-secondary mb-1">{{ group_labels[prefix] ?? prefix|capitalize }}</div>
+                {% for permission in group %}
+                  {% set id = 'rp-' ~ permission.ap_id %}
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" name="permission_ids[]" value="{{ permission.ap_id }}" id="{{ id }}"{{ permission.ap_id in granted ? ' checked' }}>
+                    <label class="form-check-label" for="{{ id }}">{{ permission.ap_name }} <code class="small">{{ permission.ap_key }}</code></label>
+                  </div>
+                {% endfor %}
+              </div>
+            {% endfor %}
+          </div>
+        </fieldset>
+      </div>
+      {% if can_edit_permissions %}
+        <div class="card-footer"><button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>Save permissions</button></div>
+      {% endif %}
+    </form>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header fw-semibold d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <span>Members</span>
+    <a class="btn btn-sm btn-outline-primary" href="{{ path('admin_roles') }}#assign"><i class="bi bi-person-plus me-1" aria-hidden="true"></i>Assign to a subscriber</a>
+  </div>
+  {% if members is empty %}
+    <div class="card-body">{% include 'layout/_empty_state.html.twig' with {icon: 'people', message: 'Nobody holds this role.'} %}</div>
+  {% else %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light"><tr><th scope="col">Subscriber</th><th scope="col">Name</th><th scope="col">Assigned</th>{% if custom %}<th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th>{% endif %}</tr></thead>
+        <tbody>
+        {% for member in members %}
+          <tr>
+            <td>{% if is_granted('subscribers.manage') %}<a href="{{ path('admin_subscriber', {token: member.s_uuid}) }}">{{ member.s_email }}</a>{% else %}{{ member.s_email }}{% endif %}</td>
+            <td>{{ (member.s_fname ~ ' ' ~ member.s_lname)|trim }}</td>
+            <td class="text-nowrap">{{ member.sr_assigned_at|slice(0, 16) }}</td>
+            {% if custom %}
+              <td class="text-end">
+                <form method="post" action="{{ path('admin_roles_unassign') }}" data-confirm="Remove {{ role.r_name }} from {{ member.s_email }}?">
+                  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+                  <input type="hidden" name="subscriber_id" value="{{ member.s_id }}">
+                  <input type="hidden" name="role_id" value="{{ role.r_id }}">
+                  <input type="hidden" name="back" value="{{ pagination.page > 1 ? here ~ '/' ~ pagination.page : here }}">
+                  <button class="btn btn-sm btn-outline-danger" type="submit" aria-label="Remove {{ role.r_name }} from {{ member.s_email }}"><i class="bi bi-x-lg" aria-hidden="true"></i><span class="d-none d-md-inline ms-1">Remove</span></button>
+                </form>
+              </td>
+            {% endif %}
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card-body pt-0">{% include '_pagination.html.twig' with {base: here} %}</div>
+  {% endif %}
+</div>
+
+{% if custom %}
+  <div class="card border-danger-subtle">
+    <div class="card-body">
+      <h2 class="h6">Delete this role</h2>
+      <p class="small mb-2">Deleting <strong>{{ role.r_name }}</strong> removes it from {{ pagination.total }} {{ pagination.total == 1 ? 'subscriber' : 'subscribers' }}
+        {%- if granted_permissions is empty %} (it grants no permissions).{% else %}, who lose these permissions unless another role grants them:{% endif %}</p>
+      {% if granted_permissions is not empty %}
+        <p class="small">{% for permission in granted_permissions %}<code class="me-2">{{ permission.ap_key }}</code>{% endfor %}</p>
+      {% endif %}
+      <form method="post" action="{{ path('admin_role_delete', {id: role.r_id}) }}" data-confirm="Delete the role {{ role.r_name }} and remove it from {{ pagination.total }} {{ pagination.total == 1 ? 'subscriber' : 'subscribers' }}?">
+        <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+        <button class="btn btn-outline-danger" type="submit"><i class="bi bi-trash me-1" aria-hidden="true"></i>Delete role</button>
+      </form>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}
