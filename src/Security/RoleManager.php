@@ -6,6 +6,8 @@ namespace App\Security;
 
 use App\Repository\RoleRepository;
 use App\Repository\SubscriberRepository;
+use App\Validator\InvalidField;
+use App\Validator\RoleKey;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 
 /**
@@ -34,31 +36,38 @@ final class RoleManager
     ) {
     }
 
+    /** @throws InvalidField for a malformed or taken key or name */
     public function create(string $key, string $name, string $description): void
     {
         $key = strtolower(trim($key));
-        $name = self::name($name);
-        if (!preg_match('/^[a-z0-9._-]{1,64}$/', $key)) {
-            throw new \InvalidArgumentException('Invalid role details.');
+        if (!preg_match(RoleKey::PATTERN, $key)) {
+            throw new InvalidField('key', 'Invalid role key.');
         }
+        $name = self::name($name);
+        if ($this->roles->findByKey($key) !== null) {
+            throw new InvalidField('key', 'A role with that key already exists.');
+        }
+        $this->assertNameFree($name, null);
         try {
             $this->roles->create($key, $name, trim($description));
-        } catch (UniqueConstraintViolationException) {
-            throw new \InvalidArgumentException('A role with that key or name already exists.');
+        } catch (UniqueConstraintViolationException $e) {
+            throw self::duplicate($e);
         }
     }
 
     /**
-     * @throws \InvalidArgumentException for a system role or invalid details
+     * @throws \InvalidArgumentException for a system role, InvalidField for a malformed or taken name
      * @throws RoleNotFound
      */
     public function update(int $roleId, string $name, string $description): void
     {
         $this->customRole($roleId, 'System roles cannot be renamed.');
+        $name = self::name($name);
+        $this->assertNameFree($name, $roleId);
         try {
-            $this->roles->update($roleId, self::name($name), trim($description));
-        } catch (UniqueConstraintViolationException) {
-            throw new \InvalidArgumentException('A role with that name already exists.');
+            $this->roles->update($roleId, $name, trim($description));
+        } catch (UniqueConstraintViolationException $e) {
+            throw self::duplicate($e);
         }
     }
 
@@ -85,6 +94,10 @@ final class RoleManager
         $system = $this->roles->isSystem($roleId) ?? throw new RoleNotFound($roleId);
         if ($system) {
             throw new \InvalidArgumentException('System-role permissions are fixed by the schema.');
+        }
+        // The route requires acl.manage too; the rule also holds for any other caller.
+        if (!$actor->isAdministrator() && !$actor->hasPermission('acl.manage')) {
+            throw new \InvalidArgumentException('Changing role permissions needs the acl.manage permission.');
         }
         $ids = array_values(array_unique(array_filter(
             array_map('intval', $permissionIds),
@@ -135,9 +148,25 @@ final class RoleManager
     {
         $name = trim($name);
         if ($name === '' || mb_strlen($name) > 100) {
-            throw new \InvalidArgumentException('Invalid role details.');
+            throw new InvalidField('name', 'A role name is required (at most 100 characters).');
         }
         return $name;
+    }
+
+    private function assertNameFree(string $name, ?int $exceptId): void
+    {
+        $existing = $this->roles->findByName($name);
+        if ($existing !== null && $existing['r_id'] !== $exceptId) {
+            throw new InvalidField('name', 'A role with that name already exists.');
+        }
+    }
+
+    /** A unique-constraint race (another request took the key or name first). */
+    private static function duplicate(UniqueConstraintViolationException $e): InvalidField
+    {
+        return str_contains($e->getMessage(), 'roles_r_key_key')
+            ? new InvalidField('key', 'A role with that key already exists.', $e)
+            : new InvalidField('name', 'A role with that name already exists.', $e);
     }
 
     /** @param array<string> $permissions */

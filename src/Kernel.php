@@ -62,8 +62,12 @@ final class Kernel extends BaseKernel
                 if (!$container->hasDefinition('asset_mapper.local_public_assets_filesystem')) {
                     return;
                 }
-                $publicDir = (string) $container->getParameter('kernel.instance_dir') . '/public_html';
-                $prefix = (string) $container->getDefinition('asset_mapper.public_assets_path_resolver')->getArgument(0);
+                $instanceDir = $container->getParameter('kernel.instance_dir');
+                $prefix = $container->getDefinition('asset_mapper.public_assets_path_resolver')->getArgument(0);
+                if (!is_string($instanceDir) || !is_string($prefix)) {
+                    throw new \LogicException('Unexpected AssetMapper configuration.');
+                }
+                $publicDir = $instanceDir . '/public_html';
                 $parameters = $container->getParameterBag();
                 $container->getDefinition('asset_mapper.local_public_assets_filesystem')
                     ->setArgument(0, $parameters->escapeValue($publicDir));
@@ -93,7 +97,8 @@ final class Kernel extends BaseKernel
         parent::boot();
         // Timestamps are written in PHP's timezone (the database runs in UTC),
         // so set it from the installation before any request is handled.
-        date_default_timezone_set((string) $this->getContainer()->getParameter('app.timezone'));
+        $timezone = $this->getContainer()->getParameter('app.timezone');
+        date_default_timezone_set(is_string($timezone) && $timezone !== '' ? $timezone : 'UTC');
     }
 
     /** @return array<string, mixed> */

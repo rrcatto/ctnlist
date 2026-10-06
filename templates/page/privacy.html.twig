@@ -3,12 +3,30 @@
 {% block title %}Privacy policy{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-  <div class="col-xl-auto border border-dark p-1 m-1 bg-light">
-    <h1 class="bg-primary p-3 m-2 text-center text-white"><i class="bi bi-eye" aria-hidden="true"></i> Privacy Policy</h1>
-    <p class="bg-secondary p-3 m-2 text-center text-white"><i class="bi bi-shield-check" aria-hidden="true"></i> Your personal information is safe with us. We will not divulge it to anyone</p>
-    <h1 class="bg-primary p-3 m-2 text-center text-white"><i class="bi bi-box-arrow-right" aria-hidden="true"></i> Opt Out of email subscription</h1>
-    <p class="bg-secondary p-3 m-2 text-center text-white"><i class="bi bi-hand-index" aria-hidden="true"></i> You may opt out of receiving emails at any time</p>
+{% include 'layout/_page_header.html.twig' with {title: 'Privacy policy', description: site.listName ~ ' and your personal information.'} %}
+<div class="app-narrow ms-0 d-grid gap-4">
+  <div>
+    <div class="card">
+      <div class="card-body d-flex gap-3">
+        <i class="bi bi-shield-check fs-3 text-primary flex-shrink-0" aria-hidden="true"></i>
+        <div>
+          <h2 class="h5">Your information</h2>
+          <p class="mb-0">Your personal information is safe with us. We will not divulge it to anyone.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <div class="card">
+      <div class="card-body d-flex gap-3">
+        <i class="bi bi-box-arrow-right fs-3 text-primary flex-shrink-0" aria-hidden="true"></i>
+        <div>
+          <h2 class="h5">Opt out of email subscription</h2>
+          <p>You may opt out of receiving emails at any time: use the unsubscribe link in any message, or sign in to manage your lists.</p>
+          <a class="btn btn-outline-primary btn-sm" href="{{ path('subscribe') }}"><i class="bi bi-list-check me-1" aria-hidden="true"></i>Manage your lists</a>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}

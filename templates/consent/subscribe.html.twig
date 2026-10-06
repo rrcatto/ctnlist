@@ -1,8 +1,8 @@
 {#
   Subscribe page.
-  Visitors: `lists` (one list when coming from a message, with `message_id`)
-  and a form that emails a confirmation link (POST /login, return action
-  "confirm"); nothing is subscribed until the link is used and confirmed.
+  Visitors: `lists` (one list when coming from a message) and the subscribe
+  form (SubscribeType, POST /subscribe/request), which emails a link to
+  confirm the chosen list; nothing is subscribed until it is confirmed.
   Signed-in subscribers: `memberships`, each with a subscribe/unsubscribe link.
 #}
 {% extends 'base.html.twig' %}
@@ -43,27 +43,30 @@
   {% if lists is empty %}
     {% include 'layout/_empty_state.html.twig' with {icon: 'envelope', message: 'There are no lists to subscribe to.'} %}
   {% else %}
-    <form action="{{ path('login_request') }}" method="post" class="card app-narrow ms-0">
+    {{ form_start(form, {attr: {class: 'card app-narrow ms-0'}}) }}
       <div class="card-body">
-        <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-        <input type="hidden" name="return_action" value="confirm">
-        {% if message_id %}<input type="hidden" name="return_message_id" value="{{ message_id }}">{% endif %}
-        <div class="mb-3">
-          <label class="form-label" for="subscribe-email">Email address</label>
-          <input class="form-control" id="subscribe-email" name="email" type="email" maxlength="254" autocomplete="email" required>
-        </div>
+        {{ form_errors(form) }}
+        {{ form_widget(form.messageId) }}
+        {{ form_row(form.email) }}
         {% if single %}
-          <input type="hidden" name="return_list_id" value="{{ (lists|first).l_id }}">
+          <div class="d-none">{{ form_widget(form.listId) }}</div>
+          {{ form_errors(form.listId) }}
         {% else %}
-          <fieldset class="mb-0">
-            <legend class="form-label fs-6">List</legend>
-            {% for list in lists %}
+          {% set descriptions = {} %}
+          {% for list in lists %}{% set descriptions = descriptions|merge({('l' ~ list.l_id): list.l_description}) %}{% endfor %}
+          <fieldset class="mb-0"{% if not form.listId.vars.valid %} aria-describedby="{{ form.listId.vars.id }}_error1"{% endif %}>
+            <legend class="form-label fs-6 required">{{ form.listId.vars.label }}</legend>
+            {{ form_errors(form.listId) }}
+            {% for choice in form.listId %}
+              {% set description = descriptions['l' ~ choice.vars.value] ?? '' %}
               <div class="form-check mb-2">
-                <input class="form-check-input" type="radio" name="return_list_id" value="{{ list.l_id }}" id="subscribe-list-{{ list.l_id }}"{{ loop.first ? ' checked' }}{% if list.l_description %} aria-describedby="subscribe-list-{{ list.l_id }}-help"{% endif %}>
-                <label class="form-check-label fw-semibold" for="subscribe-list-{{ list.l_id }}">{{ list.l_name }}</label>
-                {% if list.l_description %}<div class="form-text mt-0" id="subscribe-list-{{ list.l_id }}-help">{{ list.l_description }}</div>{% endif %}
+                <input class="form-check-input" type="radio" id="{{ choice.vars.id }}" name="{{ choice.vars.full_name }}" value="{{ choice.vars.value }}"{{ choice.vars.checked ? ' checked' }}{% if description %} aria-describedby="{{ choice.vars.id }}_help"{% endif %}>
+                <label class="form-check-label fw-semibold" for="{{ choice.vars.id }}">{{ choice.vars.label }}</label>
+                {% if description %}<div class="form-text mt-0" id="{{ choice.vars.id }}_help">{{ description }}</div>{% endif %}
               </div>
+              {% do choice.setRendered %}
             {% endfor %}
+            {% do form.listId.setRendered %}
           </fieldset>
         {% endif %}
       </div>
@@ -71,7 +74,7 @@
         <button class="btn btn-primary" type="submit"><i class="bi bi-envelope-check me-1" aria-hidden="true"></i>Subscribe</button>
         <a class="small" href="{{ path('login') }}">Already subscribed? Sign in to manage your lists</a>
       </div>
-    </form>
+    {{ form_end(form) }}
   {% endif %}
 {% endif %}
 {% endblock %}

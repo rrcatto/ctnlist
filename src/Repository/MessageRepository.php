@@ -176,6 +176,18 @@ final class MessageRepository
         $this->db->executeStatement('UPDATE messages SET m_queued = m_queued + 1 WHERE m_id = ?', [$messageId]);
     }
 
+    /** A catto-mail hard bounce of one of this message's deliveries (v5 m_bounces). */
+    public function incrementBounces(string $muid): void
+    {
+        $this->db->executeStatement('UPDATE messages SET m_bounces = m_bounces + 1 WHERE m_uniqid = ?', [$muid]);
+    }
+
+    /** A delivery handed back to the queue (its catto-mail job failed before sending). */
+    public function decrementSent(int $messageId, int $count): void
+    {
+        $this->db->executeStatement('UPDATE messages SET m_sent = GREATEST(0, m_sent - ?) WHERE m_id = ?', [max(0, $count), $messageId]);
+    }
+
     public function incrementSent(int $messageId): void
     {
         $this->db->executeStatement('UPDATE messages SET m_sent = m_sent + 1 WHERE m_id = ?', [$messageId]);

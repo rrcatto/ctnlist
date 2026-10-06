@@ -1,0 +1,60 @@
+{% extends 'base.html.twig' %}
+{% import 'admin/_cattomail_macros.html.twig' as cm %}
+
+{% block title %}Validation job{% endblock %}
+
+{% block content %}
+{% embed 'layout/_page_header.html.twig' with {title: job.cvj_scope ?: 'Validation job ' ~ job.cvj_id, description: 'Results as catto-mail classified them. “unknown” and “temporarily unverifiable” are not invalid; a suggestion is only a suggestion.'} %}
+  {% block actions %}
+    <form method="post" action="{{ path('admin_validation_refresh', {id: job.cvj_id}) }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+      <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Check now</button>
+    </form>
+    <a class="btn btn-outline-secondary" href="{{ path('admin_validation') }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>All jobs</a>
+  {% endblock %}
+{% endembed %}
+
+<p>{{ cm.job_status(job.cvj_status) }} <span class="small text-body-secondary ms-2">{{ job.cvj_processed }} of {{ job.cvj_total }} processed{{ job.cvj_results_complete ? ' · results stored' }}{{ job.cvj_completed_at ? ' · completed ' ~ job.cvj_completed_at|slice(0, 16) }}</span></p>
+{% if job.cvj_error %}<div class="alert alert-danger small text-break" role="alert">{{ job.cvj_error }}</div>{% endif %}
+
+<form method="get" class="card card-body bg-body-tertiary mb-3" role="search" aria-label="Filter results">
+  <div class="d-flex flex-wrap gap-2 align-items-end">
+    <div>
+      <label class="form-label small" for="v-class">Classification</label>
+      <select class="form-select form-select-sm" id="v-class" name="c">
+        <option value="">All</option>
+        {% for c in classifications|merge(['pending']) %}<option value="{{ c }}"{{ class == c ? ' selected' }}>{{ c|replace({'_': ' '}) }}{{ (job.cvj_counts[c] ?? null) is not null ? ' (' ~ job.cvj_counts[c] ~ ')' }}</option>{% endfor %}
+      </select>
+    </div>
+    <button class="btn btn-sm btn-primary" type="submit">Filter</button>
+    {% if class %}<a class="btn btn-sm btn-outline-secondary" href="{{ path('admin_validation_job', {id: job.cvj_id}) }}">Clear</a>{% endif %}
+  </div>
+</form>
+
+{% if results is empty %}
+  {% include 'layout/_empty_state.html.twig' with {icon: 'patch-question', message: 'No results to show.', hint: job.cvj_status in ['queued', 'processing', 'pending'] ? 'catto-mail is still working on this job.' : null} %}
+{% else %}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead class="table-light"><tr><th scope="col">Address</th><th scope="col">Classification</th><th scope="col">Checks</th><th scope="col">Suggestion</th><th scope="col">Diagnostic</th></tr></thead>
+      <tbody>
+      {% for r in results %}
+        <tr>
+          <td class="text-break">{% if r.s_id and is_granted('subscribers.manage') %}<a href="{{ path('admin_subscriber', {token: r.cva_s_uuid}) }}">{{ r.cva_address }}</a>{% else %}{{ r.cva_address }}{% endif %}</td>
+          <td>{{ cm.classification(r.cva_classification) }}{% if r.cva_confidence %}<div class="small text-body-secondary">{{ r.cva_confidence }} confidence</div>{% endif %}</td>
+          <td class="small text-nowrap">
+            {% if r.cva_syntax_status %}syntax {{ r.cva_syntax_status }}<br>{% endif %}
+            {% if r.cva_domain_status %}domain {{ r.cva_domain_status|replace({'_': ' '}) }}<br>{% endif %}
+            {% if r.cva_smtp_status %}SMTP {{ r.cva_smtp_status|replace({'_': ' '}) }}{% endif %}
+            {% for flag, label in {cva_is_role: 'role', cva_is_disposable: 'disposable', cva_is_catch_all: 'accept-all', cva_is_typo_suspected: 'typo?'} %}{% if r[flag] %}<span class="badge text-bg-light border ms-1">{{ label }}</span>{% endif %}{% endfor %}
+          </td>
+          <td class="small text-break">{% if r.cva_suggested_address %}<span title="Suggestion only; never applied">{{ r.cva_suggested_address }}</span><div class="text-body-secondary">suggestion only{{ r.cva_suggestion_confidence ? ', ' ~ r.cva_suggestion_confidence ~ ' confidence' }}</div>{% endif %}</td>
+          <td class="small text-break">{% if r.cva_diagnostic_code %}<code>{{ r.cva_diagnostic_code }}</code>{% endif %}{% if r.cva_diagnostic_text %}<div class="text-body-secondary">{{ r.cva_diagnostic_text|slice(0, 160) }}</div>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include '_pagination.html.twig' with {base: path('admin_validation_job', {id: job.cvj_id}), query: class ? '?c=' ~ class : ''} %}
+{% endif %}
+{% endblock %}

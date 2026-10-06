@@ -6,7 +6,12 @@ namespace App\Controller\Admin;
 
 use App\Campaign\MessageNotFound;
 use App\Campaign\MessageService;
+use App\CattoMail\SendOutcome;
 use App\Config\SiteConfig;
+use App\Form\FormErrors;
+use App\Form\Model\QueueRotation;
+use App\Form\Type\ProofType;
+use App\Form\Type\QueueRotationType;
 use App\Http\Pagination;
 use App\Queue\QueueBuilder;
 use App\Queue\QueueOutcome;
@@ -15,6 +20,7 @@ use App\Repository\MessageRepository;
 use App\Repository\QueueRepository;
 use App\Security\Csrf;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\FormInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -31,7 +37,6 @@ final class QueueController extends AbstractController
     private const QUEUE_LIMIT = 500000;
     private const ROTATION_VOLUME = 1000000;
     private const SEND_LIMIT = 250000;
-    private const ROTATION_SLOTS = 4;
 
     /** Next steps offered on the result pages (shown when the user holds the permission). */
     private const QUEUE_LINK = ['label' => 'View the queue', 'route' => 'admin_queue', 'permission' => 'queue.process'];
@@ -64,24 +69,35 @@ final class QueueController extends AbstractController
     #[IsGranted('messages.queue')]
     public function rotationForm(MessageRepository $messages): Response
     {
-        return $this->render('admin/queue_rotation.html.twig', [
-            'messages' => $messages->choices(),
-            'slots' => self::ROTATION_SLOTS,
-            'volume' => self::ROTATION_VOLUME,
-        ]);
+        return $this->rotationPage($this->rotationFormFor($messages));
     }
 
     #[Route('/advanced-queue', name: 'admin_queue_rotation_submit', methods: ['POST'])]
     #[IsGranted('messages.queue')]
-    #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
-    public function queueRotation(Request $request): Response
+    public function queueRotation(Request $request, MessageRepository $messages): Response
     {
-        set_time_limit(86400);
-        $muids = [];
-        for ($slot = 1; $slot <= self::ROTATION_SLOTS; $slot++) {
-            $muids[] = $request->request->getString('muid' . $slot);
+        $form = $this->rotationFormFor($messages);
+        $form->handleRequest($request);
+        if (!$form->isSubmitted() || !$form->isValid()) {
+            return $this->rotationPage($form, Response::HTTP_UNPROCESSABLE_ENTITY);
         }
-        return $this->outcome('Queue multiple messages', $this->builder->queueRotation($muids, $request->request->getInt('mvolume')));
+        /** @var QueueRotation $rotation */
+        $rotation = $form->getData();
+        set_time_limit(86400);
+        return $this->outcome('Queue multiple messages', $this->builder->queueRotation($rotation->muids(), (int) $rotation->volume));
+    }
+
+    private function rotationFormFor(MessageRepository $messages): FormInterface
+    {
+        return $this->createForm(QueueRotationType::class, new QueueRotation(self::ROTATION_VOLUME), [
+            'action' => $this->generateUrl('admin_queue_rotation_submit'),
+            'messages' => $messages->choices(),
+        ]);
+    }
+
+    private function rotationPage(FormInterface $form, int $status = Response::HTTP_OK): Response
+    {
+        return $this->render('admin/queue_rotation.html.twig', ['form' => $form], new Response(status: $status));
     }
 
     #[Route('/queue/{page}', name: 'admin_queue', defaults: ['page' => 1], requirements: ['page' => '\d+'], methods: ['GET'])]
@@ -126,8 +142,15 @@ final class QueueController extends AbstractController
     public function process(Request $request, QueueProcessor $processor): Response
     {
         set_time_limit(86400);
-        $sent = $processor->process($request->request->getString('muid'), $request->request->getInt('limit') ?: self::SEND_LIMIT);
-        return $this->result('Process queue', 'Sent ' . $sent . ' message(s).', [self::QUEUE_LINK]);
+        $outcome = $processor->process($request->request->getString('muid'), $request->request->getInt('limit') ?: self::SEND_LIMIT);
+        $message = 'Handed ' . $outcome->handedOff . ' message(s) to catto-mail.';
+        if ($outcome->staged > $outcome->handedOff && $outcome->status !== SendOutcome::FAILED) {
+            $message .= ' ' . ($outcome->staged - $outcome->handedOff) . ' more are waiting for catto-mail and will be retried automatically.';
+        }
+        if ($outcome->problem !== null) {
+            $message .= ' ' . ($outcome->status === SendOutcome::DEFERRED ? 'catto-mail could not be reached: ' : 'Problem: ') . $outcome->problem;
+        }
+        return $this->result('Process queue', $message, [self::QUEUE_LINK]);
     }
 
     #[Route('/stop-send', name: 'admin_queue_stop', methods: ['GET'])]
@@ -151,28 +174,55 @@ final class QueueController extends AbstractController
     #[IsGranted('messages.manage')]
     public function proofForm(string $muid, SiteConfig $site): Response
     {
-        return $this->render('admin/proof.html.twig', [
-            'muid' => $muid,
-            'test_email' => $site->testEmail,
-            'test_email_valid' => filter_var(trim($site->testEmail), FILTER_VALIDATE_EMAIL) !== false,
-        ]);
+        return $this->proofPage($muid, $site, $this->proofFormFor($muid, $site));
     }
 
     #[Route('/sendtome/{muid}', name: 'admin_proof_submit', methods: ['POST'])]
     #[IsGranted('messages.manage')]
-    #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
     public function proof(string $muid, Request $request, SiteConfig $site, MessageService $messages): Response
     {
-        $email = trim($request->request->getString('email')) ?: $site->testEmail;
-        try {
-            $sent = $messages->sendProof($muid, $email);
-        } catch (\InvalidArgumentException $e) {
-            $this->addFlash('danger', $e->getMessage());
-            return $this->redirectToRoute('admin_proof', ['muid' => $muid]);
-        } catch (MessageNotFound $e) {
-            throw $this->createNotFoundException($e->getMessage(), $e);
+        $form = $this->proofFormFor($muid, $site);
+        $form->handleRequest($request);
+        if ($form->isSubmitted() && $form->isValid()) {
+            /** @var array{email: string} $data */
+            $data = $form->getData();
+            $email = trim($data['email']) ?: trim($site->testEmail);
+            try {
+                $outcome = $messages->sendProof($muid, $email);
+                return $this->result('Proof send', match ($outcome->status) {
+                    SendOutcome::SUBMITTED => 'Proof message sent to ' . $email . ' (handed to catto-mail).',
+                    SendOutcome::DEFERRED => 'catto-mail could not be reached; the proof to ' . $email . ' is kept and will be retried automatically.',
+                    default => 'Proof message could not be sent: ' . $outcome->problem,
+                }, [self::MESSAGES_LINK]);
+            } catch (MessageNotFound $e) {
+                throw $this->createNotFoundException($e->getMessage(), $e);
+            } catch (\InvalidArgumentException $e) {
+                FormErrors::attach($form, $e);
+            }
         }
-        return $this->result('Proof send', $sent ? 'Proof message sent to ' . $email . '.' : 'Proof message could not be sent.', [self::MESSAGES_LINK]);
+        return $this->proofPage($muid, $site, $form, Response::HTTP_UNPROCESSABLE_ENTITY);
+    }
+
+    private function proofFormFor(string $muid, SiteConfig $site): FormInterface
+    {
+        return $this->createForm(ProofType::class, ['email' => self::validEmail($site->testEmail) ? trim($site->testEmail) : ''], [
+            'action' => $this->generateUrl('admin_proof_submit', ['muid' => $muid]),
+        ]);
+    }
+
+    private function proofPage(string $muid, SiteConfig $site, FormInterface $form, int $status = Response::HTTP_OK): Response
+    {
+        return $this->render('admin/proof.html.twig', [
+            'muid' => $muid,
+            'form' => $form,
+            'test_email' => $site->testEmail,
+            'test_email_valid' => self::validEmail($site->testEmail),
+        ], new Response(status: $status));
+    }
+
+    private static function validEmail(string $email): bool
+    {
+        return filter_var(trim($email), FILTER_VALIDATE_EMAIL) !== false;
     }
 
     private function outcome(string $title, QueueOutcome $outcome): Response

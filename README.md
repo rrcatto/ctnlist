@@ -1,4 +1,4 @@
-# ctnlist 6.0.2
+# ctnlist 6.0.3
 
 ctnlist is a web-based mailing-list application created by Richard Royston Catto in 2009. Versions 5.0.x and 6.0.x are an incremental modernisation of the working v5.0 application, not a replacement of its established workflows.
 
@@ -16,19 +16,36 @@ Version 6.0.1 removes the defunct Ecwid store (the Store page, its links, `POST 
 
 Version 6.0.2 arranges the Settings page as tabs, one per section, each with its own form and Save button; fields are laid out on a grid, the SMTP tab shows the main server and each failover server as its own block, and the URL (e.g. `/settings#smtp`) opens and returns to a tab.
 
+Version 6.0.3 hands campaign delivery to the catto-mail smarthost and hardens the application:
+- **catto-mail:** queue sends, proofs, resends and forwards go through catto-mail's API, with durable send runs, idempotent retries, signed webhooks, a reconciliation worker, hard-bounce and complaint handling, address validation, an optional global opt-out and signed one-click unsubscribe links. ctnlist's own SMTP campaign path is removed and `MAILER_DSN` carries transactional mail only.
+- **Forms:** every input form is a Symfony Form with Validator constraints that keep entered values and show errors at their fields.
+- **Security:**
+  - PHPStan level 8;
+  - GET routes never change state (export, sync and logout are POST with CSRF);
+  - route-wide CSRF, permission and smoke-coverage checks;
+  - security headers;
+  - rate limits on the contact form and forwards;
+  - sanitised archive HTML;
+  - placeholders never print literally;
+  - one quality gate, `bin/dev check`.
+- **Profile pictures:** a subscriber can choose, crop and save one, and it shows beside their name in the site menu.
+
 ## Platform and upgrades
 
 - PHP 8.4.1+ (developed on 8.5), Composer
 - Symfony 8.1 (including Symfony Security, Twig and Mailer) with Doctrine DBAL 4
 - PostgreSQL with versioned Phinx migrations
-- Symfony Mailer: the application's mail services (`src/Mail/`: transports with failover and throttling, transactional and campaign mailers) send all mail
+- Symfony Mailer for transactional mail only (`src/Mail/`: sign-in links, invitations, notifications, contact acknowledgements, throttled); campaign content (queue sends, proofs, resends, forwards) is delivered by the catto-mail smarthost through its HTTPS API (`src/CattoMail/`)
+- Symfony Forms and Validator for every input form; symfony/html-sanitizer (archive pages) and symfony/rate-limiter (contact form, forwards)
+- PHP `gd` (with JPEG and WebP) and `exif` for profile pictures
 - permanent RFC 9562 UUIDv7 subscriber identifiers
 - `subscribers` as the canonical identity table
 - passwordless one-time email authentication (Symfony Security from 5.0.3)
 - application-owned database sessions
 - multiple mailing lists and per-list consent
 - immutable `ALL` system list as an optional audience
-- a Settings page for overriding selected `.env` settings (site identity, contact details, mail sender, SMTP servers, contact form, subscription messages, archives, sign-in limits), with SMTP secrets encrypted by `APP_SETTINGS_KEY`
+- profile pictures: on Edit profile a subscriber chooses a picture, positions, zooms and rotates it with a live preview, and saves it; it appears beside their name in the site menu (signed-out visitors see a placeholder) and on their profile
+- a Settings page for overriding selected `.env` settings (site identity, contact details, mail sender, the transactional SMTP server, contact form, subscription messages, archives, sign-in limits), with SMTP secrets encrypted by `APP_SETTINGS_KEY`
 - roles, permissions and ACL: custom roles can be created, renamed, deleted and given permissions; subscribers are found by search to assign roles, and each role lists its members (`roles.manage` manages roles and membership, `acl.manage` additionally changes permissions; system roles are fixed)
 - CSRF protection for state-changing actions
 - separate PostgreSQL global email/domain suppression database
@@ -57,7 +74,7 @@ The delivery system restores:
 - ordinary and advanced queueing
 - per-message maximum-send handling
 - queue inspection, deletion, clearing, stopping and processing
-- SMTP batching, throttling, retry and failover
+- delivery through the catto-mail smarthost (see [catto-mail integration](#catto-mail-integration)): ctnlist renders every recipient's message, catto-mail sends it
 - archive creation when a campaign is first queued
 - queue-time subscriber state updates
 
@@ -65,7 +82,7 @@ The delivery system restores:
 
 The ordinary campaign workflow sends a message once to a subscriber. The unique `(subscriber UUID, message MUID)` record in `smlog` is used as the delivery guard.
 
-All campaign-content paths—including queue delivery, forwarding, proof copies and deliberate resends—use the campaign mail path and update `sendlog`; deliveries to subscribers also update `smlog`. A proof can go to any valid address (by default `MAIL_TEST_ADDRESS`), which needs no subscriber record: it is logged as PROOF in `sendlog` only and does not affect the queue, consent, memberships or the once-only guard.
+All campaign-content paths—including queue delivery, forwarding, proof copies and deliberate resends—are delivered by catto-mail and update `sendlog` when catto-mail has accepted them (the send job is sealed); deliveries to subscribers also update `smlog`. A proof can go to any valid address (by default `MAIL_TEST_ADDRESS`), which needs no subscriber record: it is logged as PROOF in `sendlog` only and does not affect the queue, consent, memberships or the once-only guard.
 
 `smlog` again records list context, sent/read activity, likes, dislikes, forwards, profile updates, confirmations, subscriptions, unsubscriptions and bookings/contact activity.
 
@@ -127,15 +144,15 @@ database/       Phinx migrations (domain/, banlist/), destructive development re
 assets/         application CSS and JavaScript for Symfony AssetMapper (app.js, styles/app.css, ckeditor/ editor configuration, images/)
 importmap.php   AssetMapper import map (entry point: assets/app.js)
 public_html/    per-installation web root: front controller (index.php) and vendor/ckeditor5/ (prebuilt CKEditor 5 bundle)
-src/            application code, namespace App\ (Controller/, Repository/ and domain folders: Campaign/, Queue/, Mail/, Log/, Subscriber/, Security/, Suppression/)
+src/            application code, namespace App\ (Controller/, Repository/ and domain folders: Campaign/, Queue/, Mail/, CattoMail/, Log/, Subscriber/, Security/, Suppression/; Form/ and Validator/; Command/ for console commands)
 templates/      Twig templates: base.html.twig and layout/ (navbar, admin bar, flash messages, footer) form the site layout
-tests/          PHPUnit: Unit/, Integration/ (application against the ctnlist_test database), Smoke/ (HTTP against the running stack)
+tests/          PHPUnit: Unit/, Integration/ (application against the ctnlist_test database), Smoke/ (HTTP against the running stack), Support/ (FakeCattoMail)
 dev/podman/     development container files
 ```
 
 ## Deployment
 
-The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.0.2/` (the path is set in `public_html/index.php`). Run `composer install --no-dev` there.
+The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.0.3/` (the path is set in `public_html/index.php`). Run `composer install --no-dev` there. PHP needs the `gd` extension with JPEG and WebP support (profile pictures; `composer install` checks for it) and should have `exif` (phone photos are turned upright). The picture editor uploads only the cropped square (well under 1 MB); without JavaScript the original file is posted, so allow uploads of up to 8 MB (nginx `client_max_body_size`, PHP `upload_max_filesize`/`post_max_size`) or such uploads are refused.
 
 Each installation has its own directory containing:
 
@@ -161,21 +178,114 @@ Per-installation settings are read from `.env` outside the public web directory.
 
 The main application uses `DB_*` settings. The separate global suppression database uses `GDB_*` settings in an externally managed `ban.env`. Set `GDB_ENV_DIRECTORY` and, when necessary, `GDB_ENV_FILE` in the installation `.env` (default: `config/phinx/ban.env` in the shared tree); the same variables can be exported when running the banlist Phinx configuration. `SUPPRESSION_PROVIDER=none` disables the suppression database and is only accepted with `APP_ENV` `dev` or `test`.
 
-SMTP can be configured with a single `MAILER_DSN` or an optional `MAIL_SMTP_SERVERS_JSON` array for per-server batching, delay, rate and failover. Optional legacy synchronisation targets use `SYNC_DATABASES_JSON`.
+Transactional mail (sign-in links, invitations, notifications, contact acknowledgements) goes through the SMTP server in `MAILER_DSN`, throttled to `MAIL_RATE_PER_MINUTE`. Campaign content goes through catto-mail (`CATTOMAIL_*`, below). Optional legacy synchronisation targets use `SYNC_DATABASES_JSON`.
 
-Sign-in links expire after `AUTH_MAGIC_LINK_TTL` seconds and are rate-limited per address (`AUTH_MAGIC_LINK_MAX_PER_EMAIL` within `AUTH_MAGIC_LINK_EMAIL_WINDOW`) and per client IP (`AUTH_MAGIC_LINK_MAX_PER_IP` within `AUTH_MAGIC_LINK_IP_WINDOW`); a signed-in session lasts `AUTH_SESSION_TTL` seconds. Contact-form submissions are appended to `CONTACT_LOG_FILE` (default: the installation's `logs/contact.log`). Bulk-subscribe and import logs (`emails_added.txt`) and the export files (`export-subscribers.txt`, `export-remove.txt`) are written to `APP_LOG_DIR` (default: the installation's `logs/`).
+Sign-in links expire after `AUTH_MAGIC_LINK_TTL` seconds and are rate-limited per address (`AUTH_MAGIC_LINK_MAX_PER_EMAIL` within `AUTH_MAGIC_LINK_EMAIL_WINDOW`) and per client IP (`AUTH_MAGIC_LINK_MAX_PER_IP` within `AUTH_MAGIC_LINK_IP_WINDOW`); a signed-in session lasts `AUTH_SESSION_TTL` seconds. The sign-in page and email state the link lifetime in words from the same setting. Contact messages are limited per hour per client IP and per address (`CONTACT_RATE_LIMIT`, default 5), forwards and resends per subscriber (`FORWARD_RATE_LIMIT`, default 10; holders of `messages.manage` are exempt); over a limit the page answers 429. Contact-form submissions are appended to `CONTACT_LOG_FILE` (default: the installation's `logs/contact.log`). Bulk-subscribe and import logs (`emails_added.txt`) and the export files (`export-subscribers.txt`, `export-remove.txt`) are written to `APP_LOG_DIR` (default: the installation's `logs/`).
 
 ### Settings page
 
-Administrators, and any role given the `settings.manage` permission, can change a selected set of settings at **Admin → Settings** without editing `.env`: site identity, contact details and message links, the mail sender and proof address, the SMTP servers (the main server and the campaign failover servers, in order) and sending pace, the contact form, the subscription messages, the archive and the sign-in limits.
+Administrators, and any role given the `settings.manage` permission, can change a selected set of settings at **Admin → Settings** without editing `.env`: site identity, contact details and message links, the mail sender and proof address, the transactional SMTP server and its pace, the contact form, the subscription messages, the archive and the sign-in limits.
 
 - Each setting resolves as **database override → `.env` → built-in default**, and the page shows which one is in effect (Database, .env or Default). Overrides are stored in the `options` table; nothing is written to `.env`. Database overrides are optional: an installation without any runs exactly from its `.env`.
 - Saving a value equal to the inherited one, or "Reset override" / "Reset section", removes the override so `.env` (or the default) applies again. Changes apply from the next page or email; a send that is already running keeps the SMTP settings it started with.
 - SMTP passwords are encrypted in the database with AES-256-GCM using the dedicated `APP_SETTINGS_KEY` from `.env` (32 random bytes, Base64; generate with `openssl rand -base64 32`). The key is needed only once a secret is saved there; without it the SMTP section explains what to add. Passwords are never sent to the browser (leave the field empty to keep the current one) and never logged.
 - **Do not change `APP_SETTINGS_KEY` while encrypted settings exist**: they become unreadable, and mail that needs them fails (the Settings page reports it) until they are entered again or reset. A future key rotation must decrypt with the old key and re-encrypt with the new key before the new key is deployed.
-- Stay in `.env` only: `APP_SECRET`, `APP_SETTINGS_KEY`, `APP_ENV`/`APP_DEBUG`, `APP_INSTANCE_ID`, the database and suppression-database settings, `TRUSTED_PROXIES`, `APP_BASE_URL`/`APP_DOMAIN`, `APP_TIMEZONE`, file paths (`CONTACT_LOG_FILE`, `APP_LOG_DIR`), the auth cookie name, `APP_ADMIN_EMAIL` and the synchronisation targets.
+- Stay in `.env` only: `APP_SECRET`, `APP_SETTINGS_KEY`, `APP_ENV`/`APP_DEBUG`, `APP_INSTANCE_ID`, the catto-mail settings (`CATTOMAIL_*`), the database and suppression-database settings, `TRUSTED_PROXIES`, `APP_BASE_URL`/`APP_DOMAIN`, `APP_TIMEZONE`, file paths (`CONTACT_LOG_FILE`, `APP_LOG_DIR`), the auth cookie name, `APP_ADMIN_EMAIL` and the synchronisation targets.
 
 Deployment is otherwise unchanged (including `asset-map:compile` per installation).
+
+### Security notes
+
+- Secrets are generated, never typed: `APP_SECRET` with `openssl rand -hex 32`, `APP_INSTANCE_ID` with `openssl rand -hex 16`, `APP_SETTINGS_KEY` with `openssl rand -base64 32` (`bin/dev ensure-env` does this for the development stack and never replaces an existing key).
+- Every page carries `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, a `Permissions-Policy`, HSTS over HTTPS, and a Content-Security-Policy that stops framing by other sites, `<base>`/plugin injection and form posts to other sites. A full script/style policy (nonces for the import map, the CDN and CKEditor) is a later change. Static files are served by nginx, which can add the same headers there.
+- The auth cookie is HttpOnly, SameSite=Lax and Secure whenever `APP_BASE_URL` is https.
+- Bootstrap and Bootstrap Icons stay on jsDelivr with subresource integrity: vendoring them with AssetMapper would not bring the icon fonts along. CKEditor 5 is a prebuilt bundle in `public_html/vendor/ckeditor5/`, loaded only on the message and template editors.
+- Message HTML shown on the site (the public archive) is sanitised (`config/packages/html_sanitizer.yaml`); mail is sent as composed.
+- Logs never contain secrets, setting values or tokens; the Site Log omits query strings and masks one-click unsubscribe signatures. Configure the web server's access log not to record query strings for `/auth/verify`, which carries the sign-in token.
+
+### Message placeholders
+
+Placeholders are case-insensitive. For a subscriber: `{firstname}`, `{lastname}`, `{emailsleft}`, `{subscription}` (the subscription message, itself filled), `{unsubscribe}`, `{confirm}`, `{forward}`, `{preferences}`, `{like}`, `{dislike}`, `{booking}` (`APP_BOOKING_URL`, may contain `{BaseURL}`, `{suid}`, `{muid}`), `{contact}` (`APP_CONTACT_URL`), `{usertrack}` (open-tracking pixel, HTML only), `{suid}`, `{muid}`, `{baseurl}`, `{listshortcode}`; for everyone: `{subscribe}`, `{archive}`, `{listname}`, `{domain}`, `{organisation}`, `{advertise}` (`APP_ADVERTISE_URL`), `{facebook}` (`APP_FACEBOOK_URL`), `{twitter}` (`APP_X_URL`). In archives subscriber links become plain labels (UNSUBSCRIBE, FORWARD, UPDATE, OPT IN, YES, NO, BOOKING FORM, CONTACT FORM), names and identifiers are empty. Site links whose URL is not configured render nothing. `{STORE}` and `{lms-booking}` are retired and render nothing. Proofs fill names with test values and point subscriber links at a page explaining that a proof has no subscriber.
+
+## catto-mail integration
+
+ctnlist is the first client of the [catto-mail](https://github.com/rrcatto/catto-mail) smarthost. The two applications stay separate: ctnlist talks to catto-mail only through its HTTPS `/v1` API (`App\CattoMail\CattoMailClient`, the only class that does) and receives its signed webhooks. ctnlist never touches catto-mail's database. ctnlist keeps subscribers, lists, consent and ordinary unsubscribes, campaigns, templates, audience selection and the per-recipient rendering. catto-mail does address validation, SMTP delivery, DSNs, complaints, global transport suppression, tracking and metering.
+
+**Configuration** (`.env` only, never Settings, never committed; a changed key applies from the next request):
+
+| Variable | Purpose |
+|---|---|
+| `CATTOMAIL_API_BASE_URL` | catto-mail's HTTPS origin (`/v1` is added). |
+| `CATTOMAIL_API_KEY` | This installation's API key, sent as `Authorization: Bearer`; never rendered or logged (errors and log lines are redacted). |
+| `CATTOMAIL_WEBHOOK_SECRET` | The signing secret catto-mail showed when the webhook endpoint `<APP_BASE_URL>cattomail/webhook` was registered. |
+| `CATTOMAIL_WEBHOOK_SECRET_PREVIOUS` | Only during a secret rotation: the previous secret, for catto-mail's overlap window. After catto-mail rotates, put the new secret in `CATTOMAIL_WEBHOOK_SECRET` and the old one here; remove it when the overlap has passed. |
+| `CATTOMAIL_GLOBAL_OPTOUT_ENABLED` | `true` only when catto-mail's operator granted this client the global-opt-out capability. |
+| `CATTOMAIL_CA_FILE`, `CATTOMAIL_API_CONNECT_HOST` | Development only: trust catto-mail's self-signed certificate; reach its API host through another name (ignored outside `dev`/`test`). |
+| `CATTOMAIL_RECONCILE_AFTER_SECONDS` | Poll jobs that have had no final webhook after this long (default 900; 300 in development). |
+| `CATTOMAIL_TRACK_OPENS`, `CATTOMAIL_TRACK_CLICKS` | catto-mail open/click tracking per send job (default off). |
+
+**Sending.** Every campaign delivery (queue sends, proofs, resends, forwards) is rendered by ctnlist for its recipient and handed to catto-mail. catto-mail does no mail merge.
+- A sending run (one queue run, proof, resend or forward) gets send jobs, one per message and list, of at most 10,000 recipients each: a bigger run gets several jobs, numbered `<run uuid>/<n>` (their `external_reference`).
+- Recipients are uploaded in batches of at most 500, then the job is submitted.
+- Each recipient carries its final subject, HTML and text, `external_recipient_reference` (the ctnlist delivery's UUID) and, for subscription mail, a per-recipient one-click `unsubscribe_url`. That URL is `https://…/unsubscribe-link/…`, signed, without tracking, and unsubscribes from that list only.
+- Proofs, and resends of a draft without lists, are transactional jobs.
+- A message's From domain must be a sending domain registered in catto-mail, and subscription mail needs an https `APP_BASE_URL`.
+- **Admin → Sending → Delivery (catto-mail)** shows each message's send jobs, every recipient's message state, and a recipient's event history read live from catto-mail. `remote_accepted` is acceptance by the receiving server, not inbox delivery; `open_recorded` is not proof of reading.
+
+**Idempotency.** Each operation's `Idempotency-Key` (validation job, send job, every recipient batch, global opt-out) is generated once and stored with its row before the request is sent. Every retry, in place or by the worker, resends the same key and the same body, so a timeout can never create a second job, batch or opt-out. Rendered content is kept until its batch is accepted.
+
+**Webhooks.**
+- `POST /cattomail/webhook` takes no session and no CSRF token.
+- It verifies `Smarthost-Signature` (`t=<unix>,v1=<hex HMAC-SHA256 over "<t>.<raw body>">`) against the current and previous secret, in constant time, before parsing. Timestamps more than 5 minutes off are rejected.
+- It stores the event under its unique event id and answers 200 at once; a duplicate gets 200 and no second effect.
+- Processing happens after the response is sent.
+- Handled: `validation.completed`/`failed` (results fetched), `send.completed`/`failed` (job and message states fetched), `message.hard_bounced`, `message.complained`. Unknown types are kept and ignored.
+- States never move backwards, so late or reordered events change nothing.
+
+**Worker.** Run `ctnlist:cattomail:work` from cron (every minute) per installation:
+
+```bash
+CTNLIST_INSTANCE_DIR=/var/www/example bin/console ctnlist:cattomail:work
+```
+
+It processes stored webhook events not yet processed, retries unsealed send jobs and pending opt-outs and validation submissions (same keys), and reconciles by polling jobs without a final state (`GET /v1/send-jobs/{id}` with its messages, `GET /v1/validation-jobs/{id}` with its results).
+
+**Hard bounces and complaints** (from webhooks or polling, applied once per delivery). catto-mail already suppresses these addresses globally; ctnlist only keeps its business state:
+- A hard bounce sets the subscriber's delivery state to `hard_bounced`, adds to `s_bounces` and the message's `m_bounces`, and removes their queued deliveries. Consent and memberships are unchanged.
+- A complaint sets `complained` and unsubscribes them from every ctnlist list, with the reason "Spam complaint reported through catto-mail".
+- Either state keeps the subscriber out of campaign selection until an administrator clears it on the subscriber page.
+
+**Unsubscribe and global opt-out.** Every ordinary unsubscribe (one list, the one-click link, all ctnlist lists, the ctnlist suppression database) is ctnlist state and is never sent to catto-mail. Separately, when `CATTOMAIL_GLOBAL_OPTOUT_ENABLED` is true, a signed-in subscriber can explicitly ask for "no email from any sender using our mail service" (unsubscribe page or profile):
+- ctnlist records it and reports `POST /v1/global-suppressions`;
+- because they want no email at all, ctnlist also unsubscribes them from all its lists;
+- withdrawing it reports `POST /v1/global-suppressions/{id}/lift` and does not re-subscribe them.
+
+**Address validation.** **Admin → Subscribers → Address validation** submits a list's members, at most 10,000 addresses per job, each with the subscriber's UUID as `external_address_reference`. Results are mapped back by that reference and stored exactly as classified:
+- `unknown` stays unknown, and `temporarily_unverifiable` is not invalid;
+- a suggested address is shown, never applied;
+- a deliverable address says nothing about consent;
+- nothing about a subscriber changes automatically.
+
+### catto-mail development route
+
+The development stacks are separate (catto-mail's pod is on an internal network, its API published on `127.0.0.1:8443`; its webhook worker only delivers to public addresses, or to private hosts listed in its `APP_WEBHOOK_ALLOWED_PRIVATE_HOSTS`). The route is a dedicated internal Podman network, `cattomail-dev`:
+
+1. `bin/dev cattomail-link` creates `cattomail-dev` and attaches ctnlist's web container (alias `ctnlist-web`) and app container. Run it again after `bin/dev up`, which recreates the containers.
+2. `bin/dev cattomail-ca` saves catto-mail's self-signed development certificate (read from its public port) to `dev/podman/cattomail-ca.pem` (gitignored).
+3. catto-mail's side, done in the catto-mail repository:
+   - attach its pod to `cattomail-dev` with an alias (e.g. `catto-mail`);
+   - add `ctnlist-web` to `APP_WEBHOOK_ALLOWED_PRIVATE_HOSTS`;
+   - provision a client with its console: an active client, the development sending domain, an API key, optionally the global-opt-out capability, and a webhook endpoint `http://ctnlist-web/cattomail/webhook` for the six event types (plain http is accepted in catto-mail development).
+4. In `dev/podman/ctnlist.env`:
+   - `CATTOMAIL_API_BASE_URL=https://localhost`;
+   - `CATTOMAIL_API_CONNECT_HOST=catto-mail` (TLS is still verified for `localhost`);
+   - `CATTOMAIL_CA_FILE=/usr/local/lib/php/ctnlist/6.0.3/dev/podman/cattomail-ca.pem`;
+   - the API key and webhook secret;
+   - for subscription mail, `APP_BASE_URL=https://localhost:8543/` (ctnlist's development HTTPS listener).
+
+   Then run `bin/dev restart`, `bin/dev cattomail-link` and, in another terminal, `bin/dev console ctnlist:cattomail:work --loop 30`.
+
+All development mail then ends up in catto-mail's Mailpit (catto-mail's own capture mode); nothing reaches the Internet. Production uses public HTTPS in both directions and none of the development settings.
 
 ## Database setup
 
@@ -197,17 +307,20 @@ bin/dev up          # build and start, composer install, migrations (including t
 bin/dev help        # all commands
 ```
 
-The application is at http://localhost:8180. All outgoing mail is captured by Mailpit at http://localhost:8125: sign in as `admin@ctnlist.test` and follow the magic link it receives. The development instance runs without a banlist database (`SUPPRESSION_PROVIDER=none`).
+The application is at http://localhost:8180 (and https://localhost:8543 with a generated development certificate). Transactional mail is captured by Mailpit at http://localhost:8125: sign in as `admin@ctnlist.test` and follow the magic link it receives. The development instance runs without a banlist database (`SUPPRESSION_PROVIDER=none`) and, until catto-mail is connected ([development route](#catto-mail-development-route)), sends no campaign content: the queue, proofs and resends report that catto-mail is not configured and keep their work.
 
 ## Testing and validation
 
 ```bash
+bin/dev check       # the quality gate: all of the below plus Twig/YAML/container lint and composer validate + audit
 bin/dev lint        # php -l over public_html/index.php, src/ and tests/
-bin/dev analyse     # PHPStan
+bin/dev analyse     # PHPStan level 8
 bin/dev test        # PHPUnit: unit, integration and smoke suites
 ```
 
-`tests/Smoke/RouteSmokeTest` requests every GET route of the running stack over HTTP, anonymously and as the development administrator, and checks status codes, login redirects, access control and PHP error output. It was the route-parity check for the Symfony migration. `tests/Smoke/AuthFlowTest` covers sign-in links, auth cookies, logout and CSRF, `tests/Smoke/LayoutTest` the site layout and error pages, `tests/Smoke/AdminListsRolesTest` list and role administration, `AdminMessagesTemplatesTest`, `AdminQueueTest`, `AdminSubscribersTest` and `ReportsTest` the rest of the administration and the Site Log, and `ProfileTest`, `ConsentTest`, `MessageActionTest` and `ArchiveContactTest` the subscriber-facing pages. `tests/Unit` holds unit tests; `tests/Integration` boots the application against the `ctnlist_test` database (each test rolled back) and covers the services: suppression (including the banlist database, `ctnlist_banlist_test`), the send and message logs, mail, rendering, messages, the delivery queue, consent, contact and subscriber administration.
+`bin/dev check` must pass before a change is handed over; it stops at the first failing step. `tests/Integration/RouteConventionsTest` checks the whole route table: every POST route is CSRF-protected (Symfony form or `#[IsCsrfTokenValid]`; the webhook, the signed one-click unsubscribe link and logout are documented exemptions), every administration route declares its permission, no state-changing route accepts GET, and every GET route is requested by the route smoke test.
+
+`tests/Smoke/RouteSmokeTest` requests every GET route of the running stack over HTTP, anonymously and as the development administrator, and checks status codes, login redirects, access control and PHP error output. Every new GET route must be added to it. `tests/Smoke/AuthFlowTest` covers sign-in links, auth cookies, logout and CSRF, `tests/Smoke/LayoutTest` the site layout and error pages, `tests/Smoke/AdminListsRolesTest` list and role administration, `AdminMessagesTemplatesTest`, `AdminQueueTest`, `AdminSubscribersTest` and `ReportsTest` the rest of the administration and the Site Log, and `ProfileTest`, `ConsentTest`, `MessageActionTest` and `ArchiveContactTest` the subscriber-facing pages. `tests/Unit` holds unit tests; `tests/Integration` boots the application against the `ctnlist_test` database (each test rolled back) and covers the services: suppression (including the banlist database, `ctnlist_banlist_test`), the send and message logs, mail, rendering, messages, the delivery queue, consent, contact and subscriber administration.
 
 The banlist suppression database and real SMTP delivery are not part of the development stack and must be tested on a target installation.
 

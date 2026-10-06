@@ -12,9 +12,7 @@ final class ArchiveContactTest extends SmokeTestCase
     public static function setUpBeforeClass(): void
     {
         parent::setUpBeforeClass();
-        self::$archiveId = (int) self::$db->query(
-            "INSERT INTO archives (a_subject, a_html) VALUES ('Archive fixture', '<p id=\"archived\">Archived copy</p>') RETURNING a_id"
-        )->fetchColumn();
+        self::$archiveId = (int) self::value("INSERT INTO archives (a_subject, a_html) VALUES ('Archive fixture', '<p id=\"archived\">Archived copy</p>') RETURNING a_id");
     }
 
     public static function tearDownAfterClass(): void
@@ -25,31 +23,62 @@ final class ArchiveContactTest extends SmokeTestCase
 
     public function testArchivePageCountsViewsAndOffersForwarding(): void
     {
-        $anonymous = self::request(self::client(), 'GET', '/archive/' . self::$archiveId)['body'];
-        self::assertStringContainsString('<p id="archived">Archived copy</p>', $anonymous, 'archived HTML rendered as is');
-        self::assertStringNotContainsString('forwardarchiveform', $anonymous);
+        self::withSetting('APP_ARCHIVE_ENABLED', 'true', function (): void {
+            $anonymous = self::request(self::client(), 'GET', '/archive/' . self::$archiveId)['body'];
+            self::assertStringContainsString('<p id="archived">Archived copy</p>', $anonymous, 'archived HTML rendered as is');
+            self::assertStringNotContainsString('id="forward-archive"', $anonymous);
 
-        $client = self::client();
-        self::loginAsAdmin($client);
-        self::assertStringContainsString('forwardarchiveform', self::request($client, 'GET', '/archive/' . self::$archiveId)['body']);
-        self::assertSame(2, (int) self::$db->query('SELECT a_viewed FROM archives WHERE a_id = ' . self::$archiveId)->fetchColumn());
+            $client = self::client();
+            self::loginAsAdmin($client);
+            self::assertStringContainsString('id="forward-archive"', self::request($client, 'GET', '/archive/' . self::$archiveId)['body']);
+            $invalid = self::submitForm($client, '/archive/' . self::$archiveId, 'forward', ['forward[emails]' => 'nobody']);
+            self::assertSame(422, $invalid['status'], 'invalid input shows the archive again');
+            self::assertMatchesRegularExpression('#id="forward_emails_error1">No usable email addresses were found#', $invalid['body']);
+            self::assertStringContainsString('<p id="archived">Archived copy</p>', $invalid['body']);
+            self::assertSame(3, (int) self::value('SELECT a_viewed FROM archives WHERE a_id = ' . self::$archiveId));
 
-        self::assertStringContainsString('Archive fixture', self::request(self::client(), 'GET', '/archives')['body']);
-        self::assertSame(404, self::request(self::client(), 'GET', '/archive/999999')['status']);
+            self::assertStringContainsString('Archive fixture', self::request(self::client(), 'GET', '/archives')['body']);
+            self::assertSame(404, self::request(self::client(), 'GET', '/archive/999999')['status']);
+        });
+    }
+
+    public function testDisabledArchivesAreNotPublished(): void
+    {
+        self::withSetting('APP_ARCHIVE_ENABLED', 'false', function (): void {
+            foreach (['/archives', '/archives/1', '/archive/' . self::$archiveId] as $path) {
+                self::assertSame(404, self::request(self::client(), 'GET', $path)['status'], $path);
+            }
+            self::assertStringNotContainsString('href="/archives"', self::request(self::client(), 'GET', '/')['body']);
+        });
     }
 
     public function testContactSubmission(): void
     {
         $client = self::client();
         self::loginAsAdmin($client);
-        $form = self::request($client, 'GET', '/contact-form')['body'];
-        self::assertSame(1, preg_match('/name="csrf" value="([^"]+)"/', $form, $csrf));
+        $invalid = self::submitForm($client, '/contact-form', 'contact', ['contact[name]' => 'Smoke Visitor', 'contact[email]' => 'not-an-address', 'contact[message]' => 'Kept message']);
+        self::assertSame(422, $invalid['status']);
+        self::assertMatchesRegularExpression('#id="contact_email_error1">Enter a valid email address#', $invalid['body']);
+        self::assertStringContainsString('value="Smoke Visitor"', $invalid['body'], 'values are kept');
+        self::assertStringContainsString('>Kept message</textarea>', $invalid['body']);
+        self::assertStringNotContainsString('Thank you for your submission!', $invalid['body'], 'nothing is sent');
 
-        $response = self::request($client, 'POST', '/contact-form', [
-            'csrf' => html_entity_decode($csrf[1]), 'name' => 'Smoke Visitor', 'email' => 'visitor@example.com', 'topic' => 'Smoke', 'message' => 'Hello',
-        ]);
-        self::assertSame(200, $response['status']);
-        self::assertStringContainsString('Thank you for your submission!', $response['body']);
+        // Every run submits from the same container address; the hourly limit itself is covered by RequestThrottleTest.
+        self::withSetting('CONTACT_RATE_LIMIT', '100000', function () use ($client): void {
+            $response = self::submitForm($client, '/contact-form', 'contact', [
+                'contact[name]' => 'Smoke Visitor', 'contact[email]' => 'visitor@example.com', 'contact[topic]' => 'Smoke', 'contact[message]' => 'Hello',
+            ]);
+            self::assertSame(200, $response['status']);
+            self::assertStringContainsString('Thank you for your submission!', $response['body']);
+        });
+
+        self::withSetting('CONTACT_RATE_LIMIT', '1', function () use ($client): void {
+            $fields = ['contact[name]' => 'Smoke Visitor', 'contact[email]' => 'limit-' . bin2hex(random_bytes(4)) . '@example.com', 'contact[message]' => 'Hello'];
+            self::submitForm($client, '/contact-form', 'contact', $fields);
+            $limited = self::submitForm($client, '/contact-form', 'contact', $fields);
+            self::assertSame(429, $limited['status'], 'one message per hour for this address');
+            self::assertStringContainsString('Too many messages have been sent from here recently.', $limited['body']);
+        });
 
         $prefilled = self::request(self::client(), 'GET', '/contact-form/' . self::$admin['s_uuid'])['body'];
         self::assertStringContainsString('value="' . self::$admin['s_email'] . '"', $prefilled);

@@ -31,9 +31,11 @@ final class LayoutTest extends SmokeTestCase
         '/import' => 'subscribers.manage',
         '/export' => 'subscribers.manage',
         '/sync' => 'subscribers.manage',
+        '/address-validation' => 'subscribers.manage',
         '/lists' => 'lists.manage',
         '/sendlog' => 'logs.view',
         '/sitelog' => 'logs.view',
+        '/delivery' => 'logs.view',
         '/roles' => 'roles.manage',
         '/settings' => 'settings.manage',
     ];
@@ -70,6 +72,7 @@ final class LayoutTest extends SmokeTestCase
     public function testAnonymousLayout(): void
     {
         $body = self::request(self::client(), 'GET', '/')['body'];
+        self::assertMatchesRegularExpression('#<img class="app-avatar" src="/assets/images/avatar-placeholder-[^"]+\.svg" alt=""#', $body, 'signed out: the placeholder picture beside Log in');
         self::assertMatchesRegularExpression('/<title>.+ \| Home<\/title>/', $body);
         self::assertMatchesRegularExpression('/<header class="[^"]*\bsticky-top\b/', $body, 'sticky header');
         self::assertStringContainsString('aria-label="Main navigation"', $body);
@@ -77,12 +80,12 @@ final class LayoutTest extends SmokeTestCase
             self::assertStringContainsString('href="' . $href . '"', $body, "public link {$href}");
         }
         // Archives appear only while public archives are enabled: the Settings override, else .env.
-        $override = self::$db->query("SELECT o_value FROM options WHERE o_key = 'setting:APP_ARCHIVE_ENABLED'")->fetchColumn();
+        $override = self::value("SELECT o_value FROM options WHERE o_key = 'setting:APP_ARCHIVE_ENABLED'");
         $archives = filter_var($override !== false ? $override : ($_ENV['APP_ARCHIVE_ENABLED'] ?? 'false'), FILTER_VALIDATE_BOOLEAN);
         self::assertSame($archives, str_contains($body, 'href="/archives"'), 'Archives link follows APP_ARCHIVE_ENABLED');
         self::assertMatchesRegularExpression('/class="nav-link active" href="\/" aria-current="page"/', $body, 'current page marked');
         self::assertStringNotContainsString('aria-label="Administration"', $body);
-        self::assertStringNotContainsString('href="/logout"', $body);
+        self::assertStringNotContainsString('action="/logout"', $body);
         self::assertStringNotContainsString('btn-toolbar', $body, 'no secondary toolbar');
     }
 
@@ -101,7 +104,7 @@ final class LayoutTest extends SmokeTestCase
         self::assertStringContainsString('<script type="importmap">', $body);
 
         foreach (['/assets/styles/app-[^"]+\.css', '/assets/app-[^"]+\.js', '/assets/images/favicon-[^"]+\.svg'] as $pattern) {
-            self::assertSame(1, preg_match('#"(' . $pattern . ')"#', $body, $match), $pattern);
+            $match = self::match('#"(' . $pattern . ')"#', $body, $pattern);
             self::assertSame(200, self::request($client, 'GET', $match[1])['status'], $match[1]);
         }
         self::assertMatchesRegularExpression('#<link rel="icon" href="/assets/images/favicon-[^"]+\.svg"#', $body);
@@ -115,9 +118,10 @@ final class LayoutTest extends SmokeTestCase
         $body = self::request($client, 'GET', '/edit-profile')['body'];
 
         self::assertStringContainsString('Nav Tester', $body, 'account menu');
-        foreach (['/profile', '/my/messages', '/edit-profile', '/logout'] as $href) {
+        foreach (['/profile', '/my/messages', '/edit-profile'] as $href) {
             self::assertStringContainsString('href="' . $href . '"', $body, "account link {$href}");
         }
+        self::assertMatchesRegularExpression('#<form method="post" action="/logout">\s*<input type="hidden" name="csrf"#', $body, 'log out is a POST with the CSRF token');
         self::assertStringNotContainsString('href="/login"', $body);
         self::assertStringNotContainsString('aria-label="Administration"', $body, 'no permissions, no admin bar');
     }
@@ -134,7 +138,7 @@ final class LayoutTest extends SmokeTestCase
             self::assertStringContainsString('href="' . $href . '"', $body, "admin link {$href}");
         }
         self::assertMatchesRegularExpression('/All subscribers<\/span>\s*<span class="badge[^"]*">\d+</', $body, 'counters');
-        self::assertStringContainsString('href="/logout"', $body);
+        self::assertStringContainsString('action="/logout"', $body);
         self::assertStringContainsString('Create a topic list', $body, 'page content inside the layout');
         self::assertStringNotContainsString('btn-toolbar', $body, 'no duplicate admin toolbar');
     }
@@ -163,6 +167,34 @@ final class LayoutTest extends SmokeTestCase
         self::assertSame(403, self::request($client, 'GET', '/bulk-subscribe')['status']);
     }
 
+    /**
+     * Each permission on its own: a custom role holding only it (no
+     * Administrator) sees and opens exactly that permission's pages, and the
+     * server refuses every other administration page.
+     */
+    public function testEachPermissionOpensExactlyItsPages(): void
+    {
+        self::$db->prepare('INSERT INTO roles (r_key, r_name) VALUES (?, ?) ON CONFLICT DO NOTHING')->execute([self::$roleKey, 'Smoke navigation ' . self::$roleKey]);
+        self::$db->prepare('INSERT INTO subscriber_roles (sr_s_id, sr_r_id) SELECT ?, r_id FROM roles WHERE r_key = ? ON CONFLICT DO NOTHING')->execute([self::$navId, self::$roleKey]);
+        $client = self::signIn(self::$navId);
+        foreach (array_unique(array_values(self::ADMIN_LINKS)) as $permission) {
+            self::$db->prepare('DELETE FROM role_permissions WHERE rp_r_id IN (SELECT r_id FROM roles WHERE r_key = ?)')->execute([self::$roleKey]);
+            self::$db->prepare('INSERT INTO role_permissions (rp_r_id, rp_ap_id) SELECT r.r_id, ap.ap_id FROM roles r JOIN acl_permissions ap ON ap.ap_key = ? WHERE r.r_key = ?')
+                ->execute([$permission, self::$roleKey]);
+            $menu = self::request($client, 'GET', '/edit-profile')['body'];
+            foreach (self::ADMIN_LINKS as $href => $required) {
+                $status = self::request($client, 'GET', $href)['status'];
+                if ($required === $permission) {
+                    self::assertSame(200, $status, "{$href} with only {$permission}");
+                    self::assertStringContainsString('href="' . $href . '"', $menu, "{$href} offered with {$permission}");
+                } else {
+                    self::assertSame(403, $status, "{$href} needs {$required}, not {$permission}");
+                    self::assertStringNotContainsString('href="' . $href . '"', $menu, "{$href} hidden with only {$permission}");
+                }
+            }
+        }
+    }
+
     public function testEditorAssetsOnlyOnEditorPages(): void
     {
         $client = self::client();
@@ -172,8 +204,8 @@ final class LayoutTest extends SmokeTestCase
             $body = self::request($client, 'GET', $page)['body'];
             self::assertStringContainsString('src="/vendor/ckeditor5/ckeditor5.umd.js"', $body, $page);
             self::assertStringContainsString('href="/vendor/ckeditor5/ckeditor5.css"', $body, $page);
-            self::assertSame(1, preg_match('#src="(/assets/ckeditor/editor-[^"]+\.js)"#', $body, $editor), $page);
-            self::assertStringContainsString('id="mt_html"', $body, $page);
+            $editor = self::match('#src="(/assets/ckeditor/editor-[^"]+\.js)"#', $body, $page);
+            self::assertStringContainsString('data-html-editor', $body, $page);
         }
         self::assertSame(200, self::request($client, 'GET', $editor[1])['status']);
         self::assertSame(200, self::request($client, 'GET', '/vendor/ckeditor5/ckeditor5.umd.js')['status']);

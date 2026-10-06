@@ -1,0 +1,33 @@
+{% extends 'base.html.twig' %}
+{% import 'admin/_cattomail_macros.html.twig' as cm %}
+
+{% block title %}Message events{% endblock %}
+
+{% block content %}
+{% embed 'layout/_page_header.html.twig' with {title: recipient.crp_email, description: 'The message\'s event history, read from catto-mail now.'} %}
+  {% block actions %}<a class="btn btn-outline-secondary" href="{{ path('admin_delivery_job', {id: recipient.crp_csj_id}) }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>Send job</a>{% endblock %}
+{% endembed %}
+<p>{{ cm.message_status(recipient.crp_status) }} <span class="small text-body-secondary ms-2">catto-mail message {{ recipient.crp_remote_message_id }}</span></p>
+<div class="alert alert-secondary small" role="note">“remote accepted” means the receiving mail server accepted the message, not that it reached an inbox; “open recorded” means the tracking image was loaded, not that a person read the message.</div>
+{% if problem %}<div class="alert alert-warning small" role="alert">{{ problem }}</div>{% endif %}
+{% if events is empty %}
+  {% include 'layout/_empty_state.html.twig' with {icon: 'clock-history', message: 'No events recorded.'} %}
+{% else %}
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle">
+      <thead class="table-light"><tr><th scope="col">When (UTC)</th><th scope="col">Event</th><th scope="col">SMTP</th><th scope="col">Remote host</th><th scope="col">Diagnostic</th></tr></thead>
+      <tbody>
+      {% for e in events %}
+        <tr>
+          <td class="text-nowrap small">{{ (e.occurred_at ?? '')|replace({'T': ' '})|slice(0, 19) }}</td>
+          <td><code>{{ e.event_type ?? '' }}</code></td>
+          <td class="small">{{ e.smtp_code ?? '' }} {{ e.enhanced_status_code ?? '' }}</td>
+          <td class="small text-break">{{ e.remote_host ?? '' }}</td>
+          <td class="small text-break">{{ (e.diagnostic ?? '')|slice(0, 200) }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+{% endblock %}

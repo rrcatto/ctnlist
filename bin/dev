@@ -19,14 +19,65 @@ random_hex() { od -An -tx1 -N"$1" /dev/urandom | tr -d ' \n'; }
 random_base64() { head -c "$1" /dev/urandom | base64 | tr -d '\n'; }
 
 # Generate the instance .env from the template on first use, with secrets
-# that are random per checkout and never committed.
+# that are random per checkout and never committed. An existing file is kept;
+# only a missing or empty APP_SETTINGS_KEY is filled in, never replaced. The
+# file is rewritten in place (same inode), so a running container's bind
+# mount keeps seeing it. CTNLIST_DEV_ENV_FILE overrides the path (tests).
+# A self-signed certificate for the development HTTPS listener (port 8543),
+# generated once per checkout and never committed.
+ensure_tls() {
+    local dir=dev/podman/tls
+    [ -f "$dir/ctnlist-dev.crt" ] && [ -f "$dir/ctnlist-dev.key" ] && return 0
+    mkdir -p "$dir"
+    openssl req -x509 -newkey rsa:2048 -nodes -days 825 -subj "/CN=localhost" \
+        -addext "subjectAltName=DNS:localhost,DNS:ctnlist-web,IP:127.0.0.1" \
+        -keyout "$dir/ctnlist-dev.key" -out "$dir/ctnlist-dev.crt" 2>/dev/null
+    chmod 644 "$dir/ctnlist-dev.crt" "$dir/ctnlist-dev.key"
+    echo "Generated the development TLS certificate in $dir"
+}
+
+# catto-mail development route (README): a dedicated internal network that
+# ctnlist's web (alias ctnlist-web, for webhooks) and app (for the API)
+# containers join. catto-mail joins it from its side; nothing here touches
+# catto-mail or its network.
+CATTOMAIL_NETWORK=cattomail-dev
+cattomail_link() {
+    podman network exists "$CATTOMAIL_NETWORK" || podman network create --internal "$CATTOMAIL_NETWORK" >/dev/null
+    for pair in "ctnlist_web_1:ctnlist-web" "ctnlist_app_1:ctnlist-app"; do
+        local container="${pair%%:*}" alias="${pair##*:}"
+        if podman inspect "$container" --format '{{range $k, $v := .NetworkSettings.Networks}}{{$k}} {{end}}' | grep -qw "$CATTOMAIL_NETWORK"; then
+            echo "$container is already on $CATTOMAIL_NETWORK"
+        else
+            podman network connect --alias "$alias" "$CATTOMAIL_NETWORK" "$container"
+            echo "Connected $container to $CATTOMAIL_NETWORK as $alias"
+        fi
+    done
+}
+
+# Save catto-mail's development certificate, read from its public HTTPS port,
+# for CATTOMAIL_CA_FILE (it is self-signed).
+cattomail_ca() {
+    local endpoint="${1:-127.0.0.1:8443}"
+    echo | openssl s_client -connect "$endpoint" -servername localhost -showcerts 2>/dev/null \
+        | openssl x509 -outform PEM > dev/podman/cattomail-ca.pem
+    openssl x509 -in dev/podman/cattomail-ca.pem -noout -subject -enddate
+    echo "Saved dev/podman/cattomail-ca.pem; set CATTOMAIL_CA_FILE to its path inside the app container: <the compose.yaml shared-code path>/dev/podman/cattomail-ca.pem"
+}
+
 ensure_env() {
-    local env_file=dev/podman/ctnlist.env
+    local env_file="${CTNLIST_DEV_ENV_FILE:-dev/podman/ctnlist.env}"
     if [ -f "$env_file" ]; then
-        # Instances created before APP_SETTINGS_KEY existed get one.
         if ! grep -q '^APP_SETTINGS_KEY=.' "$env_file"; then
-            sed -i '/^APP_SETTINGS_KEY=/d' "$env_file"
-            echo "APP_SETTINGS_KEY=$(random_base64 32)" >> "$env_file"
+            local content key
+            key="$(random_base64 32)"
+            if grep -q '^APP_SETTINGS_KEY=' "$env_file"; then
+                # Fill the empty entry where it is; every other line stays as written.
+                content="$(awk -v key="$key" '/^APP_SETTINGS_KEY=$/ && !done { print "APP_SETTINGS_KEY=" key; done = 1; next } !/^APP_SETTINGS_KEY=$/' "$env_file")"
+            else
+                content="$(cat "$env_file")"$'\n'"APP_SETTINGS_KEY=$key"
+            fi
+            # Rewritten in place (same inode), so a running container's bind mount sees it.
+            printf '%s\n' "$content" > "$env_file"
             echo "Added APP_SETTINGS_KEY to $env_file"
         fi
         return 0
@@ -88,8 +139,12 @@ Usage: bin/dev <command> [args]
   analyse            Run PHPStan (composer analyse)
   test [args]        Run PHPUnit
   lint               php -l over public_html/index.php, src/ and tests/
+  check              Quality gate: lint, Twig/YAML/container lint, composer validate+audit, PHPStan, all tests
   psql [args]        Open psql on the ctnlist database
   shell              Bash shell in the app container
+  ensure-env         Create dev/podman/ctnlist.env if missing; add APP_SETTINGS_KEY only if absent (run by up)
+  cattomail-link     Attach web/app to the cattomail-dev network (catto-mail development route)
+  cattomail-ca [h:p] Save catto-mail's development certificate (default 127.0.0.1:8443) for CATTOMAIL_CA_FILE
   reset-db           DESTROY the database volume and re-run migrations
 
 App: http://localhost:8180   Mailpit: http://localhost:8125   DB: localhost:5434
@@ -102,6 +157,7 @@ shift || true
 case "$cmd" in
     up)
         ensure_env
+        ensure_tls
         compose up -d --build --force-recreate
         if [ ! -f vendor/autoload.php ]; then
             in_app composer install --no-interaction
@@ -118,6 +174,9 @@ case "$cmd" in
         echo "Mailpit: http://localhost:8125"
         ;;
     down) compose down ;;
+    ensure-env) ensure_env ;;
+    cattomail-link) cattomail_link ;;
+    cattomail-ca) cattomail_ca "$@" ;;
     restart) "$0" down && "$0" up ;;
     ps) compose ps ;;
     logs) compose logs -f "$@" ;;
@@ -134,6 +193,19 @@ case "$cmd" in
     test) ensure_instance_dirs; in_app vendor/bin/phpunit "$@" ;;
     lint)
         in_app sh -c 'for f in public_html/index.php $(find src tests -name "*.php"); do php -l "$f" >/dev/null || exit 1; done; echo "No syntax errors."'
+        ;;
+    check)
+        # The quality gate: every step must pass; it stops at the first failure.
+        step() { echo; echo "== $1"; shift; "$@" || { echo "FAILED: $*" >&2; exit 1; }; }
+        step "PHP syntax" "$0" lint
+        step "Twig templates" "$0" console lint:twig templates --show-deprecations
+        step "YAML configuration" "$0" console lint:yaml config --parse-tags
+        step "Service container" "$0" console lint:container
+        step "Composer manifest" in_app composer validate --strict
+        step "Composer advisories" in_app composer audit --locked
+        step "PHPStan" "$0" analyse
+        step "PHPUnit (unit, integration, smoke)" "$0" test
+        echo; echo "All checks passed."
         ;;
     psql) if [ -t 0 ]; then podman exec -it "$DB" psql -U ctnlist -d ctnlist "$@"; else psql_db "$@"; fi ;;
     shell) podman exec -it "$APP" bash ;;

@@ -15,8 +15,14 @@
         <env name="DB_NAME" value="ctnlist_test" force="true"/>
         <env name="SUPPRESSION_PROVIDER" value="none" force="true"/>
         <env name="MAILER_DSN" value="null://null" force="true"/>
-        <env name="MAIL_SMTP_SERVERS_JSON" value="[]" force="true"/>
         <env name="MAIL_RATE_PER_MINUTE" value="0" force="true"/>
+        <!-- catto-mail: integration tests replace the HTTP client with a fake (tests/Support/FakeCattoMail). -->
+        <env name="CATTOMAIL_API_BASE_URL" value="https://cattomail.test" force="true"/>
+        <env name="CATTOMAIL_API_KEY" value="shk_test_key_0123456789" force="true"/>
+        <env name="CATTOMAIL_WEBHOOK_SECRET" value="whsec_test_current" force="true"/>
+        <env name="CATTOMAIL_WEBHOOK_SECRET_PREVIOUS" value="whsec_test_previous" force="true"/>
+        <env name="CATTOMAIL_GLOBAL_OPTOUT_ENABLED" value="true" force="true"/>
+        <env name="APP_BASE_URL" value="https://ctnlist.test/" force="true"/>
         <env name="APP_ADMIN_EMAIL" value="owner@ctnlist.test" force="true"/>
         <env name="AUTH_MAGIC_LINK_MAX_PER_EMAIL" value="5" force="true"/>
         <env name="AUTH_MAGIC_LINK_MAX_PER_IP" value="20" force="true"/>

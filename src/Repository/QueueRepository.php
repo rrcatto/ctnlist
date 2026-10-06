@@ -26,7 +26,7 @@ final class QueueRepository
     /** Add a row; false when the subscriber is already queued for the message. */
     public function add(string $muid, string $subscriberUuid, string $subject, string $email, string $listShortcode, ?string $lastInteracted, int $messagePriority, int $subscriberPriority): bool
     {
-        return $this->db->executeStatement(
+        return (int) $this->db->executeStatement(
             'INSERT INTO queue (q_muid, q_subject, q_s_uuid, q_email, q_list_shortcode, q_last_interacted, q_mpriority, q_spriority)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
              ON CONFLICT (q_muid, q_s_uuid) DO NOTHING',
@@ -39,14 +39,20 @@ final class QueueRepository
         return $this->db->fetchOne('SELECT 1 FROM queue WHERE q_muid = ? AND q_s_uuid = ?', [$muid, $subscriberUuid]) !== false;
     }
 
+    /** Remove every queued delivery to a subscriber (their address hard-bounced or complained). */
+    public function deleteForSubscriber(string $subscriberUuid): int
+    {
+        return (int) $this->db->executeStatement('DELETE FROM queue WHERE q_s_uuid = ?', [strtolower($subscriberUuid)]);
+    }
+
     public function delete(int $queueId): bool
     {
-        return $this->db->executeStatement('DELETE FROM queue WHERE q_id = ?', [$queueId]) === 1;
+        return (int) $this->db->executeStatement('DELETE FROM queue WHERE q_id = ?', [$queueId]) === 1;
     }
 
     public function clear(): int
     {
-        return $this->db->executeStatement('DELETE FROM queue');
+        return (int) $this->db->executeStatement('DELETE FROM queue');
     }
 
     /**
@@ -108,6 +114,7 @@ final class QueueRepository
                 LEFT JOIN smlog sml ON sml.sml_s_uuid = s.s_uuid AND sml.sml_muid = :muid
                 WHERE ml.ml_m_id = :mid
                   AND ls.ls_confirmed = TRUE AND ls.ls_unsubscribed = FALSE AND l.l_active = TRUE
+                  AND s.s_delivery_state = \'ok\'
                   AND sml.sml_id IS NULL
                   AND NOT EXISTS (SELECT 1 FROM queue q WHERE q.q_muid = :muid AND q.q_s_uuid = s.s_uuid)
             )
@@ -141,6 +148,7 @@ final class QueueRepository
              JOIN messages m ON m.m_id = ml.ml_m_id
              WHERE ml.ml_m_id IN (?)
                AND ls.ls_confirmed = TRUE AND ls.ls_unsubscribed = FALSE AND l.l_active = TRUE
+               AND s.s_delivery_state = \'ok\'
                AND NOT EXISTS (SELECT 1 FROM smlog x WHERE x.sml_s_uuid = s.s_uuid AND x.sml_muid = m.m_uniqid)
                AND NOT EXISTS (SELECT 1 FROM queue x WHERE x.q_s_uuid = s.s_uuid AND x.q_muid = m.m_uniqid)
              GROUP BY s.s_id

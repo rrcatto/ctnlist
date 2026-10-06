@@ -1,0 +1,36 @@
+# Message HTML shown on the site itself (the public archive page) is
+# sanitised: it is written by anyone holding messages.manage, a permission
+# custom roles can have, and must not run script in visitors' (or
+# administrators') sessions. Mail is not sanitised: the stored archive and
+# what recipients receive stay exactly as rendered.
+framework:
+    html_sanitizer:
+        sanitizers:
+            app.message_html:
+                allow_safe_elements: true
+                allow_static_elements: true
+                # Presentational attributes used by email layouts, on any element.
+                allow_attributes:
+                    style: '*'
+                    class: '*'
+                    align: '*'
+                    valign: '*'
+                    width: '*'
+                    height: '*'
+                    bgcolor: '*'
+                    border: '*'
+                    cellpadding: '*'
+                    cellspacing: '*'
+                    color: '*'
+                    face: '*'
+                    size: '*'
+                    role: '*'
+                allowed_link_schemes: ['http', 'https', 'mailto', 'tel']
+                allowed_media_schemes: ['http', 'https', 'data']
+                # No forms inside the site's own pages (phishing, CSRF-token capture).
+                drop_elements: [form, input, button, select, textarea, option, optgroup, datalist, fieldset]
+                force_attributes:
+                    a:
+                        rel: noopener noreferrer
+                # Campaign HTML is routinely larger than the 20,000-character default.
+                max_input_length: -1

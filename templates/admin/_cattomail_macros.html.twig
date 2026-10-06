@@ -1,0 +1,19 @@
+{# Badges for catto-mail states (vocabulary from catto-mail; never reinterpreted). #}
+{% macro classification(value) %}
+  {%- set styles = {deliverable: 'text-bg-success', probably_deliverable: 'text-bg-success bg-opacity-75', risky: 'text-bg-warning', unknown: 'text-bg-secondary',
+      temporarily_unverifiable: 'text-bg-info', undeliverable: 'text-bg-danger'} -%}
+  {%- if value -%}<span class="badge {{ styles[value] ?? 'text-bg-light border' }}">{{ value|replace({'_': ' '}) }}</span>{%- else -%}<span class="badge text-bg-light border">pending</span>{%- endif -%}
+{% endmacro %}
+
+{% macro job_status(value) %}
+  {%- set styles = {open: 'text-bg-light border', ready: 'text-bg-light border', pending: 'text-bg-light border', queued: 'text-bg-info', processing: 'text-bg-primary',
+      dispatched: 'text-bg-primary', completed: 'text-bg-success', failed: 'text-bg-danger', cancelled: 'text-bg-secondary'} -%}
+  <span class="badge {{ styles[value] ?? 'text-bg-light border' }}">{{ value }}</span>
+{%- endmacro %}
+
+{% macro message_status(value) %}
+  {%- set styles = {staged: 'text-bg-light border', handed_off: 'text-bg-info', not_sent: 'text-bg-secondary', remote_accepted: 'text-bg-success',
+      deferred: 'text-bg-warning', soft_bounced: 'text-bg-warning', outcome_unknown: 'text-bg-secondary', hard_bounced: 'text-bg-danger',
+      complained: 'text-bg-danger', failed: 'text-bg-danger', suppressed: 'text-bg-dark'} -%}
+  <span class="badge {{ styles[value] ?? 'text-bg-light border' }}">{{ value|replace({'_': ' '}) }}</span>
+{%- endmacro %}

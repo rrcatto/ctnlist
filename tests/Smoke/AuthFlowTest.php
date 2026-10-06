@@ -60,7 +60,11 @@ final class AuthFlowTest extends SmokeTestCase
         $cookie = self::cookieValue($client, self::AUTH_COOKIE);
         self::assertNotNull($cookie);
 
-        $response = self::request($client, 'GET', '/logout');
+        self::assertSame(405, self::request($client, 'GET', '/logout')['status'], 'a link or image cannot sign anyone out');
+        self::assertNotSame(302, self::request($client, 'POST', '/logout', ['csrf' => 'forged'])['status'], 'nor a forged form');
+        self::assertNotNull(self::cookieValue($client, self::AUTH_COOKIE), 'still signed in');
+
+        $response = self::request($client, 'POST', '/logout', ['csrf' => self::csrfToken(self::request($client, 'GET', '/profile/subscriber/' . self::$admin['s_uuid'])['body'])]);
         self::assertSame(302, $response['status']);
         self::assertSame('/', parse_url($response['location'], PHP_URL_PATH));
         self::assertTrue(self::clearsCookie($response['cookies'], self::AUTH_COOKIE), 'auth cookie cleared');
@@ -78,15 +82,23 @@ final class AuthFlowTest extends SmokeTestCase
     public function testStatePostsRequireTheSessionCsrfToken(): void
     {
         $client = self::client();
-        self::assertSame(403, self::request($client, 'POST', '/login', ['email' => 'nobody@ctnlist.test'])['status']);
-        self::assertSame(403, self::request($client, 'POST', '/login', ['email' => 'nobody@ctnlist.test', 'csrf' => 'forged'])['status']);
+        // The sign-in form: without a valid token nothing is sent.
+        $missing = self::request($client, 'POST', '/login', ['signin[email]' => 'nobody@ctnlist.test']);
+        self::assertSame(422, $missing['status']);
+        self::assertStringContainsString('CSRF token is invalid', $missing['body']);
+        $forged = self::submitForm($client, '/login', 'signin', ['signin[email]' => 'nobody@ctnlist.test', 'signin[csrf]' => 'forged']);
+        self::assertSame(422, $forged['status']);
+        self::assertStringNotContainsString('sign-in link has been sent', $forged['body']);
 
-        $form = self::request($client, 'GET', '/login');
-        self::assertSame(1, preg_match('/name="csrf" value="([^"]+)"/', $form['body'], $match));
-        // An invalid address is rejected after the CSRF check, so no mail is sent.
-        $response = self::request($client, 'POST', '/login', ['email' => 'not-an-address', 'csrf' => html_entity_decode($match[1])]);
-        self::assertSame(200, $response['status']);
-        self::assertStringContainsString('secure sign-in link has been sent', $response['body']);
+        // An invalid address is shown at the field, so no mail is sent.
+        $invalid = self::submitForm($client, '/login', 'signin', ['signin[email]' => 'not-an-address']);
+        self::assertSame(422, $invalid['status']);
+        self::assertMatchesRegularExpression('#id="signin_email_error1">Enter a valid email address#', $invalid['body']);
+        self::assertStringContainsString('value="not-an-address"', $invalid['body']);
+
+        // Manual action forms still need the session token.
+        self::assertSame(403, self::request($client, 'POST', '/auth/request', ['subscriber_token' => 'x'])['status']);
+        self::assertSame(403, self::request($client, 'POST', '/auth/request', ['subscriber_token' => 'x', 'csrf' => 'forged'])['status']);
     }
 
     /** @param list<string> $cookies Set-Cookie header values */

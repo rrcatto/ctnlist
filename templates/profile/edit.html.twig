@@ -1,34 +1,79 @@
 {% extends 'base.html.twig' %}
 
-{% macro options(choices, current, blank) %}
-  <option value=""{{ current is empty ? ' selected' }}>{{ blank }}</option>
-  {% for choice in choices %}
-    <option value="{{ choice }}"{{ choice == current ? ' selected' }}>{{ choice }}</option>
-  {% endfor %}
-{% endmacro %}
-
 {% block title %}Edit profile{% endblock %}
 
 {% block content %}
-{% import _self as form %}
-<form action="{{ path('profile_save') }}" method="post">
-  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-  <fieldset class="border rounded p-4">
-    <legend>Edit profile</legend>
-    <div class="row g-3">
-      <div class="col-md-6"><label class="form-label" for="p-fname">First name</label><input class="form-control" id="p-fname" name="s_fname" maxlength="100" value="{{ profile.s_fname }}"></div>
-      <div class="col-md-6"><label class="form-label" for="p-lname">Last name</label><input class="form-control" id="p-lname" name="s_lname" maxlength="100" value="{{ profile.s_lname }}"></div>
-      <div class="col-md-6"><label class="form-label" for="p-email">Email</label><input class="form-control" id="p-email" value="{{ profile.s_email }}" readonly></div>
-      <div class="col-md-6"><label class="form-label" for="p-phone">Cell</label><input class="form-control" id="p-phone" name="s_phone" maxlength="30" value="{{ profile.s_phone }}"></div>
-      <div class="col-md-6"><label class="form-label" for="p-birthday">Birthdate</label><input class="form-control" id="p-birthday" type="date" name="s_birthday" value="{{ profile.s_birthday }}"></div>
-      <div class="col-md-6"><label class="form-label" for="p-gender">Gender</label><select class="form-select" id="p-gender" name="s_gender">{{ form.options(genders, profile.s_gender, '') }}</select></div>
-      <div class="col-md-6"><label class="form-label" for="p-province">Province</label><select class="form-select" id="p-province" name="s_province">{{ form.options(provinces, profile.s_province, 'Select Province') }}</select></div>
-      <div class="col-md-6"><label class="form-label" for="p-country">Country</label><select class="form-select" id="p-country" name="s_country">{{ form.options(countries, profile.s_country, 'Select Country') }}</select></div>
-      <div class="col-md-6"><label class="form-label" for="p-business">Company</label><input class="form-control" id="p-business" name="s_business" maxlength="100" value="{{ profile.s_business }}"></div>
-      <div class="col-md-6"><label class="form-label" for="p-url">Website</label><input class="form-control" id="p-url" name="s_url" maxlength="253" value="{{ profile.s_url }}"></div>
-      <div class="col-12"><label class="form-label" for="p-photo">Photo URL</label><input class="form-control" id="p-photo" name="s_photo" maxlength="253" value="{{ profile.s_photo }}"></div>
-      <div class="col-12"><button class="btn btn-primary" type="submit">Save profile</button></div>
+{% embed 'layout/_page_header.html.twig' with {title: 'Edit profile', description: email} %}
+  {% block actions %}<a class="btn btn-outline-secondary" href="{{ path('profile') }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>My profile</a>{% endblock %}
+{% endembed %}
+{# Profile picture: its own form (a file upload), above the details. #}
+{{ form_start(image_form, {attr: {class: 'card mb-4', id: 'profile-picture'}}) }}
+  <div class="card-header fw-semibold">Profile picture</div>
+  <div class="card-body" data-profile-image data-size="{{ image_size }}">
+    {{ form_errors(image_form) }}
+    <div class="row g-4 align-items-start">
+      <div class="col-sm-auto text-center" data-profile-image-current>
+        <img class="app-avatar app-avatar-lg border" src="{{ profile_image_url(app.user) }}" alt="{{ has_image ? 'Your profile picture' : 'No profile picture yet' }}" width="128" height="128">
+        <div class="form-text">{{ has_image ? 'Your picture now.' : 'No picture yet.' }}</div>
+      </div>
+      <div class="col">
+        {{ form_row(image_form.image) }}
+        <div class="row g-3 align-items-start" data-profile-image-editor hidden>
+          <div class="col-md-auto">
+            <div class="app-image-stage" data-profile-image-stage tabindex="0" role="img" aria-label="Your picture: drag, or use the arrow keys, to position it; + and - zoom">
+              <canvas width="640" height="640"></canvas>
+            </div>
+          </div>
+          <div class="col-md">
+            <label class="form-label" for="profile-image-zoom">Zoom</label>
+            <input class="form-range" type="range" id="profile-image-zoom" min="1" max="4" step="0.02" value="1" data-profile-image-zoom>
+            <div class="btn-group btn-group-sm my-3" role="group" aria-label="Rotate">
+              <button class="btn btn-outline-secondary" type="button" data-profile-image-action="rotate-left"><i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>Rotate left</button>
+              <button class="btn btn-outline-secondary" type="button" data-profile-image-action="rotate-right"><i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Rotate right</button>
+              <button class="btn btn-outline-secondary" type="button" data-profile-image-action="reset"><i class="bi bi-bootstrap-reboot me-1" aria-hidden="true"></i>Reset</button>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+              <canvas class="app-image-preview border" width="192" height="192" data-profile-image-preview aria-label="Preview of your profile picture"></canvas>
+              <div class="form-text mt-0">Preview: how your picture will look in the menu and on your profile.</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-  </fieldset>
-</form>
+  </div>
+  <div class="card-footer d-flex flex-wrap gap-2">
+    <button class="btn btn-primary" type="submit"><i class="bi bi-image me-1" aria-hidden="true"></i>Save picture</button>
+    {% if has_image %}
+      <button class="btn btn-outline-danger" type="submit" form="remove-profile-picture" data-confirm="Remove your profile picture?"><i class="bi bi-trash me-1" aria-hidden="true"></i>Remove picture</button>
+    {% endif %}
+  </div>
+{{ form_end(image_form) }}
+{% if has_image %}
+  <form id="remove-profile-picture" method="post" action="{{ path('profile_image_remove') }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+  </form>
+{% endif %}
+
+{{ form_start(form, {attr: {class: 'card'}}) }}
+  <div class="card-body">
+    {% if not form.vars.valid %}
+      <div class="alert alert-danger" role="alert">{% if form.vars.errors|length %}{{ form_errors(form) }}{% else %}Please correct the fields marked below; nothing was saved.{% endif %}</div>
+    {% endif %}
+    <div class="row g-3">
+      <div class="col-md-6">{{ form_row(form.firstName, {row_attr: {class: 'mb-0'}}) }}</div>
+      <div class="col-md-6">{{ form_row(form.lastName, {row_attr: {class: 'mb-0'}}) }}</div>
+      <div class="col-md-6">{{ form_row(form.phone, {row_attr: {class: 'mb-0'}}) }}</div>
+      <div class="col-md-6">{{ form_row(form.birthday, {row_attr: {class: 'mb-0'}}) }}</div>
+      <div class="col-md-4">{{ form_row(form.gender, {row_attr: {class: 'mb-0'}}) }}</div>
+      <div class="col-md-4">{{ form_row(form.province, {row_attr: {class: 'mb-0'}}) }}</div>
+      <div class="col-md-4">{{ form_row(form.country, {row_attr: {class: 'mb-0'}}) }}</div>
+      <div class="col-md-6">{{ form_row(form.business, {row_attr: {class: 'mb-0'}}) }}</div>
+      <div class="col-md-6">{{ form_row(form.url, {row_attr: {class: 'mb-0'}}) }}</div>
+    </div>
+  </div>
+  <div class="card-footer d-flex flex-wrap gap-2">
+    <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>Save profile</button>
+    <a class="btn btn-outline-secondary" href="{{ path('profile') }}">Cancel</a>
+  </div>
+{{ form_end(form) }}
 {% endblock %}

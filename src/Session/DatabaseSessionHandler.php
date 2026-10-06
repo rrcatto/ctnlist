@@ -65,6 +65,6 @@ final class DatabaseSessionHandler implements \SessionHandlerInterface
 
     public function gc(int $max_lifetime): int
     {
-        return $this->db->executeStatement('DELETE FROM sessions WHERE ses_stamp < ?', [time() - $max_lifetime]);
+        return (int) $this->db->executeStatement('DELETE FROM sessions WHERE ses_stamp < ?', [time() - $max_lifetime]);
     }
 }

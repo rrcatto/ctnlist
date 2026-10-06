@@ -1,5 +1,6 @@
 # Local development environment. Use bin/dev rather than calling this directly.
 #   web      http://localhost:8180   (nginx -> app PHP-FPM, Symfony front controller)
+#            https://localhost:8543  (same, development certificate)
 #   mailpit  http://localhost:8125   (captures all outgoing mail)
 #   db       localhost:5434          (PostgreSQL 16, ctnlist/ctnlist)
 name: ctnlist
@@ -36,7 +37,7 @@ services:
       - mailpit
     volumes:
       # Shared code at the path public_html/index.php hard-codes.
-      - ./:/usr/local/lib/php/ctnlist/6.0.2
+      - ./:/usr/local/lib/php/ctnlist/6.0.3
       # Per-installation public_html, .env and writable var/, as on a
       # deployed instance.
       - ./public_html:/var/www/ctnlist/public_html:ro
@@ -50,8 +51,11 @@ services:
       - app
     ports:
       - "127.0.0.1:8180:80"
+      - "127.0.0.1:8543:443"
     volumes:
       - ./dev/podman/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # Generated development certificate (bin/dev, gitignored).
+      - ./dev/podman/tls:/etc/nginx/tls:ro
       - ./public_html:/var/www/ctnlist/public_html:ro
 
 volumes:

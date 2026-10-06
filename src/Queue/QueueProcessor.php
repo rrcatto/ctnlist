@@ -5,31 +5,35 @@ declare(strict_types=1);
 namespace App\Queue;
 
 use App\Campaign\TemplateRenderer;
-use App\Mail\CampaignDelivery;
-use App\Mail\CampaignMailer;
-use App\Mail\MailConnection;
-use App\Mail\MailConnectionFactory;
-use App\Mail\SmtpServer;
-use App\Mail\SmtpServerPool;
+use App\CattoMail\CattoMailException;
+use App\CattoMail\CattoMailSender;
+use App\CattoMail\CattoMailUnavailable;
+use App\CattoMail\OutgoingMessageFactory;
+use App\CattoMail\OutgoingRecipient;
+use App\CattoMail\SendOutcome;
 use App\Repository\MembershipRepository;
 use App\Repository\MessageRepository;
 use App\Repository\OptionRepository;
 use App\Repository\QueueRepository;
 use App\Repository\SubscriberRepository;
 use App\Suppression\SuppressionChecker;
-use Symfony\Component\Clock\ClockInterface;
+use Psr\Clock\ClockInterface;
 
 /**
- * Sends queued campaign mail with the v5 contract: batches per server, a
- * pause between batches, one reconnect/failover retry of a failed item
- * before stopping, the SendQueue stop flag, m_max_send as a hard maximum
- * (zero included), and suppression plus list eligibility re-checked
- * immediately before each send.
+ * Sends queued campaign mail through catto-mail, keeping the v5 queue
+ * contract: queue order, the SendQueue stop flag, m_max_send as a hard
+ * maximum (zero included), and suppression plus list eligibility re-checked
+ * immediately before each message is handed over. Each message is rendered
+ * here for its recipient (catto-mail performs no mail merge) and staged in
+ * the catto-mail outbox in the same transaction that removes its queue row;
+ * the run's send jobs are then submitted (CattoMailSender). Recipients whose
+ * address hard-bounced or complained are no longer sent to.
  */
 final class QueueProcessor
 {
     public const CURRENTLY_SENDING = 'CurrentlySending';
     public const SEND_QUEUE = 'SendQueue';
+    private const FETCH = 500;
 
     public function __construct(
         private readonly QueueRepository $queue,
@@ -38,34 +42,44 @@ final class QueueProcessor
         private readonly MembershipRepository $memberships,
         private readonly SuppressionChecker $suppression,
         private readonly TemplateRenderer $renderer,
-        private readonly CampaignMailer $mailer,
-        private readonly SmtpServerPool $servers,
-        private readonly MailConnectionFactory $connections,
+        private readonly CattoMailSender $sender,
+        private readonly OutgoingMessageFactory $outgoing,
         private readonly OptionRepository $options,
         private readonly ClockInterface $clock,
     ) {
     }
 
-    /** @return int messages sent */
-    public function process(string $muid = '', int $limit = 250000): int
+    public function process(string $muid = '', int $limit = 250000): SendOutcome
     {
+        $problem = $this->sender->problem();
+        if ($problem !== null) {
+            return SendOutcome::of(0, 0, $problem, false);
+        }
         if ($this->options->get(self::CURRENTLY_SENDING) === 'Y') {
-            return 0;
+            return SendOutcome::of(0, 0, 'The queue is already being sent.', true);
         }
         $this->options->set(self::SEND_QUEUE, 'Y');
         $this->options->set(self::CURRENTLY_SENDING, 'Y');
 
-        $connection = $this->connections->create();
+        $run = $this->sender->startRun('campaign', $muid);
+        $staged = 0;
+        $problem = null;
+        $retryable = true;
         try {
-            $servers = $this->servers->campaignServers();
-            if ($servers === [] || !$this->openFirstAvailable($connection, $servers)) {
-                return 0;
-            }
-            return $this->sendBatches($connection, $servers, $muid, $limit);
+            $staged = $this->stage($run, $muid, max(0, $limit), $problem);
+        } catch (CattoMailException $e) {
+            $problem = $e->getMessage();
+            $retryable = $e instanceof CattoMailUnavailable;
         } finally {
-            $connection->close();
-            $this->options->set(self::CURRENTLY_SENDING, 'N');
+            try {
+                $finished = $this->sender->finishRun($run, 0);
+            } finally {
+                $this->options->set(self::CURRENTLY_SENDING, 'N');
+            }
         }
+        $problem ??= $finished->problem;
+        $retryable = $retryable && ($finished->problem === null || $finished->status !== SendOutcome::FAILED);
+        return SendOutcome::of($staged, $finished->handedOff, $problem, $retryable);
     }
 
     /** Ask a running process to stop before its next message. */
@@ -74,25 +88,22 @@ final class QueueProcessor
         $this->options->set(self::SEND_QUEUE, 'N');
     }
 
-    /** @param list<SmtpServer> $servers */
-    private function sendBatches(MailConnection $connection, array $servers, string $muid, int $limit): int
+    /** @return int recipients staged */
+    private function stage(int $run, string $muid, int $limit, ?string &$problem): int
     {
-        $sent = 0;
-        do {
-            $batch = $this->queue->nextBatch($muid, $this->server($connection)->batchSize);
+        $staged = 0;
+        while ($staged < $limit) {
+            $batch = $this->queue->nextBatch($muid, min(self::FETCH, $limit - $staged));
             if ($batch === []) {
                 break;
             }
             foreach ($batch as $row) {
-                if ($sent >= $limit) {
-                    break;
-                }
-                if ($this->options->get(self::SEND_QUEUE) === 'N') {
-                    return $sent;
+                if ($staged >= $limit || $this->options->get(self::SEND_QUEUE) === 'N') {
+                    return $staged;
                 }
                 $recipient = $this->subscribers->findRecipientByUuid($row['q_s_uuid']);
                 $message = $this->messages->findByMuid($row['q_muid']);
-                if ($recipient === null || $message === null) {
+                if ($recipient === null || $message === null || $recipient['s_delivery_state'] !== 'ok') {
                     $this->queue->delete($row['q_id']);
                     continue;
                 }
@@ -108,58 +119,28 @@ final class QueueProcessor
                     continue;
                 }
                 if ($message['m_sent'] >= $message['m_max_send']) {
-                    return $sent;
+                    return $staged;
                 }
 
                 $rendered = $this->renderer->render($message, $recipient, $list);
-                $delivery = new CampaignDelivery(
-                    $message['m_uniqid'],
-                    $message['m_subject'],
-                    $message['m_from_name'],
-                    $message['m_from_address'],
-                    $recipient['s_uuid'],
-                    $recipient['s_email'],
-                    trim($recipient['s_fname'] . ' ' . $recipient['s_lname']),
-                    $list,
-                    $rendered->html,
-                    $rendered->text,
+                if (trim($rendered->html) === '' && trim($rendered->text) === '') {
+                    $problem = 'Message ' . $message['m_uniqid'] . ' has no content; it was not sent.';
+                    return $staged;
+                }
+                $queueId = $row['q_id'];
+                $messageId = $message['m_id'];
+                $this->sender->stage(
+                    $run,
+                    $this->outgoing->forList($message, $list),
+                    new OutgoingRecipient($recipient['s_email'], $recipient['s_uuid'], 'MESSAGE', (string) $message['m_subject'], $rendered->html, $rendered->text),
+                    function () use ($queueId, $messageId): void {
+                        $this->queue->delete($queueId);
+                        $this->messages->incrementSent($messageId);
+                    },
                 );
-                $delivered = $this->mailer->send($connection, $delivery);
-                if (!$delivered) {
-                    // v5: reconnect (failing over from the first server) and retry once.
-                    $delay = $this->server($connection)->delay;
-                    $connection->close();
-                    $this->clock->sleep($delay);
-                    if (!$this->openFirstAvailable($connection, $servers)) {
-                        return $sent;
-                    }
-                    $delivered = $this->mailer->send($connection, $delivery);
-                }
-                if (!$delivered) {
-                    return $sent;
-                }
-                $this->messages->incrementSent($message['m_id']);
-                $this->queue->delete($row['q_id']);
-                $sent++;
-            }
-            $this->clock->sleep($this->server($connection)->delay);
-        } while ($sent < $limit);
-        return $sent;
-    }
-
-    /** @param list<SmtpServer> $servers */
-    private function openFirstAvailable(MailConnection $connection, array $servers): bool
-    {
-        foreach ($servers as $server) {
-            if ($connection->open($server)) {
-                return true;
+                $staged++;
             }
         }
-        return false;
-    }
-
-    private function server(MailConnection $connection): SmtpServer
-    {
-        return $connection->server() ?? throw new \LogicException('No open mail connection.');
+        return $staged;
     }
 }

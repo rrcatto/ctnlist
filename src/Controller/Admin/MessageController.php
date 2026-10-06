@@ -7,16 +7,17 @@ namespace App\Controller\Admin;
 use App\Campaign\MessageNotFound;
 use App\Campaign\MessageService;
 use App\Config\SiteConfig;
+use App\Form\Model\MessageDraft;
+use App\Form\Type\MessageType;
 use App\Http\Pagination;
 use App\Repository\ListRepository;
 use App\Repository\MessageRepository;
 use App\Repository\TemplateRepository;
-use App\Security\Csrf;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\FormInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
-use Symfony\Component\Security\Http\Attribute\IsCsrfTokenValid;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
@@ -48,41 +49,56 @@ final class MessageController extends AbstractController
     public function edit(string $muid, SiteConfig $site): Response
     {
         if ($muid === '') {
-            $message = ['m_uniqid' => '', 'm_t_id' => 0, 'm_from_name' => '', 'm_from_address' => $site->fromAddress,
-                'm_subject' => 'Your subject here', 'm_priority' => 0, 'm_max_send' => 0, 'm_html' => 'Enter your message here', 'm_text' => ''];
-            $selected = [];
+            $draft = new MessageDraft();
+            $draft->subject = 'Your subject here';
+            $draft->html = 'Enter your message here';
+            $draft->fromAddress = $site->fromAddress;
         } else {
             $message = $this->messages->findByMuid($muid) ?? throw $this->createNotFoundException('Message does not exist.');
+            $active = array_column($this->lists->all(), 'l_id');
             $selected = array_column($this->messages->lists($message['m_id']), 'l_id');
+            $draft = MessageDraft::fromMessage($message, array_values(array_intersect($selected, $active)));
         }
-        return $this->render('admin/message_form.html.twig', [
-            'message' => $message,
-            'selected' => $selected,
-            'lists' => $this->lists->all(),
-            'templates' => $this->templates->choices(),
-        ]);
+        return $this->editor($this->messageForm($draft));
     }
 
+    /** Save exactly what was entered (drafts may be incomplete); invalid input shows the editor again with everything kept. */
     #[Route('/message', name: 'admin_message_save', methods: ['POST'])]
-    #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
     public function save(Request $request, MessageService $service): Response
     {
-        $form = $request->request;
+        $form = $this->messageForm(new MessageDraft());
+        $form->handleRequest($request);
+        if (!$form->isSubmitted() || !$form->isValid()) {
+            return $this->editor($form, Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+        /** @var MessageDraft $draft */
+        $draft = $form->getData();
         try {
-            $service->save(trim($form->getString('m_uniqid')) ?: null, [
-                'm_t_id' => $form->getInt('m_t_id'),
-                'm_from_name' => $form->getString('m_from_name'),
-                'm_from_address' => $form->getString('m_from_address'),
-                'm_subject' => $form->getString('m_subject'),
-                'm_priority' => $form->getInt('m_priority'),
-                'm_max_send' => $form->getInt('m_max_send'),
-                'm_html' => $form->getString('mt_html'),
-                'm_text' => $form->getString('m_text'),
-            ], array_map('intval', array_values($form->all('list_ids'))));
+            $service->save($draft->muid, $draft->input(), $draft->listIds);
             $this->addFlash('info', 'Message saved.');
         } catch (MessageNotFound) {
             $this->addFlash('danger', 'Message does not exist.');
         }
         return $this->redirectToRoute('admin_messages');
+    }
+
+    private function messageForm(MessageDraft $draft): FormInterface
+    {
+        return $this->createForm(MessageType::class, $draft, [
+            'lists' => $this->lists->all(),
+            'templates' => $this->templates->choices(),
+            'action' => $this->generateUrl('admin_message_save'),
+        ]);
+    }
+
+    private function editor(FormInterface $form, int $status = Response::HTTP_OK): Response
+    {
+        $listsById = [];
+        foreach ($this->lists->all() as $list) {
+            $listsById[$list['l_id']] = $list;
+        }
+        /** @var MessageDraft $draft */
+        $draft = $form->getData();
+        return $this->render('admin/message_form.html.twig', ['form' => $form, 'muid' => (string) $draft->muid, 'lists' => $listsById], new Response(status: $status));
     }
 }

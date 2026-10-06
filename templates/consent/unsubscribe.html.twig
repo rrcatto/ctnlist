@@ -23,4 +23,5 @@
   <div class="mb-3 mt-3"><label class="form-label" for="unsub-reason">Reason or comments</label><textarea class="form-control" id="unsub-reason" name="reason" rows="4"></textarea></div>
   <button class="btn btn-danger" type="submit">Unsubscribe</button>
 </form>
+{% if global_optout_available %}{% include 'consent/_global_optout.html.twig' %}{% endif %}
 {% endblock %}

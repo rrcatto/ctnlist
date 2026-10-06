@@ -25,12 +25,8 @@ final class RouteSmokeTest extends SmokeTestCase
     {
         parent::setUpBeforeClass();
 
-        $archiveId = (int) self::$db->query(
-            "INSERT INTO archives (a_subject, a_html) VALUES ('Smoke fixture', '<p>Smoke fixture</p>') RETURNING a_id"
-        )->fetchColumn();
-        $templateId = (int) self::$db->query(
-            "INSERT INTO templates (t_name, t_html, t_text) VALUES ('Smoke fixture', '<p>{content}</p>', '{content}') RETURNING t_id"
-        )->fetchColumn();
+        $archiveId = (int) self::value("INSERT INTO archives (a_subject, a_html) VALUES ('Smoke fixture', '<p>Smoke fixture</p>') RETURNING a_id");
+        $templateId = (int) self::value("INSERT INTO templates (t_name, t_html, t_text) VALUES ('Smoke fixture', '<p>{content}</p>', '{content}') RETURNING t_id");
         $muid = bin2hex(random_bytes(16));
         $insert = self::$db->prepare(
             "INSERT INTO messages (m_uniqid, m_subject, m_html, m_text, m_a_id) VALUES (?, 'Smoke fixture', '<p>Smoke</p>', 'Smoke', ?)"
@@ -43,7 +39,24 @@ final class RouteSmokeTest extends SmokeTestCase
              SELECT s_uuid, s_email, ?, 'ALL', LOCALTIMESTAMP FROM subscribers WHERE s_id = ?"
         )->execute([$muid, self::$admin['s_id']]);
 
+        $listId = (int) self::value("INSERT INTO lists (l_shortcode, l_name) VALUES ('R" . strtoupper(bin2hex(random_bytes(2))) . "', 'Smoke fixture " . bin2hex(random_bytes(3)) . "') RETURNING l_id");
+
+        // catto-mail pages: a validation job and a send job with one recipient (no catto-mail call is made to show them).
+        $validationId = (int) self::value("INSERT INTO cattomail_validation_jobs (cvj_idempotency_key, cvj_scope, cvj_total) VALUES (?, 'Smoke fixture', 0) RETURNING cvj_id", [bin2hex(random_bytes(16))]);
+        $runId = (int) self::value("INSERT INTO cattomail_runs (cr_kind, cr_muid) VALUES ('campaign', ?) RETURNING cr_id", [$muid]);
+        $jobId = (int) self::value("INSERT INTO cattomail_send_jobs (csj_cr_id, csj_seq, csj_idempotency_key, csj_muid, csj_message_class, csj_request) VALUES (?, 1, ?, ?, 'transactional', '{}') RETURNING csj_id",
+            [$runId, bin2hex(random_bytes(16)), $muid]);
+        $batchId = (int) self::value('INSERT INTO cattomail_batches (cb_csj_id, cb_seq, cb_idempotency_key) VALUES (?, 1, ?) RETURNING cb_id', [$jobId, bin2hex(random_bytes(16))]);
+        $recipient = (string) self::value("INSERT INTO cattomail_recipients (crp_csj_id, crp_cb_id, crp_email, crp_muid, crp_type, crp_subject) VALUES (?, ?, 'smoke@example.com', ?, 'PROOF', 'Smoke') RETURNING crp_uuid",
+            [$jobId, $batchId, $muid]);
+
         self::$fixture = [
+            'vid' => (string) $validationId,
+            'jid' => (string) $jobId,
+            'ruuid' => $recipient,
+            'run' => (string) $runId,
+            'lid' => (string) $listId,
+            'rid' => (string) self::value("SELECT r_id FROM roles WHERE r_key = 'administrator'"),
             'token' => self::$admin['s_uuid'],
             'shortcode' => 'ALL',
             'muid' => $muid,
@@ -59,6 +72,9 @@ final class RouteSmokeTest extends SmokeTestCase
             self::$db->prepare('DELETE FROM messages WHERE m_uniqid = ?')->execute([self::$fixture['muid']]);
             self::$db->prepare('DELETE FROM templates WHERE t_id = ?')->execute([(int) self::$fixture['tid']]);
             self::$db->prepare('DELETE FROM archives WHERE a_id = ?')->execute([(int) self::$fixture['aid']]);
+            self::$db->prepare('DELETE FROM lists WHERE l_id = ?')->execute([(int) self::$fixture['lid']]);
+            self::$db->prepare('DELETE FROM cattomail_runs WHERE cr_id = ?')->execute([(int) self::$fixture['run']]);
+            self::$db->prepare('DELETE FROM cattomail_validation_jobs WHERE cvj_id = ?')->execute([(int) self::$fixture['vid']]);
         }
         parent::tearDownAfterClass();
     }
@@ -78,20 +94,22 @@ final class RouteSmokeTest extends SmokeTestCase
 
     /** Routes that send anonymous visitors to the login page. */
     private const LOGIN_REQUIRED = [
-        '/profile', '/edit-profile', '/my/messages', '/contact-form',
+        '/profile', '/edit-profile', '/profile/image', '/my/messages', '/contact-form',
     ];
 
     /** Routes that require an administrator or an ACL permission. */
     private const ADMIN = [
-        '/subscribe/{token}', '/subscribe/{token}/{muid}',
+        '/subscribers/{token}', '/subscribers/{token}/{muid}',
         '/subscribers', '/subscribers/1', '/activesubscribers', '/activesubscribers/1',
-        '/bulk-subscribe', '/bulk-unsubscribe', '/import', '/export', '/export/0/10', '/sync',
+        '/bulk-subscribe', '/bulk-unsubscribe', '/import', '/export', '/sync',
         '/messages', '/messages/1', '/message', '/message/{muid}', '/forward/{muid}',
         '/templates', '/templates/1', '/template', '/template/{tid}',
-        '/lists', '/roles',
+        '/lists', '/lists/{lid}/edit', '/roles', '/roles/{rid}', '/roles/{rid}/1', '/settings',
         '/advanced-queue', '/queuelist/{muid}', '/queue', '/queue/1',
         '/processqueue', '/processqueue/{muid}', '/processqueue/{muid}/10',
         '/stop-send', '/sendtome/{muid}',
+        '/delivery', '/delivery/message/{muid}', '/delivery/job/{jid}', '/delivery/job/{jid}/1', '/delivery/recipient/{ruuid}',
+        '/address-validation', '/address-validation/{vid}', '/address-validation/{vid}/1',
         '/sendlog', '/sendlog/1', '/sitelog', '/sitelog/1',
         '/message-views/{muid}', '/message-views/{muid}/1',
     ];
@@ -132,7 +150,9 @@ final class RouteSmokeTest extends SmokeTestCase
     public function testPublicRouteRendersAnonymously(string $route): void
     {
         $response = self::request(self::client(), 'GET', self::path($route));
-        self::assertSame(200, $response['status'], $route);
+        // The archive exists only while public archives are enabled (a setting).
+        $expected = str_starts_with($route, '/archive') && !self::archivesEnabled() ? 404 : 200;
+        self::assertSame($expected, $response['status'], $route);
         self::assertCleanPage($route, $response['body']);
     }
 
@@ -156,6 +176,10 @@ final class RouteSmokeTest extends SmokeTestCase
     public function testRouteRendersForAdministrator(string $route): void
     {
         $response = self::request(self::adminClient(), 'GET', self::path($route));
+        if (str_starts_with($route, '/archive') && !self::archivesEnabled()) {
+            self::assertSame(404, $response['status'], $route . ' (archives disabled)');
+            return;
+        }
         // /profile hands the administrator on to their own profile page.
         self::assertContains($response['status'], [200, 302], $route);
         if ($response['status'] === 302) {

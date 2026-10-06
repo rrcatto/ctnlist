@@ -92,3 +92,65 @@
 .app-footer a:hover {
     text-decoration: underline;
 }
+
+/* Symfony forms: required fields (label.required) and server-side errors. */
+.form-label.required::after,
+.form-check-label.required::after {
+  content: " *";
+  color: var(--bs-danger);
+}
+
+/* Profile pictures: always round, always cropped to fill (the stored image is square). */
+.app-avatar {
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    background-color: var(--bs-secondary-bg);
+}
+
+.app-avatar-lg {
+    width: 8rem;
+    height: 8rem;
+}
+
+/* The profile picture editor (assets/profile_image.js): a square stage with a round mask. */
+.app-image-stage {
+    position: relative;
+    width: 100%;
+    max-width: 20rem;
+    aspect-ratio: 1;
+    touch-action: none;
+    cursor: grab;
+    border-radius: var(--bs-border-radius);
+    overflow: hidden;
+    background-color: var(--bs-secondary-bg);
+}
+
+.app-image-stage.is-dragging {
+    cursor: grabbing;
+}
+
+.app-image-stage canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* Darkens what falls outside the circle the navbar and profile show. */
+.app-image-stage::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.45);
+    outline: 2px solid rgb(255 255 255 / 0.85);
+    pointer-events: none;
+}
+
+.app-image-preview {
+    width: 6rem;
+    height: 6rem;
+    border-radius: 50%;
+}

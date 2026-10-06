@@ -5,6 +5,8 @@
  * dismissible alerts.
  */
 import './styles/app.css';
+// The profile picture editor; it does nothing on pages without [data-profile-image].
+import './profile_image.js';
 
 // Flash messages close themselves after a few seconds, as they did in v5.
 document.querySelectorAll('.alert[data-autoclose]').forEach((alert) => {

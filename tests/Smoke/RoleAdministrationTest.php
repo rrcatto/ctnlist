@@ -48,25 +48,37 @@ final class RoleAdministrationTest extends SmokeTestCase
         self::loginAsAdmin($admin);
         $key = 'smoke-rlife-' . self::$suffix;
 
-        self::assertStringContainsString('Role created.', self::post($admin, '/roles', ['key' => $key, 'name' => 'Life ' . self::$suffix, 'description' => 'd'], '/roles'));
+        self::assertStringContainsString('Role created.', self::submitAndFollow($admin, '/roles', 'role', ['role[key]' => strtoupper($key), 'role[name]' => 'Life ' . self::$suffix, 'role[description]' => 'd']));
         $roleId = self::roleId($key);
         $page = self::request($admin, 'GET', '/roles/' . $roleId)['body'];
         self::assertStringContainsString('Nobody holds this role.', $page);
         self::assertStringContainsString('Delete this role', $page);
 
-        $renamed = self::post($admin, '/roles/' . $roleId . '/edit', ['name' => 'Renamed ' . self::$suffix, 'description' => 'New text'], '/roles/' . $roleId);
+        $renamed = self::submitAndFollow($admin, '/roles/' . $roleId, 'role', ['role[name]' => 'Renamed ' . self::$suffix, 'role[description]' => 'New text']);
         self::assertStringContainsString('Role updated.', $renamed);
         self::assertStringContainsString('Renamed ' . self::$suffix, $renamed);
-        self::assertSame($key, self::scalar('SELECT r_key FROM roles WHERE r_id = ?', [$roleId]), 'key unchanged');
+        self::assertSame($key, self::scalar('SELECT r_key FROM roles WHERE r_id = ?', [$roleId]), 'key stored in lower case and unchanged');
+        $blank = self::submitForm($admin, '/roles/' . $roleId, 'role', ['role[name]' => ' ', 'role[description]' => 'Kept text']);
+        self::assertSame(422, $blank['status']);
+        self::assertMatchesRegularExpression('#id="role_name_error1">Enter a name#', $blank['body']);
+        self::assertStringContainsString('value="Kept text"', $blank['body']);
+        $duplicate = self::submitForm($admin, '/roles/' . $roleId, 'role', ['role[name]' => 'Administrator']);
+        self::assertMatchesRegularExpression('#id="role_name_error1">A role with that name already exists#', $duplicate['body']);
 
         $logs = self::scalar("SELECT ap_id FROM acl_permissions WHERE ap_key = 'logs.view'");
-        self::assertStringContainsString('Permissions updated.', self::post($admin, '/roles/permissions', ['role_id' => (string) $roleId, 'permission_ids[]' => $logs], '/roles/' . $roleId));
+        self::assertStringContainsString('Permissions updated.', self::submitAndFollow($admin, '/roles/' . $roleId, 'role_permissions', ['role_permissions[permissions][]' => [$logs]]));
 
         $search = self::request($admin, 'GET', '/roles?q=smoke-member')['body'];
         self::assertStringContainsString(self::MEMBER_EMAIL, $search, 'search finds the subscriber');
         self::assertMatchesRegularExpression('#<span class="badge text-bg-dark me-1">Subscriber</span>#', $search, 'current roles shown');
         self::assertStringContainsString('Role assigned.', self::post($admin, '/roles/assign', ['subscriber_id' => (string) self::$memberId, 'role_key' => $key, 'back' => '/roles?q=smoke-member'], '/roles'));
         self::assertStringContainsString('already holds', self::post($admin, '/roles/assign', ['subscriber_id' => (string) self::$memberId, 'role_key' => $key], '/roles'));
+        foreach (['https://evil.example/roles', '//evil.example/roles', '/roles/../logout', "/roles\r\nX: y", '/rolesevil'] as $back) {
+            $response = self::request($admin, 'POST', '/roles/assign', ['subscriber_id' => (string) self::$memberId, 'role_key' => $key, 'back' => $back, 'csrf' => self::csrf($admin, '/roles')]);
+            self::assertSame(302, $response['status']);
+            self::assertSame('/roles', parse_url($response['location'], PHP_URL_PATH), 'back only to the roles pages: ' . json_encode($back) . ' -> ' . $response['location']);
+            self::assertContains(parse_url($response['location'], PHP_URL_HOST), [null, 'web'], 'same host');
+        }
 
         $members = self::request($admin, 'GET', '/roles/' . $roleId)['body'];
         self::assertStringContainsString(self::MEMBER_EMAIL, $members, 'member listed');
@@ -83,8 +95,8 @@ final class RoleAdministrationTest extends SmokeTestCase
 
         $system = self::scalar("SELECT r_id FROM roles WHERE r_key = 'administrator'");
         self::assertStringContainsString('System roles cannot be deleted.', self::post($admin, '/roles/' . $system . '/delete', [], '/roles/' . $system));
-        self::assertStringContainsString('System roles cannot be renamed.', self::post($admin, '/roles/' . $system . '/edit', ['name' => 'Boss'], '/roles/' . $system));
         $systemPage = self::request($admin, 'GET', '/roles/' . $system)['body'];
+        self::assertStringNotContainsString('name="role[name]"', $systemPage, 'system roles cannot be renamed');
         self::assertStringNotContainsString('Delete this role', $systemPage);
         self::assertStringNotContainsString('action="/roles/unassign"', $systemPage);
     }
@@ -98,14 +110,15 @@ final class RoleAdministrationTest extends SmokeTestCase
         $targetId = self::roleId($target);
 
         $page = self::request($staff, 'GET', '/roles/' . $targetId)['body'];
-        self::assertStringContainsString('<fieldset disabled>', $page, 'permissions read only');
+        self::assertMatchesRegularExpression('#name="role_permissions\[permissions\]\[\]" disabled="disabled"#', $page, 'permissions read only');
         self::assertStringNotContainsString('Save permissions', $page);
         self::assertStringContainsString('Save details', $page, 'may still edit the role');
 
-        $csrf = self::csrf($staff, '/roles/' . $targetId);
-        self::assertSame(403, self::request($staff, 'POST', '/roles/permissions', ['csrf' => $csrf, 'role_id' => (string) $targetId])['status'], 'enforced on the server');
+        self::assertSame(403, self::request($staff, 'POST', '/roles/' . $targetId . '/permissions', ['role_permissions[csrf]' => self::csrf($staff, '/roles/' . $targetId)])['status'], 'enforced on the server');
         self::assertStringContainsString('Role assigned.', self::post($staff, '/roles/assign', ['subscriber_id' => (string) self::$memberId, 'role_key' => $target], '/roles'));
         self::assertStringContainsString('cannot assign a role with permissions you do not hold', self::post($staff, '/roles/assign', ['subscriber_id' => (string) self::$memberId, 'role_key' => 'administrator'], '/roles'));
+        self::assertStringContainsString('cannot assign a role with permissions you do not hold', self::post($staff, '/roles/assign', ['subscriber_id' => (string) self::$staffId, 'role_key' => 'administrator'], '/roles'), 'not even to themselves');
+        self::assertSame('0', self::scalar("SELECT COUNT(*) FROM subscriber_roles sr JOIN roles r ON r.r_id = sr.sr_r_id WHERE sr.sr_s_id = ? AND r.r_key = 'administrator'", [(string) self::$staffId]));
     }
 
     public function testRolesAndAclManageMayGrantHeldPermissions(): void
@@ -118,8 +131,10 @@ final class RoleAdministrationTest extends SmokeTestCase
         self::assertStringContainsString('Save permissions', self::request($staff, 'GET', '/roles/' . $targetId)['body']);
         $logs = self::scalar("SELECT ap_id FROM acl_permissions WHERE ap_key = 'logs.view'");
         $manage = self::scalar("SELECT ap_id FROM acl_permissions WHERE ap_key = 'subscribers.manage'");
-        self::assertStringContainsString('Permissions updated.', self::post($staff, '/roles/permissions', ['role_id' => (string) $targetId, 'permission_ids[]' => $logs], '/roles/' . $targetId));
-        self::assertStringContainsString('cannot grant permissions you do not hold', self::post($staff, '/roles/permissions', ['role_id' => (string) $targetId, 'permission_ids[]' => $manage], '/roles/' . $targetId));
+        self::assertStringContainsString('Permissions updated.', self::submitAndFollow($staff, '/roles/' . $targetId, 'role_permissions', ['role_permissions[permissions][]' => [$logs]]));
+        $escalate = self::submitForm($staff, '/roles/' . $targetId, 'role_permissions', ['role_permissions[permissions][]' => [$logs, $manage]]);
+        self::assertSame(422, $escalate['status']);
+        self::assertStringContainsString('cannot grant permissions you do not hold', $escalate['body']);
         self::assertSame('logs.view', self::scalar('SELECT string_agg(ap.ap_key, \',\') FROM role_permissions rp JOIN acl_permissions ap ON ap.ap_id = rp.rp_ap_id WHERE rp.rp_r_id = ?', [$targetId]));
     }
 
@@ -131,13 +146,18 @@ final class RoleAdministrationTest extends SmokeTestCase
         self::$db->prepare("INSERT INTO messages (m_uniqid, m_subject, m_html, m_text) VALUES (?, 'Proof fixture', '<p>Hi {firstname}</p>', 'Hi')")->execute([$muid]);
         try {
             $subscribers = self::scalar('SELECT COUNT(*) FROM subscribers');
-            $page = self::post($admin, '/sendtome/' . $muid, ['email' => 'outside-tester@example.org'], '/sendtome/' . $muid, false);
-            self::assertStringContainsString('Proof message sent to outside-tester@example.org.', $page);
+            $sent = self::submitForm($admin, '/sendtome/' . $muid, 'proof', ['proof[email]' => 'outside-tester@example.org']);
+            self::assertSame(200, $sent['status']);
+            $page = $sent['body'];
+            // Proofs go through catto-mail, which the development stack does not configure (see the integration tests).
+            self::assertStringContainsString('Proof message could not be sent: catto-mail is not configured', $page);
             self::assertSame($subscribers, self::scalar('SELECT COUNT(*) FROM subscribers'), 'no subscriber created');
-            self::assertSame('PROOF|', self::scalar("SELECT sl_type || '|' || COALESCE(sl_s_uuid::text, '') FROM sendlog WHERE sl_email = 'outside-tester@example.org' ORDER BY sl_id DESC LIMIT 1"));
             self::assertSame('0', self::scalar('SELECT COUNT(*) FROM smlog WHERE sml_muid = ?', [$muid]));
 
-            self::assertStringContainsString('Enter a valid email address for the proof.', self::post($admin, '/sendtome/' . $muid, ['email' => 'not-an-address'], '/sendtome/' . $muid));
+            $invalid = self::submitForm($admin, '/sendtome/' . $muid, 'proof', ['proof[email]' => 'not-an-address']);
+            self::assertSame(422, $invalid['status']);
+            self::assertMatchesRegularExpression('#id="proof_email_error1">Enter a valid email address#', $invalid['body']);
+            self::assertStringContainsString('value="not-an-address"', $invalid['body'], 'the address is kept');
         } finally {
             self::$db->prepare('DELETE FROM messages WHERE m_uniqid = ?')->execute([$muid]);
         }
@@ -186,7 +206,8 @@ final class RoleAdministrationTest extends SmokeTestCase
     private static function csrf(\CurlHandle $client, string $formPage): string
     {
         $body = self::request($client, 'GET', $formPage)['body'];
-        self::assertSame(1, preg_match('/name="csrf" value="([^"]+)"/', $body, $match), "CSRF field on {$formPage}");
+        // Any token on the page: manual forms and Symfony forms share the token id.
+        $match = self::match('/name="(?:\w+\[)?csrf\]?"[^>]*value="([^"]+)"/', $body, "CSRF field on {$formPage}");
         return html_entity_decode($match[1]);
     }
 

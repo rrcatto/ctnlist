@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Form\Model\SignInRequest;
+use App\Form\Type\SignInType;
 use App\Repository\SubscriberRepository;
 use App\Security\Csrf;
 use App\Security\MagicLinkRequester;
+use App\Util\Duration;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\FormInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -23,24 +27,21 @@ final class AuthController extends AbstractController
     #[Route('/login', name: 'login', methods: ['GET'])]
     public function login(): Response
     {
-        return $this->render('auth/login.html.twig', ['return_action' => 'profile']);
+        return $this->loginPage($this->signInForm());
     }
 
     #[Route('/login', name: 'login_request', methods: ['POST'])]
-    #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
     public function requestLink(Request $request): Response
     {
-        $messageId = $request->request->getInt('return_message_id');
-        $listId = $request->request->getInt('return_list_id');
-        $this->requester->request(
-            $request->request->getString('email'),
-            trim($request->request->getString('return_action')) ?: 'profile',
-            $messageId > 0 ? $messageId : null,
-            $listId > 0 ? $listId : null
-        );
-        return $this->render('auth/link_sent.html.twig', ['message' => $request->request->getString('return_action') === 'confirm'
-            ? 'If the address is valid, we have emailed you a link to confirm your subscription. You are subscribed once you confirm.'
-            : 'If the address is valid, a secure sign-in link has been sent.']);
+        $form = $this->signInForm();
+        $form->handleRequest($request);
+        if (!$form->isSubmitted() || !$form->isValid()) {
+            return $this->loginPage($form, Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+        /** @var SignInRequest $data */
+        $data = $form->getData();
+        $this->requester->request($data->email, 'profile');
+        return $this->render('auth/link_sent.html.twig', ['message' => 'If the address is valid, a secure sign-in link has been sent.']);
     }
 
     /** From the authentication prompt on a subscriber link. */
@@ -57,5 +58,16 @@ final class AuthController extends AbstractController
             $request->request->getInt('list_id') ?: null
         );
         return $this->render('auth/link_sent.html.twig', ['message' => 'If the request is valid, a secure sign-in link has been sent.']);
+    }
+
+    private function loginPage(FormInterface $form, int $status = Response::HTTP_OK): Response
+    {
+        return $this->render('auth/login.html.twig', ['form' => $form, 'link_lifetime' => Duration::describe($this->requester->lifetimeSeconds())],
+            new Response(status: $status));
+    }
+
+    private function signInForm(): FormInterface
+    {
+        return $this->createForm(SignInType::class, new SignInRequest(), ['action' => $this->generateUrl('login_request')]);
     }
 }

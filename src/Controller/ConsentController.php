@@ -4,15 +4,21 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\CattoMail\GlobalOptOut;
+use App\CattoMail\UnsubscribeLinks;
+use App\Form\Model\SubscribeRequest;
+use App\Form\Type\SubscribeType;
 use App\Repository\ListRepository;
 use App\Repository\MembershipRepository;
 use App\Repository\MessageRepository;
 use App\Repository\SubscriberRepository;
 use App\Security\AuthenticationPrompt;
 use App\Security\Csrf;
+use App\Security\MagicLinkRequester;
 use App\Security\SubscriberUser;
 use App\Subscriber\ConsentService;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\FormInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -65,14 +71,15 @@ final class ConsentController extends AbstractController
     }
 
     #[Route('/unsubscribe/{token}/{shortcode}/{muid}', name: 'consent_unsubscribe', defaults: ['muid' => ''], methods: ['GET'])]
-    public function unsubscribeForm(string $token, string $shortcode, string $muid, #[CurrentUser] ?SubscriberUser $user): Response
+    public function unsubscribeForm(string $token, string $shortcode, string $muid, #[CurrentUser] ?SubscriberUser $user, GlobalOptOut $optOut): Response
     {
         $list = $this->listFor($token, $shortcode);
         if (!$this->isOwner($token, $user)) {
             return $this->prompt($token, 'unsubscribe', $muid, $list);
         }
         $this->denyAccessUnlessGranted('lists.unsubscribe');
-        return $this->render('consent/unsubscribe.html.twig', ['token' => strtolower($token), 'list' => $list, 'muid' => $muid]);
+        return $this->render('consent/unsubscribe.html.twig', ['token' => strtolower($token), 'list' => $list, 'muid' => $muid,
+            'global_optout_available' => $optOut->isAvailable()]);
     }
 
     #[Route('/unsubscribe', name: 'consent_unsubscribe_submit', methods: ['POST'])]
@@ -93,6 +100,29 @@ final class ConsentController extends AbstractController
                 $this->isGranted('subscribers.manage')
             );
         return $this->render('page/result.html.twig', ['title' => 'Unsubscribed', 'message' => $message]);
+    }
+
+    /**
+     * The one-click unsubscribe link catto-mail sends as List-Unsubscribe
+     * (RFC 8058). It needs no sign-in or CSRF token: the signature proves it
+     * came from the message. GET only asks (link scanners must not
+     * unsubscribe anyone); POST, which mail clients send with
+     * `List-Unsubscribe=One-Click`, unsubscribes from that list only.
+     */
+    #[Route('/unsubscribe-link/{token}/{shortcode}/{muid}/{signature}', name: 'consent_unsubscribe_link', methods: ['GET', 'POST'])]
+    public function unsubscribeLink(string $token, string $shortcode, string $muid, string $signature, Request $request, UnsubscribeLinks $links): Response
+    {
+        if (!$links->isValid($token, $shortcode, $muid, $signature)) {
+            throw $this->createNotFoundException('Unknown unsubscribe link.');
+        }
+        $identity = $this->subscribers->findIdentityByUuid($token) ?? throw $this->createNotFoundException('Unknown subscriber.');
+        $list = $this->lists->findByShortcode($shortcode) ?? throw $this->createNotFoundException('Unknown list.');
+        $muid = $muid === '-' ? '' : $muid;
+        if ($request->isMethod('POST')) {
+            $message = $this->consent->unsubscribeByLink($identity, $list, $muid);
+            return $this->render('page/result.html.twig', ['title' => 'Unsubscribed', 'message' => $message]);
+        }
+        return $this->render('consent/unsubscribe_link.html.twig', ['list' => $list, 'email' => $identity['s_email']]);
     }
 
     /**
@@ -132,13 +162,55 @@ final class ConsentController extends AbstractController
             if ($user !== null) {
                 return $this->redirectToRoute('consent_confirm', ['token' => $user->uuid, 'shortcode' => $list['l_shortcode'], 'muid' => $muid]);
             }
-            return $this->render('consent/subscribe.html.twig', ['lists' => [$list], 'message_id' => $message['m_id']]);
+            return $this->subscribePage([$list], $message['m_id']);
         }
 
         if ($user !== null) {
             return $this->render('consent/subscribe.html.twig', ['memberships' => $memberships->forSubscriber($user->id)]);
         }
-        return $this->render('consent/subscribe.html.twig', ['lists' => $this->lists->all(), 'message_id' => null]);
+        return $this->subscribePage($this->lists->all(), null);
+    }
+
+    /**
+     * The visitors' subscribe form: emails a link to confirm the chosen list
+     * (MagicLinkRequester, return action "confirm"). Invalid input shows the
+     * form again with the address and list kept.
+     */
+    #[Route('/subscribe/request', name: 'subscribe_request', methods: ['POST'])]
+    public function subscribeRequest(Request $request, MagicLinkRequester $requester): Response
+    {
+        $lists = $this->lists->all();
+        $form = $this->subscribeForm($lists, new SubscribeRequest());
+        $form->handleRequest($request);
+        /** @var SubscribeRequest $data */
+        $data = $form->getData();
+        $messageId = (int) $data->messageId > 0 ? (int) $data->messageId : null;
+        if (!$form->isSubmitted() || !$form->isValid()) {
+            // Coming from a message, the page offered only that message's list.
+            $chosen = array_values(array_filter($lists, static fn(array $list): bool => $list['l_id'] === $data->listId));
+            return $this->subscribePage($messageId !== null && $chosen !== [] ? $chosen : $lists, $messageId, $form);
+        }
+        $requester->request($data->email, 'confirm', $messageId, $data->listId);
+        return $this->render('auth/link_sent.html.twig', ['message' => 'If the address is valid, we have emailed you a link to confirm your subscription. You are subscribed once you confirm.']);
+    }
+
+    /** @param list<array{l_id: int, l_name: string}> $lists */
+    private function subscribeForm(array $lists, SubscribeRequest $data): FormInterface
+    {
+        return $this->createForm(SubscribeType::class, $data, ['lists' => $lists, 'action' => $this->generateUrl('subscribe_request')]);
+    }
+
+    /** @param list<array{l_id: int, l_name: string}> $lists */
+    private function subscribePage(array $lists, ?int $messageId, ?FormInterface $form = null): Response
+    {
+        if ($form === null) {
+            $data = new SubscribeRequest();
+            $data->listId = $lists[0]['l_id'] ?? null;
+            $data->messageId = $messageId === null ? null : (string) $messageId;
+            $form = $this->subscribeForm($lists, $data);
+        }
+        return $this->render('consent/subscribe.html.twig', ['lists' => $lists, 'form' => $form],
+            new Response(status: $form->isSubmitted() ? Response::HTTP_UNPROCESSABLE_ENTITY : Response::HTTP_OK));
     }
 
     /** @return MailingList the list of a consent link; 404 for an unknown subscriber or list */

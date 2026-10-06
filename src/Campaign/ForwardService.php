@@ -75,7 +75,7 @@ final class ForwardService
             }
             $this->subscriptions->subscribe($email, 0, $allListId);
             $recipient = $this->subscribers->findIdentityByEmail($email);
-            if ($recipient === null || !$this->messageService->sendTo($muid, $email, 'FORWARD-MESSAGE', $sourceList)) {
+            if ($recipient === null || !$this->messageService->sendTo($muid, $email, 'FORWARD-MESSAGE', $sourceList)->accepted()) {
                 continue;
             }
             $this->messages->recordForward($message['m_id'], $sender['s_id'], $recipient['s_id'], $email, $now);

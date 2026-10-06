@@ -5,28 +5,17 @@
 {% block content %}
 {% include 'layout/_page_header.html.twig' with {title: 'Queue multiple messages', description: 'Queues up to four messages in rotation across their combined audience, up to a total number of emails. Nothing is sent until sending is started.'} %}
 
-<form action="{{ path('admin_queue_rotation_submit') }}" method="post" class="card">
+{{ form_start(form, {attr: {class: 'card'}}) }}
   <div class="card-body">
-    <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+    {{ form_errors(form) }}
     <div class="row g-3">
-      {% for slot in 1..slots %}
-        <div class="col-md-6">
-          <label class="form-label" for="muid{{ slot }}">Message {{ slot }}</label>
-          <select class="form-select" id="muid{{ slot }}" name="muid{{ slot }}">
-            <option value="">– none –</option>
-            {% for message in messages %}<option value="{{ message.m_uniqid }}">{{ message.m_subject }}</option>{% endfor %}
-          </select>
-        </div>
-      {% endfor %}
-      <div class="col-md-6">
-        <label class="form-label" for="mvolume">Total number of emails to queue</label>
-        <input class="form-control" id="mvolume" type="number" min="0" name="mvolume" value="{{ volume }}">
-      </div>
+      {% for slot in 1..4 %}{{ form_row(form['message' ~ slot]) }}{% endfor %}
+      {{ form_row(form.volume) }}
     </div>
   </div>
   <div class="card-footer d-flex flex-wrap gap-2">
     <button class="btn btn-primary" type="submit"><i class="bi bi-list-check me-1" aria-hidden="true"></i>Queue messages</button>
     <a class="btn btn-outline-secondary" href="{{ path('admin_queue') }}">Cancel</a>
   </div>
-</form>
+{{ form_end(form) }}
 {% endblock %}

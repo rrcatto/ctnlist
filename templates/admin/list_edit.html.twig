@@ -1,0 +1,25 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Edit list {{ list.l_shortcode }}{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb small"><li class="breadcrumb-item"><a href="{{ path('admin_lists') }}">Lists</a></li><li class="breadcrumb-item active" aria-current="page">{{ list.l_shortcode }}</li></ol></nav>
+{% include 'layout/_page_header.html.twig' with {title: 'Edit list ' ~ list.l_shortcode, description: 'The shortcode is permanent: it appears in links and mail headers.'} %}
+<div class="app-narrow">
+  {{ form_start(form, {attr: {class: 'card'}}) }}
+    <div class="card-body">
+      {{ form_errors(form) }}
+      <div class="mb-3">
+        <span class="form-label d-block">Shortcode</span>
+        <code class="fs-6">{{ list.l_shortcode }}</code>
+      </div>
+      {{ form_row(form.name) }}
+      {{ form_row(form.description, {row_attr: {class: 'mb-0'}}) }}
+    </div>
+    <div class="card-footer d-flex gap-2">
+      <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>Save list</button>
+      <a class="btn btn-outline-secondary" href="{{ path('admin_lists') }}">Cancel</a>
+    </div>
+  {{ form_end(form) }}
+</div>
+{% endblock %}

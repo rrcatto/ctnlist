@@ -49,6 +49,7 @@
               <a class="btn btn-outline-secondary" href="{{ path('admin_proof', {muid: message.m_uniqid}) }}">Proof</a>
               {% if can_queue %}<a class="btn btn-outline-primary" href="{{ path('admin_queue_message', {muid: message.m_uniqid}) }}">Queue</a>{% endif %}
               {% if can_send %}<a class="btn btn-outline-success" href="{{ path('admin_queue_process', {muid: message.m_uniqid}) }}" title="Send this message's queued entries">Send</a>{% endif %}
+              {% if can_view_activity %}<a class="btn btn-outline-secondary" href="{{ path('admin_delivery_message', {muid: message.m_uniqid}) }}" title="catto-mail send jobs and delivery states">Delivery</a>{% endif %}
             </div>
           </td>
         </tr>

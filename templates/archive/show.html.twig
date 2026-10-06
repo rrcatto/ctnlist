@@ -1,22 +1,30 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}Archive{% endblock %}
+{% block title %}{{ archive.a_subject }}{% endblock %}
 
 {% block content %}
-{% if forward_token is not null %}
-  <form name="forwardarchiveform" action="{{ path('message_forward_archive') }}" method="post" role="form" class="card card-body mb-4">
-    <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-    <input type="hidden" name="aid" value="{{ archive.a_id }}">
-    <input type="hidden" name="subscriber_token" value="{{ forward_token }}">
-    <input type="hidden" name="muid" value="{{ muid }}">
-    <h2 class="h5">Forward Archive Message</h2>
-    <label class="form-label" for="bemail">Forward to these emails</label>
-    <textarea class="form-control mb-3" rows="5" name="bemail" id="bemail"></textarea>
-    <button class="btn btn-primary" type="submit">Forward Message</button>
-  </form>
-{% endif %}
-<p>Date created: {{ archive.a_datecreated }}</p>
-<p>Subject: {{ archive.a_subject }}</p>
-{# The archived message HTML, rendered when the message was first queued. #}
-{{ archive.a_html|raw }}
+{% embed 'layout/_page_header.html.twig' with {title: archive.a_subject, description: 'Archived ' ~ archive.a_datecreated|slice(0, 10)} %}
+  {% block actions %}<a class="btn btn-outline-secondary" href="{{ path('archives') }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>All archives</a>{% endblock %}
+{% endembed %}
+<div class="row g-4">
+  <div class="{{ form ? 'col-lg-8' : 'col-12' }}">
+    {# The archived message HTML, rendered when the message was first queued. #}
+    <div class="card"><div class="card-body overflow-x-auto">{{ archive.a_html|sanitize_html('app.message_html') }}</div></div>
+  </div>
+  {% if form %}
+    <div class="col-lg-4">
+      {{ form_start(form, {attr: {class: 'card', id: 'forward-archive'}}) }}
+        <div class="card-header fw-semibold">Forward this message</div>
+        <div class="card-body">
+          {{ form_errors(form) }}
+          {{ form_widget(form.token) }}
+          {{ form_widget(form.muid) }}
+          {{ form_widget(form.archiveId) }}
+          {{ form_row(form.emails, {row_attr: {class: 'mb-0'}}) }}
+        </div>
+        <div class="card-footer"><button class="btn btn-primary" type="submit"><i class="bi bi-forward me-1" aria-hidden="true"></i>Forward message</button></div>
+      {{ form_end(form) }}
+    </div>
+  {% endif %}
+</div>
 {% endblock %}

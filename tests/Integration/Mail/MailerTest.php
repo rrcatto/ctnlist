@@ -7,10 +7,7 @@ namespace App\Tests\Integration\Mail;
 use App\Config\SiteConfig;
 use App\Log\MessageLog;
 use App\Log\SendLog;
-use App\Mail\CampaignDelivery;
-use App\Mail\CampaignMailer;
 use App\Mail\MailConnectionFactory;
-use App\Mail\SmtpServer;
 use App\Mail\SmtpServerPool;
 use App\Mail\TransactionalMailer;
 use App\Repository\SubscriberRepository;
@@ -68,32 +65,31 @@ final class MailerTest extends IntegrationTestCase
         self::assertSame(100000, (int) $this->db->fetchOne('SELECT s_priority FROM subscribers WHERE s_id = ?', [$subscriberId]));
     }
 
-    public function testCampaignHeadersAndLogs(): void
+    /** Names and addresses typed into forms cannot add headers: Symfony Mime encodes them. */
+    public function testFormInputCannotInjectHeaders(): void
     {
-        $uuid = $this->subscriberUuid($this->createSubscriber('jane@example.com'));
-        $muid = $this->createMessage('Campaign');
-        $connection = $this->service(MailConnectionFactory::class)->create();
-        self::assertTrue($connection->open(new SmtpServer('null://null')));
-        $mailer = $this->service(CampaignMailer::class);
+        $this->service(TransactionalMailer::class)->sendContactAcknowledgement('jane@example.com', "Jane\r\nBcc: victim@example.net", '<p>Thanks</p>', 'Thanks', '', '');
+        $email = $this->getMailerMessage();
+        self::assertNotNull($email);
+        $raw = $email->toString();
+        self::assertDoesNotMatchRegularExpression('/^Bcc: victim@example\.net/mi', $raw, 'no injected header line');
+        self::assertMatchesRegularExpression('/^To: .*Jane Bcc: victim@example\.net.*<jane@example\.com>/m', $raw, 'the line break became part of the name');
+        self::assertStringNotContainsString('victim@example.net', implode(',', array_map(
+            static fn($a): string => $a->getAddress(), $email instanceof \Symfony\Component\Mime\Email ? [...$email->getTo(), ...$email->getBcc()] : []
+        )), 'not a recipient');
 
-        self::assertTrue($mailer->send($connection, $this->delivery($uuid, $muid, 'news')));
-        $headers = $this->email()->getHeaders();
-        self::assertSame('<http://localhost:8180/unsubscribe/' . $uuid . '/NEWS/' . $muid . '>', $headers->get('List-Unsubscribe')?->getBodyAsString());
-        self::assertSame($muid, $headers->get('X-ctnlist-muid')?->getBodyAsString());
-        self::assertSame('info+' . $uuid . '@localhost', $this->email()->getSender()?->getAddress());
-        self::assertSame(['MESSAGE', 'NEWS'], $this->lastSendLog());
-        self::assertTrue($this->service(MessageLog::class)->wasSent($uuid, $muid));
-
-        self::assertTrue($mailer->send($connection, $this->delivery($uuid, $muid, ''), 'proof'));
-        self::assertFalse($this->email(1)->getHeaders()->has('List-Unsubscribe'), 'no list context, no unsubscribe link');
-        self::assertSame(['PROOF', ''], $this->lastSendLog());
+        try {
+            $this->service(TransactionalMailer::class)->sendContactAcknowledgement("jane@example.com\r\nBcc: victim@example.net", 'Jane', '<p>x</p>', 'x', '', '');
+            self::fail('an address with a line break was accepted');
+        } catch (\Symfony\Component\Mime\Exception\InvalidArgumentException) {
+        }
     }
 
     public function testFailedDeliveryIsNotLogged(): void
     {
         $site = $this->service(SiteConfig::class);
         $mailer = new TransactionalMailer(
-            new SmtpServerPool($site, 'smtp://127.0.0.1:1', 600, 0),
+            new SmtpServerPool('smtp://127.0.0.1:1', 0),
             $this->service(MailConnectionFactory::class),
             $this->service(SendLog::class),
             $this->service(MessageLog::class),
@@ -104,11 +100,6 @@ final class MailerTest extends IntegrationTestCase
         self::assertFalse($mailer->sendMagicLink('jane@example.com', '', 'https://x', 60));
         self::assertEmailCount(0);
         self::assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM sendlog'));
-    }
-
-    private function delivery(string $uuid, string $muid, string $list): CampaignDelivery
-    {
-        return new CampaignDelivery($muid, 'Campaign', 'Sender', 'sender@ctnlist.test', $uuid, 'jane@example.com', 'Jane', $list, '<p>Hi</p>', 'Hi');
     }
 
     private function email(int $index = 0): Email

@@ -15,7 +15,6 @@ final class SiteConfigTest extends TestCase
             'APP_BASE_URL' => 'https://example.com',
             'APP_ADMIN_EMAIL' => 'owner@example.com',
             'APP_ORGANISATION' => '',
-            'MAIL_SMTP_SERVERS_JSON' => '[{"dsn":"smtp://a"},"junk"]',
             'APP_ARCHIVE_ENABLED' => 'true',
         ], '/var/www/example/');
 
@@ -26,7 +25,6 @@ final class SiteConfigTest extends TestCase
         self::assertSame('owner@example.com', $site->testEmail);
         self::assertSame('ctnlist', $site->contactName, 'empty values count as unset');
         self::assertSame('/var/www/example/logs/contact.log', $site->contactLogFile);
-        self::assertSame([['dsn' => 'smtp://a']], $site->smtpServers);
         self::assertSame(13, $site->emailsPerMinute);
         self::assertTrue($site->archiveEnabled);
     }

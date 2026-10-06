@@ -58,6 +58,13 @@ final class ListRepository
         return $row === false ? null : $this->hydrate($row);
     }
 
+    /** @return MailingList|null the list with exactly this name (names are unique) */
+    public function findByName(string $name): ?array
+    {
+        $row = $this->db->fetchAssociative('SELECT ' . self::COLUMNS . ' FROM lists WHERE l_name = ?', [$name]);
+        return $row === false ? null : $this->hydrate($row);
+    }
+
     public function findShortcodeById(int $id): ?string
     {
         $shortcode = $this->db->fetchOne('SELECT l_shortcode FROM lists WHERE l_id = ?', [$id]);
@@ -70,6 +77,12 @@ final class ListRepository
             'INSERT INTO lists (l_shortcode, l_name, l_description) VALUES (?, ?, ?) RETURNING l_id',
             [$shortcode, $name, $description]
         );
+    }
+
+    /** Rename or describe a non-system list; returns false when it was a system list or missing. */
+    public function updateCustom(int $id, string $name, string $description): bool
+    {
+        return $this->db->executeStatement('UPDATE lists SET l_name = ?, l_description = ? WHERE l_id = ? AND l_system = FALSE', [$name, $description, $id]) === 1;
     }
 
     /** Delete a non-system list; returns false when it was a system list or missing. */

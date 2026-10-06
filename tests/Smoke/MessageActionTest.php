@@ -16,9 +16,7 @@ final class MessageActionTest extends SmokeTestCase
     {
         parent::setUpBeforeClass();
         self::$muid = bin2hex(random_bytes(16));
-        $id = (int) self::$db->query(
-            "INSERT INTO messages (m_uniqid, m_subject, m_html, m_text) VALUES ('" . self::$muid . "', 'Action fixture', '<p>Hi {firstname}</p>', 'Hi') RETURNING m_id"
-        )->fetchColumn();
+        $id = (int) self::value("INSERT INTO messages (m_uniqid, m_subject, m_html, m_text) VALUES ('" . self::$muid . "', 'Action fixture', '<p>Hi {firstname}</p>', 'Hi') RETURNING m_id");
         self::$db->exec("INSERT INTO message_lists (ml_m_id, ml_l_id) SELECT {$id}, l_id FROM lists WHERE l_shortcode = 'ALL'");
         self::$db->prepare(
             "INSERT INTO smlog (sml_s_uuid, sml_email, sml_muid, sml_list_shortcode, sml_date_sent) VALUES (?, ?, ?, 'ALL', LOCALTIMESTAMP)"
@@ -42,12 +40,19 @@ final class MessageActionTest extends SmokeTestCase
         self::assertStringContainsString('Thank you for your LIKE.', $like);
 
         $resend = self::submit($client, "/resend/{$uuid}/" . self::$muid, '/resend', ['subscriber_token' => $uuid, 'muid' => self::$muid]);
-        self::assertStringContainsString('The current version was sent.', $resend);
+        self::assertStringContainsString('The message could not be sent.', $resend, 'the development stack has no catto-mail configured');
 
-        $forward = self::submit($client, "/forward/{$uuid}/" . self::$muid, '/forward', ['subscriber_token' => $uuid, 'muid' => self::$muid, 'bemail' => self::FRIEND]);
-        self::assertStringContainsString('Forwarded the current message to 1 recipient(s).', $forward);
+        $tooMany = implode(' ', array_map(static fn(int $n): string => "friend{$n}@example.com", range(1, 11)));
+        $invalid = self::submitForm($client, "/forward/{$uuid}/" . self::$muid, 'forward', ['forward[emails]' => $tooMany]);
+        self::assertSame(422, $invalid['status']);
+        self::assertMatchesRegularExpression('#id="forward_emails_error1">Enter no more than 10 different addresses#', $invalid['body']);
+        self::assertStringContainsString('friend11@example.com</textarea>', $invalid['body'], 'the addresses are kept');
 
-        $counts = self::$db->query("SELECT m_likes, m_reads FROM messages WHERE m_uniqid = '" . self::$muid . "'")->fetch(\PDO::FETCH_ASSOC);
+        $sent = self::submitForm($client, "/forward/{$uuid}/" . self::$muid, 'forward', ['forward[emails]' => self::FRIEND]);
+        self::assertSame(200, $sent['status']);
+        self::assertStringContainsString('Forwarded the current message to 0 recipient(s).', $sent['body'], 'no catto-mail in development: nothing sent');
+
+        $counts = self::rows("SELECT m_likes, m_reads FROM messages WHERE m_uniqid = '" . self::$muid . "'")[0];
         self::assertSame(['m_likes' => 1, 'm_reads' => 1], $counts);
     }
 
@@ -78,7 +83,7 @@ final class MessageActionTest extends SmokeTestCase
 
     private static function csrf(string $body): string
     {
-        self::assertSame(1, preg_match('/name="csrf" value="([^"]+)"/', $body, $match));
+        $match = self::match('/name="(?:\w+\[)?csrf\]?"[^>]*value="([^"]+)"/', $body);
         return html_entity_decode($match[1]);
     }
 }

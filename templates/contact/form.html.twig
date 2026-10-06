@@ -3,20 +3,19 @@
 {% block title %}Contact{% endblock %}
 
 {% block content %}
-<form action="{{ path('contact_submit') }}" method="post" class="card card-body">
-  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-  <input type="hidden" name="suid" value="{{ token }}">
-  <input type="hidden" name="muid" value="{{ muid }}">
-  <input type="hidden" name="realm" value="{{ realm }}">
+{% include 'layout/_page_header.html.twig' with {title: 'Contact', description: 'Send us a request or a question; we reply by email. Fields marked * are required.'} %}
+{{ form_start(form, {attr: {class: 'card card-body'}}) }}
+  {{ form_widget(form.suid) }}
+  {{ form_widget(form.muid) }}
   <div class="row g-3">
-    <div class="col-md-6"><label class="form-label" for="c-name">Full name</label><input class="form-control" id="c-name" name="name" value="{{ values.name ?? '' }}"></div>
-    <div class="col-md-6"><label class="form-label" for="c-email">Email</label><input class="form-control" id="c-email" name="email" value="{{ values.email ?? '' }}"></div>
-    <div class="col-md-6"><label class="form-label" for="c-cell">Cell</label><input class="form-control" id="c-cell" name="cell" value="{{ values.cell ?? '' }}"></div>
-    <div class="col-md-6"><label class="form-label" for="c-company">Company</label><input class="form-control" id="c-company" name="company" value="{{ values.company ?? '' }}"></div>
-    <div class="col-md-6"><label class="form-label" for="c-website">Website</label><input class="form-control" id="c-website" name="website" value="{{ values.website ?? '' }}"></div>
-    <div class="col-md-6"><label class="form-label" for="c-topic">Topic / subject</label><input class="form-control" id="c-topic" name="topic"></div>
-    <div class="col-12"><label class="form-label" for="c-message">Message</label><textarea class="form-control" id="c-message" name="message" rows="8"></textarea></div>
-    <div class="col-12"><button class="btn btn-primary" type="submit">Send request</button></div>
+    <div class="col-md-6">{{ form_row(form.name) }}</div>
+    <div class="col-md-6">{{ form_row(form.email) }}</div>
+    <div class="col-md-6">{{ form_row(form.cell) }}</div>
+    <div class="col-md-6">{{ form_row(form.company) }}</div>
+    <div class="col-md-6">{{ form_row(form.website) }}</div>
+    <div class="col-md-6">{{ form_row(form.topic) }}</div>
+    <div class="col-12">{{ form_row(form.message) }}</div>
+    <div class="col-12"><button class="btn btn-primary" type="submit"><i class="bi bi-send me-1" aria-hidden="true"></i>Send request</button></div>
   </div>
-</form>
+{{ form_end(form) }}
 {% endblock %}

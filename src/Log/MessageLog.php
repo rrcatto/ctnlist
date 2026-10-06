@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Log;
 
+use App\Repository\Like;
 use Doctrine\DBAL\Connection;
 use Psr\Clock\ClockInterface;
 
@@ -113,7 +114,7 @@ final class MessageLog
     {
         return (int) $this->db->fetchOne(
             'SELECT COUNT(*) FROM smlog WHERE sml_muid = ? AND sml_reads > 0 AND LOWER(sml_email) LIKE LOWER(?)',
-            [$muid, '%' . trim($email) . '%']
+            [$muid, Like::contains($email)]
         );
     }
 
@@ -125,7 +126,7 @@ final class MessageLog
                     sml_forwards, sml_subscribe, sml_unsubscribe
              FROM smlog WHERE sml_muid = ? AND sml_reads > 0 AND LOWER(sml_email) LIKE LOWER(?)
              ORDER BY sml_last_read DESC, sml_id DESC LIMIT ' . max(1, $limit) . ' OFFSET ' . max(0, $offset),
-            [$muid, '%' . trim($email) . '%']
+            [$muid, Like::contains($email)]
         );
     }
 

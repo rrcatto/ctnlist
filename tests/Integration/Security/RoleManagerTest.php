@@ -111,6 +111,42 @@ final class RoleManagerTest extends IntegrationTestCase
         self::assertSame([], $roles->permissionKeys($id), 'removing grants is always allowed');
     }
 
+    /** Self-assignment, roles changed after the fact, and acl.manage are covered by the same rule. */
+    public function testNoEscalationThroughSelfAssignmentOrLaterGrants(): void
+    {
+        $manager = $this->service(RoleManager::class);
+        $roles = $this->service(RoleRepository::class);
+        $staff = $this->actor(administrator: false, permissions: ['roles.manage', 'logs.view']);
+        $manager->create('readers', 'Readers', '');
+        $readers = ($roles->findByKey('readers') ?? [])['r_id'] ?? 0;
+        $manager->setPermissions($readers, $this->permissionIds(['logs.view']), $this->actor(administrator: true));
+
+        self::assertTrue($manager->assign($staff->id, 'readers', $staff), 'a role whose permissions they hold, even for themselves');
+        foreach (['administrator', 'readers-plus'] as $key) {
+            if ($key === 'readers-plus') {
+                // An administrator later raises another role above what the staff member holds.
+                $manager->create('readers-plus', 'Readers plus', '');
+                $manager->setPermissions(($roles->findByKey('readers-plus') ?? [])['r_id'] ?? 0, $this->permissionIds(['logs.view', 'settings.manage']), $this->actor(administrator: true));
+            }
+            try {
+                $manager->assign($staff->id, $key, $staff);
+                self::fail("assigned {$key} to themselves");
+            } catch (\InvalidArgumentException $e) {
+                self::assertStringContainsString('do not hold', $e->getMessage());
+            }
+            self::assertFalse($roles->holds($staff->id, ($roles->findByKey($key) ?? [])['r_id'] ?? 0), "{$key} not held");
+        }
+
+        try {
+            $manager->setPermissions($readers, $this->permissionIds(['logs.view']), $staff);
+            self::fail('changed permissions without acl.manage');
+        } catch (\InvalidArgumentException $e) {
+            self::assertStringContainsString('acl.manage', $e->getMessage());
+        }
+        $manager->setPermissions($readers, $this->permissionIds(['logs.view', 'settings.manage']), $this->actor(administrator: true));
+        self::assertSame(['logs.view', 'settings.manage'], $roles->permissionKeys($readers), 'administrators are unrestricted');
+    }
+
     /** The assignment picker searches; it does not stop at the first 500 subscribers. */
     public function testSubscriberSearchFindsAnySubscriber(): void
     {

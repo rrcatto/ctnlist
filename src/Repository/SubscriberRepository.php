@@ -13,7 +13,7 @@ use Doctrine\DBAL\Connection;
  *
  * @phpstan-type Identity array{s_id: int, s_uuid: string, s_email: string, s_fname: string, s_lname: string}
  * @phpstan-type Recipient array{s_id: int, s_uuid: string, s_email: string, s_fname: string, s_lname: string,
- *     s_emailsleft: int, s_priority: int, s_last_interacted: ?string}
+ *     s_emailsleft: int, s_priority: int, s_last_interacted: ?string, s_delivery_state: string}
  */
 final class SubscriberRepository
 {
@@ -112,7 +112,7 @@ final class SubscriberRepository
     {
         $row = $this->db->fetchAssociative(
             'SELECT s_uuid, s_email, s_created_at, s_fname, s_lname, s_phone, s_birthday, s_gender, s_province,
-                    s_country, s_business, s_url, s_photo
+                    s_country, s_business, s_url
              FROM subscribers WHERE s_id = ?',
             [$id]
         );
@@ -209,7 +209,7 @@ final class SubscriberRepository
         $params = [];
         if (trim($email) !== '') {
             $clauses[] = 'LOWER(s.s_email) LIKE LOWER(:email)';
-            $params['email'] = '%' . trim($email) . '%';
+            $params['email'] = Like::contains($email);
         }
         if ($activeOnly) {
             $clauses[] = 's.s_last_interacted IS NOT NULL';
@@ -247,7 +247,7 @@ final class SubscriberRepository
             return [];
         }
         $uuid = strtolower($term);
-        $like = '%' . addcslashes($term, '%_\\') . '%';
+        $like = Like::contains($term);
         return array_map(static fn(array $row): array => [
             's_id' => (int) $row['s_id'],
             's_uuid' => (string) $row['s_uuid'],
@@ -281,7 +281,7 @@ final class SubscriberRepository
     private function recipient(string $condition, string $value): ?array
     {
         $row = $this->db->fetchAssociative(
-            'SELECT s_id, s_uuid, s_email, s_fname, s_lname, s_emailsleft, s_priority, s_last_interacted FROM subscribers WHERE ' . $condition,
+            'SELECT s_id, s_uuid, s_email, s_fname, s_lname, s_emailsleft, s_priority, s_last_interacted, s_delivery_state FROM subscribers WHERE ' . $condition,
             [$value]
         );
         if ($row === false) {
@@ -296,7 +296,31 @@ final class SubscriberRepository
             's_emailsleft' => (int) $row['s_emailsleft'],
             's_priority' => (int) $row['s_priority'],
             's_last_interacted' => $row['s_last_interacted'] === null ? null : (string) $row['s_last_interacted'],
+            's_delivery_state' => (string) $row['s_delivery_state'],
         ];
+    }
+
+    /**
+     * Record a catto-mail hard bounce or complaint: the subscriber leaves
+     * campaign selection (a complaint is never downgraded to a bounce).
+     * Also counts the bounce (v5 s_bounces) for a hard bounce.
+     */
+    public function recordDeliveryProblem(int $id, string $state, string $at): void
+    {
+        $this->db->executeStatement(
+            "UPDATE subscribers SET
+                s_delivery_state = CASE WHEN s_delivery_state = 'complained' THEN s_delivery_state ELSE :state END,
+                s_delivery_state_at = :at,
+                s_bounces = s_bounces + CASE WHEN :state = 'hard_bounced' THEN 1 ELSE 0 END
+             WHERE s_id = :id",
+            ['state' => $state, 'at' => $at, 'id' => $id]
+        );
+    }
+
+    /** An administrator returns the subscriber to campaign selection (e.g. the address was fixed by its owner). */
+    public function clearDeliveryProblem(int $id): void
+    {
+        $this->db->executeStatement("UPDATE subscribers SET s_delivery_state = 'ok', s_delivery_state_at = NULL WHERE s_id = ?", [$id]);
     }
 
     /**

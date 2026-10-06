@@ -58,6 +58,13 @@ final class RoleRepository
         return $id === false ? null : $this->find((int) $id);
     }
 
+    /** @return Role|null the role with exactly this name (names are unique) */
+    public function findByName(string $name): ?array
+    {
+        $id = $this->db->fetchOne('SELECT r_id FROM roles WHERE r_name = ?', [$name]);
+        return $id === false ? null : $this->find((int) $id);
+    }
+
     /** @return array<int, int> number of subscribers holding each role id */
     public function memberCounts(): array
     {

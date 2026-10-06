@@ -5,6 +5,7 @@
   "license": "MIT",
   "require": {
     "php": ">=8.4.1 <9.0",
+    "ext-gd": "*",
     "ext-json": "*",
     "ext-openssl": "*",
     "ext-pdo": "*",
@@ -15,12 +16,17 @@
     "symfony/asset-mapper": "8.1.*",
     "symfony/console": "8.1.*",
     "symfony/dotenv": "8.1.*",
+    "symfony/form": "8.1.*",
     "symfony/framework-bundle": "8.1.*",
+    "symfony/html-sanitizer": "8.1.*",
+    "symfony/http-client": "8.1.*",
     "symfony/mailer": "8.1.*",
+    "symfony/rate-limiter": "8.1.*",
     "symfony/runtime": "8.1.*",
     "symfony/security-bundle": "8.1.*",
     "symfony/security-csrf": "8.1.*",
     "symfony/twig-bundle": "8.1.*",
+    "symfony/validator": "8.1.*",
     "symfony/yaml": "8.1.*"
   },
   "require-dev": {

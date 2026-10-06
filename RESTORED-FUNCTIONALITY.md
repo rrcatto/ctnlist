@@ -34,15 +34,15 @@ Restored or retained:
 - A global unsubscribe disables every local list membership for that subscriber.
 - Engagement and priority ordering from v5 is retained.
 - Queue rows store the actual list context used for the recipient.
-- SMTP batching, delay, retry and failover are retained.
+- Delivery is done by the catto-mail smarthost (replacing v5's SMTP batching, delay, retry and failover; see below).
 
 ## Audit invariants
 
-- Every successful email handoff is written to `sendlog`.
-- Every campaign-content delivery is written to `smlog`.
+- Every successful email handoff is written to `sendlog` (for campaign content: when catto-mail has sealed its send job).
+- Every campaign-content delivery to a subscriber is written to `smlog`.
 - A normal queue send is blocked when the `(subscriber UUID, MUID)` `smlog` record already exists.
 - Resends, proofs and administrator copies are deliberate exceptions but remain audited (proofs in the Send Log only).
-- Forwarded campaign copies use the campaign mail path and retain list context.
+- Forwarded campaign copies use the campaign delivery path (catto-mail) and retain list context.
 
 ## Subscriber actions
 
@@ -89,7 +89,6 @@ Transactional notification email and Send Log recording are restored for:
 These are part of the v5 baseline and are preserved deliberately; change them only by decision.
 
 - The v5 address cleanup rules (now `App\Subscriber\EmailNormaliser`) make addresses in non-commercial domains unusable on purpose, including `.org`, `.gov`, `.gov.za`, `.gov.uk`, `.ac.za` and `.ac.uk`, as well as role accounts such as `postmaster@` or `newsletter@`. An unusable address counts as globally suppressed, so such a subscriber loses every list membership when a message is queued.
-- In the anonymous rendering used for archives, `{booking}`, `{contact}` and `{lms-booking}` are left unreplaced (a v5 defect), so they appear literally in archive pages.
 
 ## Deliberate changes from v5
 
@@ -108,6 +107,17 @@ Made while porting to Symfony, where the v5 behaviour was a defect rather than a
 - A sign-in link requested to confirm a list (the subscribe form, a confirmation link) is sent as "Confirm your subscription to …" instead of a sign-in email; it is the same secure link.
 - Role administration is complete: custom roles can be renamed, described, deleted and removed from subscribers, each role lists its members, and subscribers are found by search instead of a picker limited to the first 500. Non-administrators cannot hand out permissions they do not hold.
 - Opening another person's subscriber form, or one that does not exist, gives the 403 or 404 page instead of a 200 page reading "Access denied." or "The subscriber does not exist.".
+- Campaign content (queue sends, proofs, resends, forwards) is delivered by the catto-mail smarthost through its API, rendered per recipient by ctnlist. ctnlist's own SMTP campaign transport is gone: the failover servers (`MAIL_SMTP_SERVERS_JSON`), `MAIL_BATCH_SIZE` and `MAIL_BATCH_DELAY` no longer exist, and `MAILER_DSN` carries transactional mail only. catto-mail sets the envelope (VERP return path); the v5 `Sender`, `List-Owner`, `List-Post`, `List-Subscribe`, `List-Archive` and `X-ctnlist-*` headers are not sent (catto-mail accepts no arbitrary headers), and `List-Id` is `<list name> <shortcode.APP_DOMAIN>` per list.
+- `List-Unsubscribe` is a signed one-click link (RFC 8058) that unsubscribes from that list without signing in; the `{unsubscribe}` link in the message body still leads to the signed-in unsubscribe page.
+- Hard bounces and complaints reported by catto-mail take a subscriber out of campaign selection (a complaint also unsubscribes them from every list). `MAIL_BOUNCE_LIMIT`, which nothing implemented, is removed.
+- "Sent" counts and Send Log rows for campaign content mean "accepted by catto-mail" (the send job was sealed); delivery outcomes are on the Delivery page.
+- Placeholders never appear literally. In archives, `{booking}` and `{contact}` become their plain labels (BOOKING FORM, CONTACT FORM) and `{baseurl}`/`{listshortcode}` are filled; v5 meant to replace them but assigned the result to unused variables. `{lms-booking}` was only ever "replaced" in that dead code and has no configuration; it is retired and, like `{STORE}`, renders as nothing. `{advertise}`, `{facebook}`, `{twitter}` and `{booking}` render nothing when their URL is not configured (v5 produced a link with an empty address). `{usertrack}` is dropped from the plain-text part (the pixel exists only in HTML). Subscriber names are HTML-escaped in the HTML part.
+- Message HTML shown on the public archive page is sanitised (no script, event handlers, `javascript:` links, frames or forms); the stored archive and the mail itself are unchanged. Archive pages, and archive forwarding, return 404 while `APP_ARCHIVE_ENABLED` is off (v5 only hid the menu link).
+- Logging out is a POST with a CSRF token (the account menu's "Log out" is a form); `GET /logout` answers 405. Export (`/export`) and synchronisation (`/sync`) show a form and act only on POST with a CSRF token; v5 exported and synchronised on a GET link (`/export/{offset}/{limit}`, `/sync`).
+- The administrator's subscriber form is at `/subscribers/{token}[/{muid}]` (was `/subscribe/{token}`, which read as the public subscribe page); the profile-update notification links to the subscriber's own profile.
+- The sign-in page and email state the configured link lifetime (`AUTH_MAGIC_LINK_TTL`, e.g. "2 hours") instead of a fixed "30 minutes".
+- The profile's "Photo URL" text field (`s_photo`, stored but never shown in v5) is replaced by an uploaded profile picture: chosen, positioned, zoomed and rotated on Edit profile, stored as a 256-pixel PNG in the database (`subscriber_images`), and shown beside the subscriber's name in the site menu and on their profile (a placeholder when there is none, and for signed-out visitors).
+- Contact messages and forwards/resends are rate-limited per hour (`CONTACT_RATE_LIMIT`, `FORWARD_RATE_LIMIT`, Settings); over the limit the page answers 429.
 
 ## Review and deployment
 

@@ -25,11 +25,14 @@
               {% if list.l_system %}
                 <span class="small text-body-secondary" title="System lists cannot be deleted"><i class="bi bi-shield-lock" aria-hidden="true"></i> Protected</span>
               {% else %}
+                <div class="d-inline-flex gap-1">
+                <a class="btn btn-sm btn-outline-secondary" href="{{ path('admin_lists_edit', {id: list.l_id}) }}" aria-label="Edit the list {{ list.l_name }}"><i class="bi bi-pencil" aria-hidden="true"></i><span class="d-none d-md-inline ms-1">Edit</span></a>
                 <form action="{{ path('admin_lists_delete') }}" method="post" data-confirm="Delete the list {{ list.l_name }}?">
                   <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
                   <input type="hidden" name="list_id" value="{{ list.l_id }}">
                   <button class="btn btn-sm btn-outline-danger" type="submit" aria-label="Delete the list {{ list.l_name }}"><i class="bi bi-trash" aria-hidden="true"></i><span class="d-none d-md-inline ms-1">Delete</span></button>
                 </form>
+                </div>
               {% endif %}
             </td>
           </tr>
@@ -39,26 +42,16 @@
     </div>
   </div>
   <div class="col-lg-5">
-    <form action="{{ path('admin_lists_create') }}" method="post" class="card">
+    {{ form_start(form, {attr: {class: 'card', id: 'create-list'}}) }}
       <div class="card-header fw-semibold">Create a topic list</div>
       <div class="card-body">
-        <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-        <div class="mb-3">
-          <label class="form-label" for="list-shortcode">Shortcode <span class="text-danger" aria-hidden="true">*</span></label>
-          <input class="form-control text-uppercase" id="list-shortcode" name="shortcode" minlength="3" maxlength="6" pattern="[A-Za-z0-9]{3,6}" required aria-describedby="list-shortcode-help">
-          <div class="form-text" id="list-shortcode-help">3–6 letters or numbers, stored in upper case. Used in links and headers.</div>
-        </div>
-        <div class="mb-3">
-          <label class="form-label" for="list-name">Name <span class="text-danger" aria-hidden="true">*</span></label>
-          <input class="form-control" id="list-name" name="name" maxlength="100" required>
-        </div>
-        <div class="mb-0">
-          <label class="form-label" for="list-description">Description</label>
-          <textarea class="form-control" id="list-description" name="description" rows="4"></textarea>
-        </div>
+        {{ form_errors(form) }}
+        {{ form_row(form.shortcode) }}
+        {{ form_row(form.name) }}
+        {{ form_row(form.description, {row_attr: {class: 'mb-0'}}) }}
       </div>
       <div class="card-footer"><button class="btn btn-primary" type="submit"><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Create list</button></div>
-    </form>
+    {{ form_end(form) }}
   </div>
 </div>
 {% endblock %}

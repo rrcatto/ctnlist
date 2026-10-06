@@ -25,7 +25,7 @@ final class SendLogRepository
     {
         return (int) $this->db->fetchOne(
             'SELECT COUNT(*) FROM sendlog WHERE sl_type LIKE ? AND LOWER(sl_email) LIKE LOWER(?)',
-            [trim($type) . '%', '%' . trim($email) . '%']
+            [Like::startsWith($type), Like::contains($email)]
         );
     }
 
@@ -36,14 +36,15 @@ final class SendLogRepository
             'SELECT sl_datesent, sl_type, sl_email, sl_list_shortcode, sl_subject, sl_s_uuid FROM sendlog
              WHERE sl_type LIKE ? AND LOWER(sl_email) LIKE LOWER(?)
              ORDER BY sl_datesent DESC, sl_id DESC LIMIT ' . max(1, $limit) . ' OFFSET ' . max(0, $offset),
-            [trim($type) . '%', '%' . trim($email) . '%']
+            [Like::startsWith($type), Like::contains($email)]
         );
     }
 
     /** @return list<array{sl_type: string, sl_total: int}> */
     public function totalsByType(): array
     {
-        return $this->db->fetchAllAssociative('SELECT sl_type, COUNT(*) AS sl_total FROM sendlog GROUP BY sl_type ORDER BY sl_type');
+        return array_map(static fn(array $row): array => ['sl_type' => (string) $row['sl_type'], 'sl_total' => (int) $row['sl_total']],
+            $this->db->fetchAllAssociative('SELECT sl_type, COUNT(*) AS sl_total FROM sendlog GROUP BY sl_type ORDER BY sl_type'));
     }
 
     /**

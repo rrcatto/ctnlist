@@ -71,7 +71,7 @@ const LICENSE_KEY = 'GPL';
 */
 
 const editorConfig = {
-	attachTo: document.querySelector('#mt_html'),
+	attachTo: document.querySelector('[data-html-editor]'),
 	root: {
 		placeholder: ''
 		/*
@@ -276,6 +276,13 @@ const editorConfig = {
 				attributes: true,
 				classes: true
 			}
+		],
+		// Email clients run none of these; keeping them out of drafts avoids
+		// surprises. The site's own pages sanitise message HTML regardless
+		// (config/packages/html_sanitizer.yaml).
+		disallow: [
+			{ name: /^(script|iframe|object|embed|form|input|button|select|textarea)$/ },
+			{ name: /^.*$/, attributes: [{ key: /^on/i, value: true }] }
 		]
 	},
 	image: {

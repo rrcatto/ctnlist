@@ -4,7 +4,12 @@ declare(strict_types=1);
 
 namespace App\Tests\Integration;
 
+use App\CattoMail\CattoMailClient;
+use App\CattoMail\CattoMailConfig;
+use App\Tests\Support\FakeCattoMail;
 use Doctrine\DBAL\Connection;
+use Psr\Log\NullLogger;
+use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
 use Symfony\Bundle\FrameworkBundle\Test\MailerAssertionsTrait;
 
@@ -23,7 +28,7 @@ abstract class IntegrationTestCase extends KernelTestCase
     protected function setUp(): void
     {
         self::bootKernel();
-        $this->db = self::getContainer()->get(Connection::class);
+        $this->db = $this->service(Connection::class);
         $this->db->beginTransaction();
     }
 
@@ -36,13 +41,32 @@ abstract class IntegrationTestCase extends KernelTestCase
     }
 
     /**
+     * Replace catto-mail's HTTP boundary with FakeCattoMail. Call it before
+     * fetching any service that uses CattoMailClient.
+     */
+    protected function fakeCattoMail(): FakeCattoMail
+    {
+        $fake = new FakeCattoMail();
+        self::getContainer()->set(CattoMailClient::class, new CattoMailClient(
+            new MockHttpClient($fake->handler(), FakeCattoMail::BASE),
+            $this->service(CattoMailConfig::class),
+            new NullLogger(),
+            static function (int $seconds): void {
+            },
+        ));
+        return $fake;
+    }
+
+    /**
      * @template T of object
      * @param class-string<T> $id
      * @return T
      */
     protected function service(string $id): object
     {
-        return self::getContainer()->get($id);
+        $service = self::getContainer()->get($id);
+        self::assertInstanceOf($id, $service);
+        return $service;
     }
 
     /** Insert a subscriber (the insert trigger adds the ALL membership) and return its id. */

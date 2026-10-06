@@ -47,7 +47,7 @@ final class SuppressionTest extends IntegrationTestCase
         self::assertTrue($checker->suppressDomain('spam.example', 'SPAM'));
         self::assertTrue($checker->isSuppressed('anyone@spam.example'));
 
-        $row = $this->banlist->fetchAssociative("SELECT gu_api, gu_domain, gu_type, gu_reason FROM globalunsubscribe WHERE gu_email = 'jane@example.com'");
+        $row = $this->banlist()->fetchAssociative("SELECT gu_api, gu_domain, gu_type, gu_reason FROM globalunsubscribe WHERE gu_email = 'jane@example.com'");
         self::assertSame(['gu_api' => 'test-instance', 'gu_domain' => 'ctnlist.test', 'gu_type' => 'USER', 'gu_reason' => 'asked'], $row);
     }
 
@@ -55,12 +55,17 @@ final class SuppressionTest extends IntegrationTestCase
     {
         $checker = $this->banlistChecker();
         $checker->suppressEmail('jane@example.com', 'USER', 'first');
-        $this->banlist->executeStatement("UPDATE globalunsubscribe SET gu_active = 0 WHERE gu_email = 'jane@example.com'");
+        $this->banlist()->executeStatement("UPDATE globalunsubscribe SET gu_active = 0 WHERE gu_email = 'jane@example.com'");
         self::assertFalse($checker->isSuppressed('jane@example.com'), 'inactive records do not suppress');
 
         self::assertTrue($checker->suppressEmail('jane@example.com', 'SPAM-ADMIN', 'again'));
         self::assertTrue($checker->isSuppressed('jane@example.com'), 'reactivated');
         self::assertFalse($checker->suppressEmail('x@example.com', 'NOT-A-TYPE', ''), 'CHECK constraint failure is reported, not thrown');
+    }
+
+    private function banlist(): Connection
+    {
+        return $this->banlist ?? throw new \LogicException('banlistChecker() connects first.');
     }
 
     private function banlistChecker(): BanlistSuppressionChecker

@@ -1,28 +1,23 @@
 {% extends 'admin/_editor_page.html.twig' %}
 
-{% block title %}{{ template.t_id ? 'Edit template' : 'Create template' }}{% endblock %}
+{# Template editor (TemplateType); invalid input shows the editor again with everything kept. #}
+{% block title %}{{ template_id ? 'Edit template' : 'Create template' }}{% endblock %}
 
 {% block content %}
-{% include 'layout/_page_header.html.twig' with {title: template.t_id ? 'Edit template' : 'Create template', description: 'Put {content} where the message body belongs, in both the HTML and the text part.'} %}
+{% include 'layout/_page_header.html.twig' with {title: template_id ? 'Edit template' : 'Create template', description: 'Put {content} where the message body belongs, in both the HTML and the text part.'} %}
 
-<form name="templateform" action="{{ path('admin_template_save') }}" method="post">
-  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-  <input type="hidden" name="t_id" value="{{ template.t_id }}">
-  <div class="mb-3 col-lg-6">
-    <label class="form-label" for="t_name">Template name</label>
-    <input class="form-control" type="text" id="t_name" name="t_name" value="{{ template.t_name }}">
-  </div>
-  <div class="mb-3">
-    <label class="form-label" for="mt_html">HTML part</label>
-    <textarea class="form-control" id="mt_html" name="mt_html" rows="20">{{ template.t_html }}</textarea>
-  </div>
-  <div class="mb-3">
-    <label class="form-label" for="t_text">Text part</label>
-    <textarea class="form-control font-monospace" id="t_text" name="t_text" rows="15">{{ template.t_text }}</textarea>
-  </div>
+{{ form_start(form) }}
+  {% if not form.vars.valid %}
+    <div class="alert alert-danger" role="alert">
+      {% if form.vars.errors|length %}{{ form_errors(form) }}{% else %}Please correct the fields marked below. Nothing was saved, and everything you entered is still here.{% endif %}
+    </div>
+  {% endif %}
+  <div class="col-lg-6">{{ form_row(form.name) }}</div>
+  {{ form_row(form.html) }}
+  {{ form_row(form.text) }}
   <div class="d-flex flex-wrap gap-2 border-top pt-3 mt-4">
     <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>Save template</button>
     <a class="btn btn-outline-secondary" href="{{ path('admin_templates') }}">Cancel</a>
   </div>
-</form>
+{{ form_end(form) }}
 {% endblock %}

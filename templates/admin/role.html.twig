@@ -30,54 +30,53 @@
 <div class="row g-4 mb-4">
   {% if custom %}
     <div class="col-lg-5">
-      <form method="post" action="{{ path('admin_role_update', {id: role.r_id}) }}" class="card h-100">
+      {{ form_start(details_form, {attr: {class: 'card h-100', id: 'role-details'}}) }}
         <div class="card-header fw-semibold">Details</div>
         <div class="card-body">
-          <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+          {{ form_errors(details_form) }}
           <div class="mb-3">
-            <label class="form-label" for="role-key">Key</label>
-            <input class="form-control" id="role-key" value="{{ role.r_key }}" readonly aria-describedby="role-key-help">
-            <div class="form-text" id="role-key-help">The key identifies the role and cannot be changed.</div>
+            <span class="form-label d-block">Key</span>
+            <code class="fs-6">{{ role.r_key }}</code>
+            <div class="form-text">The key identifies the role and cannot be changed.</div>
           </div>
-          <div class="mb-3"><label class="form-label" for="role-name">Name <span class="text-danger" aria-hidden="true">*</span></label><input class="form-control" id="role-name" name="name" value="{{ role.r_name }}" maxlength="100" required></div>
-          <div class="mb-0"><label class="form-label" for="role-description">Description</label><input class="form-control" id="role-description" name="description" value="{{ role.r_description }}"></div>
+          {{ form_row(details_form.name) }}
+          {{ form_row(details_form.description, {row_attr: {class: 'mb-0'}}) }}
         </div>
         <div class="card-footer"><button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>Save details</button></div>
-      </form>
+      {{ form_end(details_form) }}
     </div>
   {% endif %}
 
   <div class="{{ custom ? 'col-lg-7' : 'col-12' }}">
-    <form method="post" action="{{ path('admin_roles_permissions') }}" class="card h-100">
+    {{ form_start(permissions_form, {attr: {class: 'card h-100', id: 'role-permissions'}}) }}
       <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
         <span>Permissions</span>
         {% if custom and not can_edit_permissions %}<span class="small fw-normal text-body-secondary">Read only: changing them needs <code>acl.manage</code></span>{% endif %}
       </div>
       <div class="card-body">
-        <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-        <input type="hidden" name="role_id" value="{{ role.r_id }}">
-        <fieldset{{ can_edit_permissions ? '' : ' disabled' }}>
+        {% if not permissions_form.vars.valid %}<div class="alert alert-danger" role="alert">{{ form_errors(permissions_form) }}{{ form_errors(permissions_form.permissions) }}</div>{% endif %}
+        {% set by_id = {} %}
+        {% for permission in permissions %}{% set by_id = by_id|merge({('p' ~ permission.ap_id): permission}) %}{% endfor %}
+        <fieldset>
           <legend class="visually-hidden">Permissions for {{ role.r_name }}</legend>
           <div class="row g-3">
             {% for prefix, group in groups %}
               <div class="col-sm-6">
                 <div class="small fw-semibold text-uppercase text-body-secondary mb-1">{{ group_labels[prefix] ?? prefix|capitalize }}</div>
-                {% for permission in group %}
-                  {% set id = 'rp-' ~ permission.ap_id %}
-                  <div class="form-check">
-                    <input class="form-check-input" type="checkbox" name="permission_ids[]" value="{{ permission.ap_id }}" id="{{ id }}"{{ permission.ap_id in granted ? ' checked' }}>
-                    <label class="form-check-label" for="{{ id }}">{{ permission.ap_name }} <code class="small">{{ permission.ap_key }}</code></label>
-                  </div>
+                {% for choice in permissions_form.permissions|filter(c => c.vars.label|split('.')|first == prefix) %}
+                  {% set permission = by_id['p' ~ choice.vars.value] %}
+                  {{ form_widget(choice, {label: permission.ap_name|e ~ ' <code class="small">' ~ permission.ap_key|e ~ '</code>', label_html: true}) }}
                 {% endfor %}
               </div>
             {% endfor %}
           </div>
+          {% do permissions_form.permissions.setRendered %}
         </fieldset>
       </div>
       {% if can_edit_permissions %}
         <div class="card-footer"><button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>Save permissions</button></div>
       {% endif %}
-    </form>
+    {{ form_end(permissions_form) }}
   </div>
 </div>
 

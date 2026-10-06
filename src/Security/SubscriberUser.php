@@ -29,7 +29,7 @@ final class SubscriberUser implements UserInterface
 
     public function getUserIdentifier(): string
     {
-        return $this->uuid;
+        return $this->uuid !== '' ? $this->uuid : throw new \LogicException('A signed-in subscriber always has a UUID.');
     }
 
     /** @return list<string> ROLE_USER plus ROLE_<KEY> per role, e.g. ROLE_ADMINISTRATOR */

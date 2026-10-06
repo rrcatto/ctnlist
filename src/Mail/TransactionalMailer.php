@@ -10,6 +10,7 @@ use App\Log\MessageLog;
 use App\Log\SendLog;
 use App\Repository\SubscriberRepository;
 use App\Subscriber\Engagement;
+use App\Util\Duration;
 use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
 
@@ -69,7 +70,7 @@ final class TransactionalMailer
      */
     public function sendMagicLink(string $toEmail, string $subscriberUuid, string $loginUrl, int $ttlSeconds, ?string $confirmListName = null): bool
     {
-        $minutes = max(1, (int) ceil($ttlSeconds / 60));
+        $lifetime = Duration::describe($ttlSeconds);
         $list = $this->site->listName;
         if ($confirmListName !== null) {
             $subject = 'Confirm your subscription to ' . $confirmListName;
@@ -82,10 +83,10 @@ final class TransactionalMailer
         }
         $html = '<p>' . self::e($intro) . '</p>'
             . '<p><a href="' . self::e($loginUrl) . '">' . self::e($action) . '</a></p>'
-            . '<p>This link expires in ' . $minutes . ' minutes and can be used only once.</p>'
+            . '<p>This link expires in ' . $lifetime . ' and can be used only once.</p>'
             . '<p>If you did not request this link, you can ignore this email.</p>';
         $text = "{$intro}\n\n{$loginUrl}\n\n"
-            . "This link expires in {$minutes} minutes and can be used only once.\n"
+            . "This link expires in {$lifetime} and can be used only once.\n"
             . "If you did not request this link, you can ignore this email.\n";
         return $this->sendPlain($toEmail, $subject, $html, $text, 'MAGIC-LINK', '', $subscriberUuid);
     }
@@ -192,9 +193,11 @@ final class TransactionalMailer
         }
     }
 
+    /** A display name is cosmetic: control characters (e.g. line breaks typed into a form) become spaces rather than failing the mail. */
     private static function address(string $email, string $name = ''): Address
     {
-        return trim($name) === '' ? new Address(trim($email)) : new Address(trim($email), trim($name));
+        $name = trim((string) preg_replace('/[\x00-\x1F\x7F]+/', ' ', $name));
+        return $name === '' ? new Address(trim($email)) : new Address(trim($email), $name);
     }
 
     private static function e(string $value): string

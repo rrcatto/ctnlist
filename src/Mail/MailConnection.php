@@ -57,12 +57,13 @@ final class MailConnection
     /** Hand the message to the transport; false (and logged) on failure. */
     public function send(Email $email): bool
     {
-        if ($this->transport === null) {
+        $transport = $this->transport;
+        if ($transport === null) {
             return false;
         }
         try {
             $this->throttle();
-            $this->transport->send($email);
+            $transport->send($email);
             $this->lastSendAt = microtime(true);
             return true;
         } catch (\Throwable $e) {

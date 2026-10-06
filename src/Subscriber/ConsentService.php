@@ -55,7 +55,7 @@ final class ConsentService
             $this->messageLog->record($user->uuid, $muid, MessageActivity::Confirm);
         }
 
-        $this->notify($user, 'CONFIRM', $list, $muid,
+        $this->notify($user->email, $user->uuid, trim($user->firstName . ' ' . $user->lastName), 'CONFIRM', $list, $muid,
             $user->email . ' has confirmed subscription to ' . $list['l_name'],
             '<p>' . self::e($user->email) . ' has confirmed their subscription to <strong>' . self::e($list['l_name']) . '</strong>.</p>',
             "{$user->email} has confirmed their subscription to {$list['l_name']}.\n");
@@ -71,32 +71,52 @@ final class ConsentService
      */
     public function unsubscribe(SubscriberUser $user, array $list, string $scope, string $reason, string $muid = '', bool $byAdministrator = false): string
     {
+        return $this->unsubscribeSubscriber($user->id, $user->uuid, $user->email, trim($user->firstName . ' ' . $user->lastName), $list, $scope, $reason, $muid, $byAdministrator);
+    }
+
+    /**
+     * The one-click unsubscribe link of a delivered message (List-Unsubscribe,
+     * RFC 8058): this list only. Ordinary unsubscribe state stays in ctnlist;
+     * it is never reported to catto-mail.
+     *
+     * @param array{s_id: int, s_uuid: string, s_email: string, s_fname: string, s_lname: string} $subscriber
+     * @param MailingList $list
+     */
+    public function unsubscribeByLink(array $subscriber, array $list, string $muid = ''): string
+    {
+        return $this->unsubscribeSubscriber($subscriber['s_id'], $subscriber['s_uuid'], $subscriber['s_email'], trim($subscriber['s_fname'] . ' ' . $subscriber['s_lname']),
+            $list, 'list', 'One-click unsubscribe link', $muid, false);
+    }
+
+    /** @param MailingList $list */
+    private function unsubscribeSubscriber(int $id, string $uuid, string $email, string $name, array $list, string $scope, string $reason, string $muid, bool $byAdministrator): string
+    {
         $reason = trim($reason);
         $global = in_array($scope, ['global', 'bounce', 'spam'], true);
         if ($global) {
-            $this->memberships->unsubscribeAll($user->id, $reason, $this->now());
+            $this->memberships->unsubscribeAll($id, $reason, $this->now());
             $type = ['global' => 'USER', 'bounce' => 'BOUNCE', 'spam' => 'SPAM'][$scope];
             if ($byAdministrator) {
                 $type = $scope === 'global' ? 'ADMIN' : $type . '-ADMIN';
             }
-            $this->suppression->suppressEmail($user->email, $type, $reason);
+            $this->suppression->suppressEmail($email, $type, $reason);
         } else {
-            $this->memberships->unsubscribe($user->id, $list['l_id'], $reason, $this->now());
+            $this->memberships->unsubscribe($id, $list['l_id'], $reason, $this->now());
         }
 
-        $this->engagement->reset($user->uuid);
+        $this->engagement->reset($uuid);
         if ($muid !== '') {
-            $this->messageLog->record($user->uuid, $muid, MessageActivity::Unsubscribe);
+            $this->messageLog->record($uuid, $muid, MessageActivity::Unsubscribe);
         }
 
         $why = $reason !== '' ? $reason : 'No reason supplied';
-        $resubscribe = rtrim($this->site->baseUrl, '/') . '/confirm/' . rawurlencode($user->uuid) . '/' . rawurlencode($list['l_shortcode'])
+        $resubscribe = rtrim($this->site->baseUrl, '/') . '/confirm/' . rawurlencode($uuid) . '/' . rawurlencode($list['l_shortcode'])
             . ($muid !== '' ? '/' . rawurlencode($muid) : '');
-        $this->notify($user, 'UNSUBSCRIBE', $list, $muid,
-            $user->email . ' has been unsubscribed from ' . $list['l_name'],
-            '<p>' . self::e($user->email) . ' has been unsubscribed from <strong>' . self::e($list['l_name']) . '</strong>.</p>'
+        $this->notify($email, $uuid, $name, 'UNSUBSCRIBE', $list, $muid,
+            $email . ' has been unsubscribed from ' . $list['l_name'],
+            '<p>' . self::e($email) . ' has been unsubscribed from <strong>' . self::e($list['l_name']) . '</strong>.</p>'
                 . '<p>Reason: ' . self::e($why) . '</p><p><a href="' . self::e($resubscribe) . '">Re-subscribe</a></p>',
-            "{$user->email} has been unsubscribed from {$list['l_name']}.\nReason: {$why}\nRe-subscribe: {$resubscribe}\n");
+            "{$email} has been unsubscribed from {$list['l_name']}.\nReason: {$why}\nRe-subscribe: {$resubscribe}\n");
 
         return $global
             ? 'You have been unsubscribed from all local lists and added to the global suppression database.'
@@ -104,12 +124,9 @@ final class ConsentService
     }
 
     /** @param MailingList $list */
-    private function notify(SubscriberUser $user, string $type, array $list, string $muid, string $subject, string $html, string $text): void
+    private function notify(string $email, string $uuid, string $name, string $type, array $list, string $muid, string $subject, string $html, string $text): void
     {
-        $this->mailer->sendNotification(
-            $muid, $type, $this->site->fromAddress, $user->email, trim($user->firstName . ' ' . $user->lastName),
-            $subject, $html, $text, $user->uuid, $list['l_shortcode']
-        );
+        $this->mailer->sendNotification($muid, $type, $this->site->fromAddress, $email, $name, $subject, $html, $text, $uuid, $list['l_shortcode']);
     }
 
     private function now(): string

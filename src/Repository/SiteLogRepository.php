@@ -58,19 +58,19 @@ final class SiteLogRepository
                 static fn(string $column): string => "LOWER(COALESCE({$column}, '')) LIKE LOWER(:keyword)",
                 ['stl_email', 'stl_url', 'stl_ip', 'stl_host', 'stl_xfwdfor', 'stl_agent']
             )) . ')';
-            $params['keyword'] = '%' . $f('q') . '%';
+            $params['keyword'] = Like::contains($f('q'));
         }
         if ($f('e') !== '') {
             $parts[] = "LOWER(COALESCE(stl_email, '')) LIKE LOWER(:email)";
-            $params['email'] = '%' . $f('e') . '%';
+            $params['email'] = Like::contains($f('e'));
         }
         if ($f('u') !== '') {
             $parts[] = "LOWER(COALESCE(stl_url, '')) LIKE LOWER(:url)";
-            $params['url'] = '%' . $f('u') . '%';
+            $params['url'] = Like::contains($f('u'));
         }
         if ($f('ip') !== '') {
             $parts[] = "(COALESCE(stl_ip, '') LIKE :ip OR COALESCE(stl_xfwdfor, '') LIKE :ip)";
-            $params['ip'] = '%' . $f('ip') . '%';
+            $params['ip'] = Like::contains($f('ip'));
         }
         if ($f('li') === '1' || $f('li') === '0') {
             $parts[] = 'stl_logged_in = :logged';

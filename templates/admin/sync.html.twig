@@ -1,0 +1,21 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Synchronise subscribers{% endblock %}
+
+{% block content %}
+{% include 'layout/_page_header.html.twig' with {title: 'Synchronise subscribers', description: 'Copies subscriber records to the other installations listed in SYNC_DATABASES_JSON (the v5 cross-installation synchronisation).'} %}
+<form method="post" action="{{ path('admin_sync_submit') }}" class="card app-narrow ms-0" data-confirm="Synchronise subscribers with {{ targets }} other installation(s)?">
+  <div class="card-body">
+    <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+    {% if targets == 0 %}
+      <p class="mb-0 text-body-secondary">No active synchronisation targets are configured; synchronising does nothing.</p>
+    {% else %}
+      <p class="mb-0">{{ targets }} active target{{ targets == 1 ? '' : 's' }} configured. This can take a long time.</p>
+    {% endif %}
+  </div>
+  <div class="card-footer d-flex flex-wrap gap-2">
+    <button class="btn btn-primary" type="submit"{{ targets == 0 ? ' disabled' }}><i class="bi bi-arrow-left-right me-1" aria-hidden="true"></i>Synchronise now</button>
+    <a class="btn btn-outline-secondary" href="{{ path('admin_subscribers') }}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

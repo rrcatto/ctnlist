@@ -26,6 +26,12 @@ final class MagicLinkRequester
     /** Actions a link may return to (see LoginReturnPath). */
     public const RETURN_ACTIONS = ['profile', 'messages', 'confirm', 'unsubscribe', 'forward', 'like', 'dislike', 'resend'];
 
+    /** How long a link stays valid (AUTH_MAGIC_LINK_TTL, Settings override first): used for the token and every wording of it. */
+    public function lifetimeSeconds(): int
+    {
+        return $this->settings->int('AUTH_MAGIC_LINK_TTL', 1800);
+    }
+
     public function __construct(
         private readonly SubscriberRepository $subscribers,
         private readonly AuthLoginTokenRepository $tokens,
@@ -73,7 +79,7 @@ final class MagicLinkRequester
             $email,
             $hash,
             $now->format('Y-m-d H:i:s'),
-            date('Y-m-d H:i:s', $now->getTimestamp() + $this->settings->int('AUTH_MAGIC_LINK_TTL', 1800)),
+            date('Y-m-d H:i:s', $now->getTimestamp() + $this->lifetimeSeconds()),
             $ip,
             (string) $request?->headers->get('User-Agent', ''),
             $returnAction,
@@ -83,7 +89,7 @@ final class MagicLinkRequester
         $url = rtrim($this->site->baseUrl, '/') . '/auth/verify?token=' . rawurlencode($token);
         // Asked for to confirm a list (subscribe form, consent link): the email says so.
         $confirmList = $returnAction === 'confirm' && $returnListId !== null ? $this->lists->findById($returnListId) : null;
-        if (!$this->mailer->sendMagicLink($email, $found['identity']['s_uuid'], $url, $this->settings->int('AUTH_MAGIC_LINK_TTL', 1800), $confirmList['l_name'] ?? null)) {
+        if (!$this->mailer->sendMagicLink($email, $found['identity']['s_uuid'], $url, $this->lifetimeSeconds(), $confirmList['l_name'] ?? null)) {
             $this->tokens->delete($hash);
             return false;
         }

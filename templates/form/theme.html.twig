@@ -1,0 +1,31 @@
+{#
+  Application form theme on top of Symfony's Bootstrap 5 layout (set in
+  config/packages/twig.yaml):
+  - every widget, also one rendered with form_widget() outside form_row(),
+    is linked to its help text and errors (aria-describedby) and marked
+    aria-invalid when it has errors;
+  - forms are validated on the server only (novalidate), so every error is
+    shown at its field the same way;
+  - labels of required fields get the .required marker (app.css).
+#}
+{% extends 'bootstrap_5_layout.html.twig' %}
+
+{%- block form_start -%}
+    {%- set attr = attr|merge({novalidate: 'novalidate'}) -%}
+    {{- parent() -}}
+{%- endblock form_start -%}
+
+{%- block widget_attributes -%}
+    {%- set described = [] -%}
+    {%- if help is defined and help -%}
+        {%- set described = described|merge([id ~ '_help']) -%}
+    {%- endif -%}
+    {%- if errors|length > 0 -%}
+        {%- set described = described|merge(errors|map((_, index) => id ~ '_error' ~ (index + 1))) -%}
+        {%- set attr = attr|merge({'aria-invalid': 'true'}) -%}
+    {%- endif -%}
+    {%- if described|length > 0 and attr['aria-describedby'] is not defined -%}
+        {%- set attr = attr|merge({'aria-describedby': described|join(' ')}) -%}
+    {%- endif -%}
+    {{- parent() -}}
+{%- endblock widget_attributes -%}

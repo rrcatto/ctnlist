@@ -13,7 +13,7 @@ namespace App\Config;
  * quarter of the row); `heading` starts a sub-section before the field.
  *
  * Types: text, textarea, email, url, int, bool, dsn (MAILER_DSN, edited as
- * separate SMTP fields), servers (MAIL_SMTP_SERVERS_JSON). `secret` values are
+ * separate SMTP fields). `secret` values are
  * encrypted at rest and never written into the page.
  *
  * `default` is the value the application uses when .env does not set the
@@ -68,15 +68,11 @@ final class SettingsCatalogue
         ],
         'smtp' => [
             'tab' => 'SMTP',
-            'label' => 'SMTP servers',
-            'description' => 'The main server and the campaign failover servers, and the sending pace. Changes apply to the next email sent; a send that is already running keeps the settings it started with.',
+            'label' => 'Transactional mail',
+            'description' => 'The SMTP server for transactional mail (sign-in links, invitations, notifications, contact acknowledgements) and its pace. Campaign content (queue sends, proofs, resends, forwards) is delivered by catto-mail, configured in .env.',
             'settings' => [
-                'MAILER_DSN' => ['width' => 'full', 'label' => 'Main SMTP server', 'type' => 'dsn', 'secret' => true, 'optional' => true, 'help' => 'Used for transactional mail, and for campaigns when no failover servers are set.'],
-                'MAIL_SMTP_SERVERS_JSON' => ['width' => 'full', 'default' => '[]', 'label' => 'Campaign failover servers', 'type' => 'servers', 'secret' => true, 'optional' => true, 'help' => 'Campaigns use the active servers in this order, moving to the next when one fails. Without any, campaigns use the main server.'],
+                'MAILER_DSN' => ['width' => 'full', 'label' => 'SMTP server', 'type' => 'dsn', 'secret' => true, 'optional' => true, 'help' => 'Used for transactional mail only.'],
                 'MAIL_RATE_PER_MINUTE' => ['heading' => 'Sending pace', 'width' => 'quarter', 'default' => '13', 'label' => 'Messages per minute', 'type' => 'int', 'min' => 0, 'help' => '0 sends as fast as the server accepts.'],
-                'MAIL_BATCH_SIZE' => ['width' => 'quarter', 'default' => '600', 'label' => 'Batch size', 'type' => 'int', 'min' => 1, 'help' => 'Queue entries fetched per batch (main server).'],
-                'MAIL_BATCH_DELAY' => ['width' => 'quarter', 'default' => '0', 'label' => 'Batch pause (s)', 'type' => 'int', 'min' => 0, 'help' => 'Seconds between batches (main server).'],
-                'MAIL_BOUNCE_LIMIT' => ['width' => 'quarter', 'default' => '2', 'label' => 'Bounce limit', 'type' => 'int', 'min' => 0, 'help' => 'Bounces before a subscriber is skipped.'],
             ],
         ],
         'contact_form' => [
@@ -87,6 +83,7 @@ final class SettingsCatalogue
                 'CONTACT_MAIL_ADDRESS' => ['width' => 'half', 'label' => 'Messages go to', 'type' => 'email', 'optional' => true, 'help' => 'Defaults to the administrator address.'],
                 'CONTACT_MAIL_NAME' => ['width' => 'half', 'label' => 'Acknowledgement from', 'type' => 'text', 'optional' => true],
                 'CONTACT_MAIL_SUBJECT' => ['width' => 'full', 'default' => 'Your message has been received', 'label' => 'Acknowledgement subject', 'type' => 'text', 'optional' => true],
+                'CONTACT_RATE_LIMIT' => ['width' => 'third', 'default' => '5', 'label' => 'Messages per hour', 'type' => 'int', 'min' => 1, 'help' => 'Contact messages accepted per hour from one IP address, and for one email address.'],
             ],
         ],
         'subscription' => [
@@ -111,7 +108,7 @@ final class SettingsCatalogue
         'signin' => [
             'tab' => 'Sign-in',
             'label' => 'Sign-in',
-            'description' => 'Email sign-in links and how long a sign-in lasts.',
+            'description' => 'Email sign-in links, how long a sign-in lasts, and how often subscribers may forward or resend.',
             'settings' => [
                 'AUTH_MAGIC_LINK_TTL' => ['width' => 'third', 'default' => '1800', 'label' => 'Link lifetime (s)', 'type' => 'int', 'min' => 60, 'help' => 'How long a sign-in link stays valid.'],
                 'AUTH_MAGIC_LINK_MAX_PER_EMAIL' => ['width' => 'third', 'default' => '5', 'label' => 'Links per address', 'type' => 'int', 'min' => 1, 'help' => 'Sign-in links one address may request…'],
@@ -119,6 +116,7 @@ final class SettingsCatalogue
                 'AUTH_SESSION_TTL' => ['width' => 'third', 'default' => '86400', 'label' => 'Session length (s)', 'type' => 'int', 'min' => 300, 'help' => 'How long a sign-in lasts.'],
                 'AUTH_MAGIC_LINK_MAX_PER_IP' => ['width' => 'third', 'default' => '20', 'label' => 'Links per IP address', 'type' => 'int', 'min' => 1, 'help' => 'Sign-in links one IP address may request…'],
                 'AUTH_MAGIC_LINK_IP_WINDOW' => ['width' => 'third', 'default' => '3600', 'label' => 'IP window (s)', 'type' => 'int', 'min' => 60, 'help' => '… within this many seconds.'],
+                'FORWARD_RATE_LIMIT' => ['width' => 'third', 'default' => '10', 'label' => 'Forwards per hour', 'type' => 'int', 'min' => 1, 'help' => 'Forwards and resends one subscriber may make per hour (administrators are not limited).'],
             ],
         ],
     ];

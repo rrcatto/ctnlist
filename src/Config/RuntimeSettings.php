@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Config;
 
-use App\Mail\SmtpServer;
 use App\Repository\SettingRepository;
 use Doctrine\DBAL\Exception as DbalException;
 use Psr\Log\LoggerInterface;
@@ -22,7 +21,6 @@ use Psr\Log\LoggerInterface;
  *
  * @phpstan-import-type Setting from SettingsCatalogue
  * @phpstan-import-type StoredSetting from SettingRepository
- * @phpstan-type ServerRow array{index: string, active: bool, host: string, port: string, security: string, username: string, has_password: bool, batchsize: string, delay: string, sendrate: string}
  */
 final class RuntimeSettings
 {
@@ -125,13 +123,13 @@ final class RuntimeSettings
 
     /**
      * Validate and store one group of the Settings page. Each value equal to
-     * .env (or, for numbers, switches and server lists .env leaves unset, the
+     * .env (or, for numbers and switches .env leaves unset, the
      * default) removes that override; any other value is stored, secrets
      * encrypted.
      *
      * @param array<string, mixed> $input
      * @return list<string> the names whose override was set or removed
-     * @throws \InvalidArgumentException naming the first invalid field
+     * @throws \InvalidArgumentException for an unknown group
      * @throws SettingsCipherException when a secret must be stored but APP_SETTINGS_KEY is unusable
      */
     public function save(string $group, array $input, ?int $updatedBy): array
@@ -145,9 +143,7 @@ final class RuntimeSettings
         foreach ($values as $name => $value) {
             $setting = $settings[$name];
             $inherited = $this->inherited($name, $setting);
-            $equal = $setting['type'] === 'servers'
-                ? self::canonicalServers($value) === self::canonicalServers($inherited)
-                : $value === self::normalise($setting, $inherited);
+            $equal = $value === self::normalise($setting, $inherited);
             if ($equal) {
                 if ($this->settings->delete($name)) {
                     $changed[] = $name;
@@ -218,32 +214,6 @@ final class RuntimeSettings
         ];
     }
 
-    /**
-     * MAIL_SMTP_SERVERS_JSON entries as editable rows, in failover order, without passwords.
-     *
-     * @return list<ServerRow>
-     */
-    public static function serverRows(string $json): array
-    {
-        $rows = [];
-        foreach (self::serverEntries($json) as $index => $entry) {
-            $fields = self::serverFields($entry);
-            $rows[] = [
-                'index' => (string) $index,
-                'active' => (int) ($entry['active'] ?? 0) === 1,
-                'host' => $fields['host'],
-                'port' => $fields['port'],
-                'security' => $fields['enc'],
-                'username' => $fields['user'],
-                'has_password' => $fields['pass'] !== '',
-                'batchsize' => (string) ($entry['batchsize'] ?? 600),
-                'delay' => (string) ($entry['delay'] ?? 10),
-                'sendrate' => isset($entry['sendrate']) ? (string) $entry['sendrate'] : '',
-            ];
-        }
-        return $rows;
-    }
-
     /** @return array<string, Setting> */
     private static function group(string $group): array
     {
@@ -268,7 +238,7 @@ final class RuntimeSettings
 
     /**
      * The value the setting falls back to without an override: .env, or for
-     * numbers, switches and server lists that .env leaves unset, the default
+     * numbers and switches that .env leaves unset, the default
      * (text stays blank: blank already means the default).
      *
      * @param Setting $setting
@@ -276,10 +246,15 @@ final class RuntimeSettings
     private function inherited(string $name, array $setting): string
     {
         $env = $this->envValue($name);
-        return $env === '' && in_array($setting['type'], ['int', 'bool', 'servers'], true) ? ($setting['default'] ?? '') : $env;
+        return $env === '' && in_array($setting['type'], ['int', 'bool'], true) ? ($setting['default'] ?? '') : $env;
     }
 
     /**
+     * The value to store from the submitted input: trimmed and normalised,
+     * with defaults for empty numbers and switches. Input rules (email, URL,
+     * ranges, host and port syntax) are enforced by the Settings form
+     * (App\Form\Settings\SettingConstraints) before save() is called.
+     *
      * @param Setting $setting
      * @param array<string, mixed> $input
      */
@@ -287,43 +262,14 @@ final class RuntimeSettings
     {
         $raw = $input[$name] ?? '';
         $value = is_scalar($raw) ? trim((string) $raw) : '';
-        $label = $setting['label'];
-        $optional = ($setting['optional'] ?? false) || isset($setting['default']);
         if ($value === '' && isset($setting['default']) && in_array($setting['type'], ['int', 'bool'], true)) {
             $value = $setting['default'];
         }
-
-        switch ($setting['type']) {
-            case 'bool':
-                return self::normalise($setting, $value);
-            case 'int':
-                if (!preg_match('/^-?\d+$/', $value) || (int) $value < ($setting['min'] ?? PHP_INT_MIN)) {
-                    throw new \InvalidArgumentException(sprintf('%s must be a whole number%s.', $label, isset($setting['min']) ? ' of at least ' . $setting['min'] : ''));
-                }
-                return (string) (int) $value;
-            case 'email':
-                if ($value === '' ? !$optional : filter_var($value, FILTER_VALIDATE_EMAIL) === false) {
-                    throw new \InvalidArgumentException(sprintf('%s must be a valid email address.', $label));
-                }
-                return $value;
-            case 'url':
-                if ($value !== '' && (filter_var($value, FILTER_VALIDATE_URL) === false || !preg_match('#^https?://#i', $value))) {
-                    throw new \InvalidArgumentException(sprintf('%s must be a full web address (https://…).', $label));
-                }
-                return $value;
-            case 'dsn':
-                return $this->dsnFromInput($input);
-            case 'servers':
-                return $this->serversFromInput($name, $input);
-            default:
-                if ($value === '' && !$optional) {
-                    throw new \InvalidArgumentException(sprintf('%s is required.', $label));
-                }
-                if (mb_strlen($value) > 2000) {
-                    throw new \InvalidArgumentException(sprintf('%s is too long.', $label));
-                }
-                return $value;
-        }
+        return match ($setting['type']) {
+            'bool', 'int' => self::normalise($setting, $value),
+            'dsn' => $this->dsnFromInput($input),
+            default => $value,
+        };
     }
 
     /** @param array<string, mixed> $input */
@@ -336,12 +282,8 @@ final class RuntimeSettings
             $current = $this->get('MAILER_DSN');
             return self::dsnParts($current)['other'] !== '' ? $current : '';
         }
-        self::validateHost($host, 'the main SMTP server');
-        $port = self::validatePort($field('smtp_port'), 'the main SMTP server');
+        $port = $field('smtp_port') === '' ? '' : (string) (int) $field('smtp_port');
         $options = ltrim($field('smtp_options'), '?');
-        if (preg_match('/[\s#]/', $options) === 1) {
-            throw new \InvalidArgumentException('SMTP options may not contain spaces or #.');
-        }
         $username = $field('smtp_username');
         $password = is_scalar($input['smtp_password'] ?? null) ? (string) $input['smtp_password'] : '';
         if ($password === '' && $username !== '') {
@@ -351,141 +293,6 @@ final class RuntimeSettings
         $credentials = $username === '' ? '' : rawurlencode($username) . ($password !== '' ? ':' . rawurlencode($password) : '') . '@';
         $scheme = $field('smtp_scheme') === 'smtps' ? 'smtps' : 'smtp';
         return $scheme . '://' . $credentials . $host . ($port !== '' ? ':' . $port : '') . ($options !== '' ? '?' . $options : '');
-    }
-
-    /**
-     * The failover servers from their form rows (`servers[i][…]`), in the
-     * order given by `position`. Blank rows and rows marked for removal are
-     * dropped; an empty password keeps the server's current one.
-     *
-     * @param array<string, mixed> $input
-     */
-    private function serversFromInput(string $name, array $input): string
-    {
-        $rows = is_array($input['servers'] ?? null) ? $input['servers'] : [];
-        $current = self::serverEntries($this->get($name));
-        $entries = [];
-        foreach (array_values($rows) as $n => $row) {
-            if (!is_array($row)) {
-                continue;
-            }
-            $field = static fn(string $key): string => is_scalar($row[$key] ?? null) ? trim((string) $row[$key]) : '';
-            $host = $field('host');
-            if ($host === '' || $field('remove') === '1') {
-                continue;
-            }
-            $label = 'failover server ' . $host;
-            self::validateHost($host, $label);
-            $security = $field('security');
-            if (!in_array($security, ['', 'tls', 'ssl'], true)) {
-                throw new \InvalidArgumentException(sprintf('Choose the security mode for %s.', $label));
-            }
-            $user = $field('username');
-            $pass = is_scalar($row['password'] ?? null) ? (string) $row['password'] : '';
-            $original = $field('index') !== '' ? ($current[(int) $field('index')] ?? null) : null;
-            if ($pass === '' && $user !== '' && $original !== null) {
-                $pass = self::serverFields($original)['pass'];
-            }
-            $entry = [
-                'active' => $field('active') === '1' ? 1 : 0,
-                'host' => $host,
-                'port' => (int) (self::validatePort($field('port'), $label) ?: ($security === 'ssl' ? 465 : 25)),
-                'user' => $user,
-                'pass' => $user === '' ? '' : $pass,
-                'enc' => $security,
-                'batchsize' => self::boundedInt($field('batchsize'), 1, 600, 'Batch size for ' . $label),
-                'delay' => self::boundedInt($field('delay'), 0, 10, 'Delay for ' . $label),
-            ];
-            if ($field('sendrate') !== '') {
-                $entry['sendrate'] = self::boundedInt($field('sendrate'), 0, 0, 'Messages per minute for ' . $label);
-            }
-            $position = $field('position');
-            $entries[] = [is_numeric($position) ? (int) $position : PHP_INT_MAX, $n, $entry];
-        }
-        usort($entries, static fn(array $a, array $b): int => [$a[0], $a[1]] <=> [$b[0], $b[1]]);
-        return (string) json_encode(array_column($entries, 2), JSON_UNESCAPED_SLASHES);
-    }
-
-    /** @return list<array<string, mixed>> */
-    private static function serverEntries(string $json): array
-    {
-        $decoded = json_decode($json === '' ? '[]' : $json, true);
-        return is_array($decoded) ? array_values(array_filter($decoded, 'is_array')) : [];
-    }
-
-    /**
-     * Host/port/user/pass/enc of an entry given either as fields or as `dsn`.
-     *
-     * @param array<string, mixed> $entry
-     * @return array{host: string, port: string, user: string, pass: string, enc: string}
-     */
-    private static function serverFields(array $entry): array
-    {
-        $dsn = trim((string) ($entry['dsn'] ?? ''));
-        if ($dsn === '') {
-            return [
-                'host' => (string) ($entry['host'] ?? ''),
-                'port' => isset($entry['port']) ? (string) $entry['port'] : '',
-                'user' => (string) ($entry['user'] ?? ''),
-                'pass' => (string) ($entry['pass'] ?? ''),
-                'enc' => in_array($entry['enc'] ?? '', ['tls', 'ssl'], true) ? (string) $entry['enc'] : '',
-            ];
-        }
-        $parts = parse_url($dsn) ?: [];
-        parse_str((string) ($parts['query'] ?? ''), $query);
-        return [
-            'host' => (string) ($parts['host'] ?? ''),
-            'port' => isset($parts['port']) ? (string) $parts['port'] : '',
-            'user' => rawurldecode((string) ($parts['user'] ?? '')),
-            'pass' => rawurldecode((string) ($parts['pass'] ?? '')),
-            'enc' => strtolower((string) ($parts['scheme'] ?? '')) === 'smtps' ? 'ssl' : (($query['require_tls'] ?? '') === 'true' ? 'tls' : ''),
-        ];
-    }
-
-    /**
-     * What a server list means to the mailer (transport, batching, rate,
-     * active), so lists written differently but meaning the same compare equal.
-     *
-     * @return list<array{bool, string, int, int, int}>
-     */
-    private static function canonicalServers(string $json): array
-    {
-        $canonical = [];
-        foreach (self::serverEntries($json) as $entry) {
-            try {
-                $server = SmtpServer::fromConfig($entry, -1);
-            } catch (\InvalidArgumentException) {
-                continue;
-            }
-            $canonical[] = [(int) ($entry['active'] ?? 0) === 1, $server->dsn, $server->batchSize, $server->delay, $server->sendRate];
-        }
-        return $canonical;
-    }
-
-    private static function validateHost(string $host, string $label): void
-    {
-        if (preg_match('/^[A-Za-z0-9.-]{1,253}$/', $host) !== 1 && filter_var(trim($host, '[]'), FILTER_VALIDATE_IP) === false) {
-            throw new \InvalidArgumentException(sprintf('Enter a valid host name for %s.', $label));
-        }
-    }
-
-    private static function validatePort(string $port, string $label): string
-    {
-        if ($port !== '' && (!ctype_digit($port) || (int) $port < 1 || (int) $port > 65535)) {
-            throw new \InvalidArgumentException(sprintf('The port for %s must be between 1 and 65535.', $label));
-        }
-        return $port === '' ? '' : (string) (int) $port;
-    }
-
-    private static function boundedInt(string $value, int $min, int $default, string $label): int
-    {
-        if ($value === '') {
-            return $default;
-        }
-        if (!preg_match('/^\d+$/', $value) || (int) $value < $min) {
-            throw new \InvalidArgumentException(sprintf('%s must be a whole number of at least %d.', $label, $min));
-        }
-        return (int) $value;
     }
 
     /** @param Setting $setting */

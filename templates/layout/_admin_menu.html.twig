@@ -16,13 +16,14 @@
     {label: 'All templates', route: 'admin_templates', permission: 'templates.manage', counter: 'templates'},
     {label: 'New template', route: 'admin_template', permission: 'templates.manage'},
   ]},
-  {label: 'Sending', icon: 'send', routes: ['admin_queue', 'admin_queue_message', 'admin_queue_rotation', 'admin_queue_process', 'admin_queue_stop'], items: [
+  {label: 'Sending', icon: 'send', routes: ['admin_queue', 'admin_queue_message', 'admin_queue_rotation', 'admin_queue_process', 'admin_queue_stop', 'admin_delivery', 'admin_delivery_message', 'admin_delivery_job', 'admin_delivery_recipient'], items: [
     {label: 'Queue', route: 'admin_queue', permission: 'queue.process', counter: 'queue', badge: true},
     {label: 'Queue multiple messages', route: 'admin_queue_rotation', permission: 'messages.queue'},
     {label: 'Start sending', route: 'admin_queue_process', permission: 'queue.process'},
     {label: 'Stop sending', route: 'admin_queue_stop', permission: 'queue.process'},
+    {label: 'Delivery (catto-mail)', route: 'admin_delivery', permission: 'logs.view'},
   ]},
-  {label: 'Subscribers', icon: 'people', routes: ['admin_subscribers', 'admin_subscribers_active', 'admin_subscriber', 'admin_bulk_subscribe', 'admin_bulk_unsubscribe', 'admin_import', 'admin_export', 'admin_sync'], items: [
+  {label: 'Subscribers', icon: 'people', routes: ['admin_subscribers', 'admin_subscribers_active', 'admin_subscriber', 'admin_bulk_subscribe', 'admin_bulk_unsubscribe', 'admin_import', 'admin_export', 'admin_sync', 'admin_validation', 'admin_validation_job'], items: [
     {label: 'All subscribers', route: 'admin_subscribers', permission: 'subscribers.view', counter: 'subscribers'},
     {label: 'Active readers', route: 'admin_subscribers_active', permission: 'subscribers.view', counter: 'activeReaders'},
     {label: 'Bulk subscribe', route: 'admin_bulk_subscribe', permission: 'subscribers.manage'},
@@ -30,6 +31,7 @@
     {label: 'Import', route: 'admin_import', permission: 'subscribers.manage'},
     {label: 'Export', route: 'admin_export', permission: 'subscribers.manage'},
     {label: 'Synchronise', route: 'admin_sync', permission: 'subscribers.manage'},
+    {label: 'Address validation', route: 'admin_validation', permission: 'subscribers.manage'},
   ]},
   {label: 'Lists', icon: 'list-ul', routes: ['admin_lists'], items: [
     {label: 'Lists', route: 'admin_lists', permission: 'lists.manage'},
@@ -76,7 +78,7 @@
             <li class="nav-item dropdown">
               <a class="nav-link dropdown-toggle{{ group_active ? ' active' }}" href="#" id="{{ menu_id }}" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                 <i class="bi bi-{{ group.icon }} me-1" aria-hidden="true"></i>{{ group.label }}
-                {%- set badge_item = group.items|filter(item => item.badge ?? false)|first %}
+                {%- set badge_item = group.items|filter(item => (item.badge ?? false))|first %}
                 {%- if badge_item %}
                   <span class="badge rounded-pill text-bg-secondary ms-1">{{ attribute(counters, badge_item.counter) }}</span>
                 {%- endif %}

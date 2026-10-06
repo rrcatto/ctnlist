@@ -1,37 +1,41 @@
 {% extends 'base.html.twig' %}
 {% import 'admin/_macros.html.twig' as ui %}
 
-{% macro options(choices, current, blank) %}
-  <option value=""{{ current is empty ? ' selected' }}>{{ blank }}</option>
-  {% for choice in choices %}<option value="{{ choice }}"{{ choice == current ? ' selected' }}>{{ choice }}</option>{% endfor %}
-{% endmacro %}
-
+{#
+  The subscriber form (SubscriberType) for administrators or the subscriber
+  themselves. The address is the identity and is not edited; memberships are
+  shown read-only (only the subscriber confirms); administrators may set the
+  priority and invite the subscriber to a list.
+#}
 {% block title %}Subscriber{% endblock %}
 
 {% block content %}
-{% import _self as form %}
-{% embed 'layout/_page_header.html.twig' with {title: 'Subscriber', description: profile.s_email} %}
+{% embed 'layout/_page_header.html.twig' with {title: 'Subscriber', description: email} %}
   {% block actions %}
     {% if is_granted('subscribers.view') %}<a class="btn btn-outline-secondary" href="{{ path('admin_subscribers') }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>All subscribers</a>{% endif %}
   {% endblock %}
 {% endembed %}
 
-<form action="{{ path('admin_subscriber_save') }}" method="post">
-  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-  <input type="hidden" name="subscriber_token" value="{{ token }}">
-  <input type="hidden" name="muid" value="{{ muid }}">
+{{ form_start(form) }}
+  {% if not form.vars.valid %}
+    <div class="alert alert-danger" role="alert">{% if form.vars.errors|length %}{{ form_errors(form) }}{% else %}Please correct the fields marked below; nothing was saved.{% endif %}</div>
+  {% endif %}
   <div class="row g-4">
     <div class="col-lg-7">
       <div class="card h-100">
         <div class="card-header fw-semibold">Profile</div>
         <div class="card-body">
           <div class="row g-3">
-            <div class="col-12"><label class="form-label" for="s-email">Email</label><input class="form-control" id="s-email" type="email" value="{{ profile.s_email }}" readonly aria-describedby="s-email-help"><div class="form-text" id="s-email-help">The email address identifies the subscriber and cannot be changed here.</div></div>
-            <div class="col-md-6"><label class="form-label" for="s-fname">First name</label><input class="form-control" id="s-fname" name="s_fname" value="{{ profile.s_fname }}"></div>
-            <div class="col-md-6"><label class="form-label" for="s-lname">Last name</label><input class="form-control" id="s-lname" name="s_lname" value="{{ profile.s_lname }}"></div>
-            <div class="col-md-4"><label class="form-label" for="s-gender">Gender</label><select class="form-select" id="s-gender" name="s_gender">{{ form.options(genders, profile.s_gender, '') }}</select></div>
-            <div class="col-md-4"><label class="form-label" for="s-province">Province</label><select class="form-select" id="s-province" name="s_province">{{ form.options(provinces, profile.s_province, 'Select Province') }}</select></div>
-            <div class="col-md-4"><label class="form-label" for="s-country">Country</label><select class="form-select" id="s-country" name="s_country">{{ form.options(countries, profile.s_country, 'Select Country') }}</select></div>
+            <div class="col-12">
+              <span class="form-label d-block">Email</span>
+              <span class="fw-semibold text-break">{{ email }}</span>
+              <div class="form-text">The email address identifies the subscriber and cannot be changed here.</div>
+            </div>
+            <div class="col-md-6">{{ form_row(form.firstName, {row_attr: {class: 'mb-0'}}) }}</div>
+            <div class="col-md-6">{{ form_row(form.lastName, {row_attr: {class: 'mb-0'}}) }}</div>
+            <div class="col-md-4">{{ form_row(form.gender, {row_attr: {class: 'mb-0'}}) }}</div>
+            <div class="col-md-4">{{ form_row(form.province, {row_attr: {class: 'mb-0'}}) }}</div>
+            <div class="col-md-4">{{ form_row(form.country, {row_attr: {class: 'mb-0'}}) }}</div>
           </div>
         </div>
       </div>
@@ -53,20 +57,34 @@
         <div class="card-footer small text-body-secondary">Only the subscriber can confirm a membership; adding a list sends an invitation.</div>
       </div>
 
-      {% if administrator %}
+      <div class="card mb-4">
+        <div class="card-header fw-semibold">Delivery (catto-mail)</div>
+        <div class="card-body small">
+          {% if delivery_state == 'ok' %}
+            <p class="mb-2"><i class="bi bi-check-circle text-success me-1" aria-hidden="true"></i>No hard bounce or complaint recorded.</p>
+          {% else %}
+            <p class="mb-2"><span class="badge text-bg-danger">{{ delivery_state|replace({'_': ' '}) }}</span> Left out of campaigns{{ delivery_state == 'complained' ? ' and unsubscribed from every list' }}.</p>
+            {% if is_granted('subscribers.manage') %}
+              <form method="post" action="{{ path('admin_subscriber_delivery_ok', {token: app.request.attributes.get('token')}) }}" data-confirm="Let this subscriber receive campaigns again?" class="mb-2">
+                <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+                <button class="btn btn-sm btn-outline-secondary" type="submit">Clear delivery problem</button>
+              </form>
+            {% endif %}
+          {% endif %}
+          {% if validation %}
+            {% import 'admin/_cattomail_macros.html.twig' as cm %}
+            <p class="mb-0">Last validation: {{ cm.classification(validation.cva_classification) }} <span class="text-body-secondary">{{ validation.cva_checked_at|slice(0, 10) }}</span>
+              {% if validation.cva_suggested_address %}<br>Suggested address (not applied): <span class="text-break">{{ validation.cva_suggested_address }}</span>{% endif %}</p>
+          {% endif %}
+        </div>
+      </div>
+
+      {% if form.listId is defined %}
         <div class="card">
           <div class="card-header fw-semibold">Administration</div>
           <div class="card-body">
-            <div class="mb-3">
-              <label class="form-label" for="list_id">Add to list</label>
-              {% include 'admin/_list_select.html.twig' with {name: 'list_id', selected: (lists|first).l_id ?? 0} %}
-              <div class="form-text">Saving adds a pending membership (if there is none yet) and sends the invitation to confirm.</div>
-            </div>
-            <div>
-              <label class="form-label" for="s-priority">Priority</label>
-              <input class="form-control" id="s-priority" type="number" name="s_priority" value="{{ priority }}">
-              <div class="form-text">Saving sets the priority to this value plus 100 (the v5 engagement rule).</div>
-            </div>
+            {{ form_row(form.listId) }}
+            {{ form_row(form.priority, {row_attr: {class: 'mb-0'}}) }}
           </div>
         </div>
       {% endif %}
@@ -76,5 +94,5 @@
   <div class="d-flex flex-wrap gap-2 border-top pt-3 mt-4">
     <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>Save subscriber</button>
   </div>
-</form>
+{{ form_end(form) }}
 {% endblock %}

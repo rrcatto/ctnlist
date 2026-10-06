@@ -1,36 +1,35 @@
 {% extends 'admin/_editor_page.html.twig' %}
 
-{% block title %}{{ message.m_uniqid ? 'Edit message' : 'Create message' }}{% endblock %}
+{#
+  Message editor (MessageType). Invalid input shows the editor again with
+  everything entered kept, including the HTML and text parts. Saving never
+  sends; Proof, Queue and Activity are separate actions.
+#}
+{% block title %}{{ muid ? 'Edit message' : 'Create message' }}{% endblock %}
 
 {% block content %}
-{% embed 'layout/_page_header.html.twig' with {title: message.m_uniqid ? 'Edit message' : 'Create message', description: 'A message can be saved as a draft with no list selected and assigned to lists later.'} %}
+{% embed 'layout/_page_header.html.twig' with {title: muid ? 'Edit message' : 'Create message', description: 'A message can be saved as a draft with no list selected and assigned to lists later.'} %}
   {% block actions %}
-    {% if message.m_uniqid %}
-      <a class="btn btn-outline-secondary" href="{{ path('admin_proof', {muid: message.m_uniqid}) }}"><i class="bi bi-envelope-check me-1" aria-hidden="true"></i>Send proof</a>
-      {% if is_granted('messages.queue') %}<a class="btn btn-outline-primary" href="{{ path('admin_queue_message', {muid: message.m_uniqid}) }}"><i class="bi bi-list-check me-1" aria-hidden="true"></i>Queue</a>{% endif %}
-      {% if is_granted('logs.view') %}<a class="btn btn-outline-secondary" href="{{ path('report_message_views', {muid: message.m_uniqid}) }}"><i class="bi bi-bar-chart me-1" aria-hidden="true"></i>Activity</a>{% endif %}
+    {% if muid %}
+      <a class="btn btn-outline-secondary" href="{{ path('admin_proof', {muid: muid}) }}"><i class="bi bi-envelope-check me-1" aria-hidden="true"></i>Send proof</a>
+      {% if is_granted('messages.queue') %}<a class="btn btn-outline-primary" href="{{ path('admin_queue_message', {muid: muid}) }}"><i class="bi bi-list-check me-1" aria-hidden="true"></i>Queue</a>{% endif %}
+      {% if is_granted('logs.view') %}<a class="btn btn-outline-secondary" href="{{ path('report_message_views', {muid: muid}) }}"><i class="bi bi-bar-chart me-1" aria-hidden="true"></i>Activity</a>{% endif %}
     {% endif %}
   {% endblock %}
 {% endembed %}
 
-<form action="{{ path('admin_message_save') }}" method="post">
-  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-  <input type="hidden" name="m_uniqid" value="{{ message.m_uniqid }}">
+{{ form_start(form) }}
+  {% if not form.vars.valid %}
+    <div class="alert alert-danger" role="alert">
+      {% if form.vars.errors|length %}{{ form_errors(form) }}{% else %}Please correct the fields marked below. Nothing was saved, and everything you entered is still here.{% endif %}
+    </div>
+  {% endif %}
+  {{ form_widget(form.muid) }}
   <div class="row g-4">
     <div class="col-lg-8">
-      <div class="mb-3">
-        <label class="form-label" for="m-subject">Subject</label>
-        <input class="form-control form-control-lg" id="m-subject" name="m_subject" value="{{ message.m_subject }}">
-      </div>
-      <div class="mb-3">
-        <label class="form-label" for="mt_html">HTML part</label>
-        <textarea class="form-control" id="mt_html" name="mt_html" rows="20">{{ message.m_html }}</textarea>
-      </div>
-      <div class="mb-3">
-        <label class="form-label" for="m-text">Text part</label>
-        <textarea class="form-control font-monospace" id="m-text" name="m_text" rows="12">{{ message.m_text }}</textarea>
-        <div class="form-text">Plain-text alternative for mail clients that do not show HTML.</div>
-      </div>
+      {{ form_row(form.subject) }}
+      {{ form_row(form.html) }}
+      {{ form_row(form.text) }}
     </div>
 
     <div class="col-lg-4">
@@ -38,34 +37,26 @@
         <div class="card-header fw-semibold">Audience</div>
         <div class="card-body">
           <p class="small text-body-secondary">Confirmed members of the selected lists are queued once each. <code>ALL</code> is never selected automatically.</p>
-          {% for list in lists %}
-            <div class="form-check mb-2">
-              <input class="form-check-input" type="checkbox" name="list_ids[]" value="{{ list.l_id }}" id="message-list-{{ list.l_id }}"{{ list.l_id in selected ? ' checked' }}>
-              <label class="form-check-label" for="message-list-{{ list.l_id }}"><strong>{{ list.l_name }}</strong> <span class="text-body-secondary small">– {{ list.l_description }}</span></label>
-            </div>
+          {{ form_errors(form.listIds) }}
+          {% for choice in form.listIds %}
+            {% set list = lists[choice.vars.value] ?? null %}
+            {{ form_widget(choice, {label: '<strong>' ~ choice.vars.label|e ~ '</strong>' ~ (list and list.l_description ? ' <span class="text-body-secondary small">– ' ~ list.l_description|e ~ '</span>' : ''), label_html: true}) }}
           {% else %}
             <p class="mb-0 text-body-secondary">There are no active lists.</p>
           {% endfor %}
+          {% do form.listIds.setRendered %}
         </div>
       </div>
 
       <div class="card">
         <div class="card-header fw-semibold">Sending</div>
         <div class="card-body">
-          <div class="mb-3">
-            <label class="form-label" for="m-template">Template</label>
-            <select class="form-select" id="m-template" name="m_t_id">
-              <option value="0"{{ message.m_t_id == 0 ? ' selected' }}>none</option>
-              {% for template in templates %}
-                <option value="{{ template.t_id }}"{{ template.t_id == message.m_t_id ? ' selected' }}>{{ template.t_name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="mb-3"><label class="form-label" for="m-from-name">From name</label><input class="form-control" id="m-from-name" name="m_from_name" value="{{ message.m_from_name }}"></div>
-          <div class="mb-3"><label class="form-label" for="m-from-address">From address</label><input class="form-control" id="m-from-address" type="text" name="m_from_address" value="{{ message.m_from_address }}"></div>
+          {{ form_row(form.templateId) }}
+          {{ form_row(form.fromName) }}
+          {{ form_row(form.fromAddress) }}
           <div class="row g-3">
-            <div class="col-6"><label class="form-label" for="m-priority">Priority</label><input class="form-control" id="m-priority" type="number" name="m_priority" value="{{ message.m_priority }}"></div>
-            <div class="col-6"><label class="form-label" for="m-max-send">Maximum sends</label><input class="form-control" id="m-max-send" type="number" name="m_max_send" value="{{ message.m_max_send }}"></div>
+            <div class="col-6">{{ form_row(form.priority, {row_attr: {class: 'mb-0'}}) }}</div>
+            <div class="col-6">{{ form_row(form.maxSend, {row_attr: {class: 'mb-0'}}) }}</div>
           </div>
         </div>
       </div>
@@ -76,5 +67,5 @@
     <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>Save message</button>
     <a class="btn btn-outline-secondary" href="{{ path('admin_messages') }}">Cancel</a>
   </div>
-</form>
+{{ form_end(form) }}
 {% endblock %}

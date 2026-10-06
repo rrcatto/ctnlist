@@ -28,14 +28,22 @@ final class AdminMessagesTemplatesTest extends SmokeTestCase
         self::loginAsAdmin($client);
         $name = 'Smoke template ' . self::$suffix;
 
-        $page = self::post($client, '/template', '/template', ['t_id' => '0', 't_name' => $name, 'mt_html' => '<div>{content}</div>', 't_text' => '{content}']);
+        $page = self::submitAndFollow($client, '/template', 'template', ['template[name]' => $name, 'template[html]' => '<div>{content}</div>', 'template[text]' => '{content}']);
         self::assertStringContainsString('Template created.', $page);
         $id = (string) self::scalar('SELECT t_id FROM templates WHERE t_name = ?', [$name]);
         self::assertStringContainsString('/template/' . $id, $page, 'listed');
 
-        $page = self::post($client, '/template/' . $id, '/template', ['t_id' => $id, 't_name' => $name . ' v2', 'mt_html' => '<p>{content}</p>', 't_text' => 'T']);
+        $page = self::submitAndFollow($client, '/template/' . $id, 'template', ['template[name]' => $name . ' v2', 'template[html]' => '<p>{content}</p>', 'template[text]' => 'T']);
         self::assertStringContainsString('Template saved.', $page);
         self::assertSame('<p>{content}</p>', self::scalar('SELECT t_html FROM templates WHERE t_id = ?', [$id]));
+
+        // Invalid input keeps everything entered, the HTML part included.
+        $invalid = self::submitForm($client, '/template/' . $id, 'template', ['template[name]' => str_repeat('x', 101), 'template[html]' => '<p>Unsaved {content} &amp; more</p>', 'template[text]' => 'Unsaved text']);
+        self::assertSame(422, $invalid['status']);
+        self::assertMatchesRegularExpression('#id="template_name_error1">This value is too long#', $invalid['body']);
+        self::assertStringContainsString('&lt;p&gt;Unsaved {content} &amp;amp; more&lt;/p&gt;</textarea>', $invalid['body']);
+        self::assertStringContainsString('>Unsaved text</textarea>', $invalid['body']);
+        self::assertSame('<p>{content}</p>', self::scalar('SELECT t_html FROM templates WHERE t_id = ?', [$id]), 'nothing saved');
         self::assertSame(404, self::request($client, 'GET', '/template/999999')['status']);
     }
 
@@ -44,10 +52,10 @@ final class AdminMessagesTemplatesTest extends SmokeTestCase
         $client = self::client();
         self::loginAsAdmin($client);
         $subject = 'Smoke message ' . self::$suffix;
-        $fields = ['m_uniqid' => '', 'm_t_id' => '0', 'm_from_name' => 'Smoke', 'm_from_address' => 'smoke@ctnlist.test',
-            'm_subject' => $subject, 'm_priority' => '0', 'm_max_send' => '0', 'mt_html' => '<p>Draft</p>', 'm_text' => 'Draft'];
+        $fields = ['message[fromName]' => 'Smoke', 'message[fromAddress]' => 'smoke@ctnlist.test', 'message[subject]' => $subject,
+            'message[html]' => '<p>Draft</p>', 'message[text]' => 'Draft', 'message[listIds][]' => []];
 
-        $page = self::post($client, '/message', '/message', $fields);
+        $page = self::submitAndFollow($client, '/message', 'message', $fields);
         self::assertStringContainsString('Message saved.', $page);
         $muid = (string) self::scalar('SELECT m_uniqid FROM messages WHERE m_subject = ?', [$subject]);
         self::assertSame(0, (int) self::scalar('SELECT COUNT(*) FROM message_lists ml JOIN messages m ON m.m_id = ml.ml_m_id WHERE m.m_uniqid = ?', [$muid]), 'no list, ALL not added');
@@ -56,27 +64,25 @@ final class AdminMessagesTemplatesTest extends SmokeTestCase
         $allId = (string) self::scalar("SELECT l_id FROM lists WHERE l_shortcode = 'ALL'");
         $form = self::request($client, 'GET', '/message/' . $muid)['body'];
         self::assertStringContainsString('value="' . $subject . '"', $form);
-        self::post($client, '/message/' . $muid, '/message', ['m_uniqid' => $muid, 'list_ids[]' => $allId] + $fields);
+        self::submitAndFollow($client, '/message/' . $muid, 'message', ['message[listIds][]' => [$allId]]);
         self::assertSame('ALL', self::scalar('SELECT l.l_shortcode FROM message_lists ml JOIN lists l ON l.l_id = ml.ml_l_id JOIN messages m ON m.m_id = ml.ml_m_id WHERE m.m_uniqid = ?', [$muid]));
 
-        self::assertSame(404, self::request($client, 'GET', '/message/' . str_repeat('0', 32))['status']);
-        self::assertStringContainsString('Message does not exist.', self::post($client, '/message', '/message', ['m_uniqid' => str_repeat('0', 32)] + $fields));
-    }
+        // Invalid input: the editor again with the content and selections kept; nothing saved or sent.
+        $sent = self::scalar('SELECT COUNT(*) FROM sendlog');
+        $invalid = self::submitForm($client, '/message/' . $muid, 'message', [
+            'message[html]' => '<p>Long unsaved body</p>', 'message[text]' => 'Unsaved text', 'message[fromAddress]' => 'not-an-address', 'message[maxSend]' => '-1',
+        ]);
+        self::assertSame(422, $invalid['status']);
+        self::assertMatchesRegularExpression('#id="message_fromAddress_error1">Enter a valid email address#', $invalid['body']);
+        self::assertMatchesRegularExpression('#id="message_maxSend_error1">Enter a whole number from 0#', $invalid['body']);
+        self::assertStringContainsString('&lt;p&gt;Long unsaved body&lt;/p&gt;</textarea>', $invalid['body'], 'the HTML part is not lost');
+        self::assertStringContainsString('>Unsaved text</textarea>', $invalid['body']);
+        self::assertMatchesRegularExpression('#name="message\[listIds\]\[\]" class="form-check-input" value="' . $allId . '" checked#', $invalid['body'], 'the selected lists are kept');
+        self::assertSame('<p>Draft</p>', self::scalar('SELECT m_html FROM messages WHERE m_uniqid = ?', [$muid]), 'nothing saved');
+        self::assertSame($sent, self::scalar('SELECT COUNT(*) FROM sendlog'), 'saving never sends');
 
-    /**
-     * Fetch $formPage for a CSRF token, POST $action, follow the redirect.
-     *
-     * @param array<string, string> $fields
-     */
-    private static function post(\CurlHandle $client, string $formPage, string $action, array $fields): string
-    {
-        $form = self::request($client, 'GET', $formPage)['body'];
-        self::assertSame(1, preg_match('/name="csrf" value="([^"]+)"/', $form, $match), $formPage);
-        $response = self::request($client, 'POST', $action, $fields + ['csrf' => html_entity_decode($match[1])]);
-        self::assertSame(302, $response['status'], "POST {$action}");
-        $page = self::request($client, 'GET', (string) parse_url($response['location'], PHP_URL_PATH))['body'];
-        self::assertCleanPage($action, $page);
-        return $page;
+        self::assertSame(404, self::request($client, 'GET', '/message/' . str_repeat('0', 32))['status']);
+        self::assertStringContainsString('Message does not exist.', self::submitAndFollow($client, '/message', 'message', ['message[muid]' => str_repeat('0', 32)] + $fields));
     }
 
     /** @param list<string> $params */

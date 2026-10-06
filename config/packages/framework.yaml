@@ -19,6 +19,12 @@ framework:
 
     # Session-stored CSRF tokens (id App\Security\Csrf::TOKEN_ID, field csrf).
     csrf_protection: true
+    # Symfony forms use the same token and field as the manual POST forms
+    # (csrf_token('ctnlist') in a field named csrf): one CSRF scheme.
+    form:
+        csrf_protection:
+            token_id: ctnlist
+            field_name: csrf
 
     mailer:
         dsn: '%env(MAILER_DSN)%'

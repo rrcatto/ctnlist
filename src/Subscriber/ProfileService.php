@@ -17,7 +17,7 @@ final class ProfileService
 {
     /** Editable fields and their maximum lengths. */
     private const FIELDS = [
-        's_fname' => 100, 's_lname' => 100, 's_photo' => 253, 's_gender' => 30, 's_business' => 100,
+        's_fname' => 100, 's_lname' => 100, 's_gender' => 30, 's_business' => 100,
         's_province' => 100, 's_country' => 100, 's_phone' => 30, 's_url' => 253,
     ];
 

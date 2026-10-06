@@ -103,10 +103,10 @@ final class AdminScreensTest extends SmokeTestCase
         self::assertStringNotContainsString('href="/subscribe/', $subscribers, 'editing needs subscribers.manage');
         self::assertStringContainsString(self::$admin['s_email'], $subscribers);
 
-        $roleId = (int) self::$db->query("SELECT r_id FROM roles WHERE r_key = '" . self::$roleKey . "'")->fetchColumn();
+        $roleId = (int) self::value("SELECT r_id FROM roles WHERE r_key = '" . self::$roleKey . "'");
         $role = self::request($client, 'GET', '/roles/' . $roleId)['body'];
         self::assertStringContainsString('Read only: changing them needs <code>acl.manage</code>', $role);
-        self::assertStringContainsString('<fieldset disabled>', $role);
+        self::assertMatchesRegularExpression('#name="role_permissions\[permissions\]\[\]" disabled="disabled"#', $role);
         self::assertStringNotContainsString('Save permissions', $role);
     }
 

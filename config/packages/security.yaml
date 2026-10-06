@@ -13,6 +13,11 @@ security:
             custom_authenticators:
                 - App\Security\MagicLinkAuthenticator
                 - App\Security\AuthSessionAuthenticator
+            # POST with the shared CSRF token (field csrf, id ctnlist): a link
+            # or image elsewhere cannot sign anyone out.
             logout:
                 path: app_logout
                 target: /
+                enable_csrf: true
+                csrf_parameter: csrf
+                csrf_token_id: ctnlist

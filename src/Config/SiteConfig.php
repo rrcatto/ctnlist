@@ -10,10 +10,9 @@ namespace App\Config;
  */
 final class SiteConfig
 {
-    public const VERSION = '6.0.2';
+    public const VERSION = '6.0.3';
 
     /**
-     * @param list<array<string, mixed>> $smtpServers MAIL_SMTP_SERVERS_JSON entries
      * @param list<array<string, mixed>> $syncDatabases SYNC_DATABASES_JSON entries
      */
     public function __construct(
@@ -39,9 +38,7 @@ final class SiteConfig
         public readonly string $bounceAddress,
         public readonly string $unsubscribeAddress,
         public readonly string $testEmail,
-        public readonly int $bounceLimit,
         public readonly int $emailsPerMinute,
-        public readonly array $smtpServers,
         public readonly array $syncDatabases,
         public readonly string $contactEmail,
         public readonly string $contactName,
@@ -96,9 +93,7 @@ final class SiteConfig
             bounceAddress: $string('MAIL_BOUNCE_ADDRESS'),
             unsubscribeAddress: $string('MAIL_UNSUBSCRIBE_ADDRESS'),
             testEmail: $string('MAIL_TEST_ADDRESS', $string('APP_ADMIN_EMAIL')),
-            bounceLimit: $int('MAIL_BOUNCE_LIMIT', 2),
             emailsPerMinute: $int('MAIL_RATE_PER_MINUTE', 13),
-            smtpServers: $list('MAIL_SMTP_SERVERS_JSON'),
             syncDatabases: $list('SYNC_DATABASES_JSON'),
             contactEmail: $string('CONTACT_MAIL_ADDRESS', $adminEmail),
             contactName: $string('CONTACT_MAIL_NAME', $string('APP_ORGANISATION', 'ctnlist')),

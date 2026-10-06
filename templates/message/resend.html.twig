@@ -3,12 +3,17 @@
 {% block title %}Send message again{% endblock %}
 
 {% block content %}
-<form action="{{ path('message_resend_submit') }}" method="post" class="card card-body">
-  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-  <input type="hidden" name="subscriber_token" value="{{ token }}">
-  <input type="hidden" name="muid" value="{{ muid }}">
-  <h1 class="h4">Send this message again</h1>
-  <p>The current version will be sent; it may differ from the archived version first received.</p>
-  <button class="btn btn-primary" type="submit">Send current version</button>
+{% include 'layout/_page_header.html.twig' with {title: 'Send this message again', description: 'We email you the message once more.'} %}
+<form action="{{ path('message_resend_submit') }}" method="post" class="card app-narrow ms-0">
+  <div class="card-body d-flex align-items-center gap-3">
+    <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+    <input type="hidden" name="subscriber_token" value="{{ token }}">
+    <input type="hidden" name="muid" value="{{ muid }}">
+    <i class="bi bi-arrow-repeat fs-2 text-primary" aria-hidden="true"></i>
+    <p class="mb-0">The current version will be sent; it may differ from the archived version first received.</p>
+  </div>
+  <div class="card-footer">
+    <button class="btn btn-primary" type="submit"><i class="bi bi-envelope me-1" aria-hidden="true"></i>Send current version</button>
+  </div>
 </form>
 {% endblock %}

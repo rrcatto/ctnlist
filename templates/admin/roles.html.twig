@@ -32,17 +32,13 @@
 <div class="card mb-4" id="assign">
   <div class="card-header fw-semibold">Assign a role to a subscriber</div>
   <div class="card-body">
-    <form method="get" action="{{ path('admin_roles') }}#assign" class="row g-2 align-items-end mb-3" role="search" aria-label="Find a subscriber">
-      <div class="col-md-8">
-        <label class="form-label" for="role-search">Find a subscriber</label>
-        <input class="form-control" id="role-search" type="search" name="q" value="{{ search }}" placeholder="Email, first or last name, or UUID" aria-describedby="role-search-help">
-        <div class="form-text" id="role-search-help">Shows up to 20 matching subscribers.</div>
-      </div>
-      <div class="col-md-4 d-flex gap-2 mb-md-4">
+    {{ form_start(search_form, {attr: {class: 'row g-2 align-items-start mb-3', role: 'search', 'aria-label': 'Find a subscriber'}}) }}
+      <div class="col-md-8">{{ form_row(search_form.q, {row_attr: {class: 'mb-0'}}) }}</div>
+      <div class="col-md-4 d-flex gap-2 pt-md-4 mt-md-2">
         <button class="btn btn-primary" type="submit"><i class="bi bi-search me-1" aria-hidden="true"></i>Search</button>
         {% if search %}<a class="btn btn-outline-secondary" href="{{ path('admin_roles') }}#assign">Clear</a>{% endif %}
       </div>
-    </form>
+    {{ form_end(search_form) }}
 
     {% if search %}
       {% if results is empty %}
@@ -88,20 +84,16 @@
 
 <div class="row g-4 mb-4">
   <div class="col-lg-6">
-    <form action="{{ path('admin_roles_create') }}" method="post" class="card h-100">
+    {{ form_start(form, {attr: {class: 'card h-100', id: 'create-role'}}) }}
       <div class="card-header fw-semibold">Create custom role</div>
       <div class="card-body">
-        <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-        <div class="mb-3">
-          <label class="form-label" for="role-key">Key <span class="text-danger" aria-hidden="true">*</span></label>
-          <input class="form-control" id="role-key" name="key" pattern="[a-z0-9._-]+" maxlength="64" required aria-describedby="role-key-help">
-          <div class="form-text" id="role-key-help">Lower-case letters, numbers, dots, dashes and underscores. The key cannot be changed later; the name and description can.</div>
-        </div>
-        <div class="mb-3"><label class="form-label" for="role-name">Name <span class="text-danger" aria-hidden="true">*</span></label><input class="form-control" id="role-name" name="name" maxlength="100" required></div>
-        <div class="mb-0"><label class="form-label" for="role-description">Description</label><input class="form-control" id="role-description" name="description"></div>
+        {{ form_errors(form) }}
+        {{ form_row(form.key) }}
+        {{ form_row(form.name) }}
+        {{ form_row(form.description, {row_attr: {class: 'mb-0'}}) }}
       </div>
       <div class="card-footer"><button class="btn btn-primary" type="submit"><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Create role</button></div>
-    </form>
+    {{ form_end(form) }}
   </div>
   <div class="col-lg-6">
     <div class="card h-100">

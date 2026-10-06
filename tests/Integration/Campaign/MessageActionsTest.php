@@ -55,6 +55,7 @@ final class MessageActionsTest extends IntegrationTestCase
 
     public function testForwardSendsCampaignCopiesAndNotifies(): void
     {
+        $fake = $this->fakeCattoMail();
         [$uuid, $muid, $id] = $this->delivered();
         $message = $this->service(MessageRepository::class)->findByMuid($muid);
         self::assertNotNull($message);
@@ -71,6 +72,7 @@ final class MessageActionsTest extends IntegrationTestCase
             'the copy keeps the forwarder\'s list context'
         );
         self::assertTrue($this->service(MessageLog::class)->wasSent($this->subscriberUuid($friend), $muid));
+        self::assertSame(['friend@example.com'], array_column($fake->recipients[$fake->lastSendJobId()], 'email_address'), 'the copy went through catto-mail');
         self::assertSame(1, (int) $this->db->fetchOne('SELECT sml_forwards FROM smlog WHERE sml_muid = ? AND sml_s_uuid = ?', [$muid, $uuid]));
         self::assertSame(5, (int) $this->db->fetchOne('SELECT s_priority FROM subscribers WHERE s_id = ?', [$id]));
 

@@ -70,36 +70,36 @@ final class EmailNormaliser
     public static function fixUser(string $user): string
     {
         // terms to invalidate
-        $nemail = preg_replace("/^postmaster/","@@",$user);
-        $nemail = preg_replace("/^abuse/","@@",$nemail);
-        // $nemail = preg_replace("/^accounts/","@@",$nemail);
-        $nemail = preg_replace("/^billing/","@@",$nemail);
-        $nemail = preg_replace("/^comments/","@@",$nemail);
-        $nemail = preg_replace("/^media/","@@",$nemail);
-        $nemail = preg_replace("/^example/","@@",$nemail);
-        $nemail = preg_replace("/^jobs/","@@",$nemail);
-        // $nemail = preg_replace("/^sales/","@@",$nemail);
-        // $nemail = preg_replace("/^support/","@@",$nemail);
-        $nemail = preg_replace("/^sysadmin/","@@",$nemail);
-        $nemail = preg_replace("/^sysadm/","@@",$nemail);
-        $nemail = preg_replace("/^complaints/","@@",$nemail);
-        $nemail = preg_replace("/^hostmaster/","@@",$nemail);
-        $nemail = preg_replace("/^dns-admin/","@@",$nemail);
-        $nemail = preg_replace("/^dns/","@@",$nemail);
-        $nemail = preg_replace("/^absa/","@@",$nemail);
-        $nemail = preg_replace("/^e-mail[-_\.]/","",$nemail);
-        $nemail = preg_replace("/^email-list/","@@",$nemail);
-        $nemail = preg_replace("/^e-mail/","",$nemail);
-        $nemail = preg_replace("/^email/","",$nemail);
-        $nemail = preg_replace("/^e-mai/","",$nemail);
-        $nemail = preg_replace("/^letters/","@@",$nemail);
-        $nemail = preg_replace("/^mail/","@@",$nemail);
-        $nemail = preg_replace("/^assignments/","@@",$nemail);
-        $nemail = preg_replace("/^pftfrh/","@@",$nemail);
-        $nemail = preg_replace("/^listserv/","@@",$nemail);
-        $nemail = preg_replace("/^listserver/","@@",$nemail);
-        $nemail = preg_replace("/^webmaster/","@@",$nemail);
-        $nemail = preg_replace("/^pop\.wanadoo\.fr/","",$nemail);
+        $nemail = self::replace("/^postmaster/","@@",$user);
+        $nemail = self::replace("/^abuse/","@@",$nemail);
+        // $nemail = self::replace("/^accounts/","@@",$nemail);
+        $nemail = self::replace("/^billing/","@@",$nemail);
+        $nemail = self::replace("/^comments/","@@",$nemail);
+        $nemail = self::replace("/^media/","@@",$nemail);
+        $nemail = self::replace("/^example/","@@",$nemail);
+        $nemail = self::replace("/^jobs/","@@",$nemail);
+        // $nemail = self::replace("/^sales/","@@",$nemail);
+        // $nemail = self::replace("/^support/","@@",$nemail);
+        $nemail = self::replace("/^sysadmin/","@@",$nemail);
+        $nemail = self::replace("/^sysadm/","@@",$nemail);
+        $nemail = self::replace("/^complaints/","@@",$nemail);
+        $nemail = self::replace("/^hostmaster/","@@",$nemail);
+        $nemail = self::replace("/^dns-admin/","@@",$nemail);
+        $nemail = self::replace("/^dns/","@@",$nemail);
+        $nemail = self::replace("/^absa/","@@",$nemail);
+        $nemail = self::replace("/^e-mail[-_\.]/","",$nemail);
+        $nemail = self::replace("/^email-list/","@@",$nemail);
+        $nemail = self::replace("/^e-mail/","",$nemail);
+        $nemail = self::replace("/^email/","",$nemail);
+        $nemail = self::replace("/^e-mai/","",$nemail);
+        $nemail = self::replace("/^letters/","@@",$nemail);
+        $nemail = self::replace("/^mail/","@@",$nemail);
+        $nemail = self::replace("/^assignments/","@@",$nemail);
+        $nemail = self::replace("/^pftfrh/","@@",$nemail);
+        $nemail = self::replace("/^listserv/","@@",$nemail);
+        $nemail = self::replace("/^listserver/","@@",$nemail);
+        $nemail = self::replace("/^webmaster/","@@",$nemail);
+        $nemail = self::replace("/^pop\.wanadoo\.fr/","",$nemail);
 
         $nemail = str_ireplace("pop.wanadoo.fr","",$nemail);
 
@@ -171,113 +171,113 @@ final class EmailNormaliser
     public static function fixDomain(string $domain): string
     {
         // fix co.za misspellings
-        $nemail = preg_replace("/\-co\.za/",".co.za",$domain);
-        $nemail = preg_replace("/\.co\.za.+$/",".co.za",$nemail);
+        $nemail = self::replace("/\-co\.za/",".co.za",$domain);
+        $nemail = self::replace("/\.co\.za.+$/",".co.za",$nemail);
 
-        $nemail = preg_replace("/\.c\.za$/",".co.za",$nemail);
-        $nemail = preg_replace("/\.co\.xa$/",".co.za",$nemail);
-        $nemail = preg_replace("/\.co\.z[a-z]$/",".co.za",$nemail);
-        $nemail = preg_replace("/\.co\.z[a-z][a-z]$/",".co.za",$nemail);
-        $nemail = preg_replace("/\.com\.za$/",".co.za",$domain);
-        $nemail = preg_replace("/\-com\.za$/",".co.za",$domain);
-        $nemail = preg_replace("/\.oc\.za$/",".co.za",$nemail);
-        $nemail = preg_replace("/\.oc\.za.+$/",".co.za",$nemail);
-        $nemail = preg_replace("/\.co\.az$/",".co.za",$domain);
-        $nemail = preg_replace("/\.xo\.za$/",".co.za",$domain);
-        $nemail = preg_replace("/\.net\.co\.za$/",".co.za",$nemail);
-        $nemail = preg_replace("/\.xco\.za$/",".co.za",$nemail);
-        $nemail = preg_replace("/\.c0\.za$/",".co.za",$nemail);
-        $nemail = preg_replace("/\.co\.z$/",".co.za",$nemail);
-        $nemail = preg_replace("/\.ca\.za$/",".co.za",$nemail);
-        $nemail = preg_replace("/\.ca\.za\.com$/",".co.za",$nemail);
-        $nemail = preg_replace("/\.coza$/",".co.za",$nemail);
-        $nemail = preg_replace("/\.coza.+$/",".co.za",$nemail);
-        $nemail = preg_replace("/\.co$/",".co.za",$nemail);
-        $nemail = preg_replace("/\.co\/za$/",".co.za",$nemail);
-        $nemail = preg_replace("/\.co\.co\.za$/",".co.za",$nemail);
+        $nemail = self::replace("/\.c\.za$/",".co.za",$nemail);
+        $nemail = self::replace("/\.co\.xa$/",".co.za",$nemail);
+        $nemail = self::replace("/\.co\.z[a-z]$/",".co.za",$nemail);
+        $nemail = self::replace("/\.co\.z[a-z][a-z]$/",".co.za",$nemail);
+        $nemail = self::replace("/\.com\.za$/",".co.za",$domain);
+        $nemail = self::replace("/\-com\.za$/",".co.za",$domain);
+        $nemail = self::replace("/\.oc\.za$/",".co.za",$nemail);
+        $nemail = self::replace("/\.oc\.za.+$/",".co.za",$nemail);
+        $nemail = self::replace("/\.co\.az$/",".co.za",$domain);
+        $nemail = self::replace("/\.xo\.za$/",".co.za",$domain);
+        $nemail = self::replace("/\.net\.co\.za$/",".co.za",$nemail);
+        $nemail = self::replace("/\.xco\.za$/",".co.za",$nemail);
+        $nemail = self::replace("/\.c0\.za$/",".co.za",$nemail);
+        $nemail = self::replace("/\.co\.z$/",".co.za",$nemail);
+        $nemail = self::replace("/\.ca\.za$/",".co.za",$nemail);
+        $nemail = self::replace("/\.ca\.za\.com$/",".co.za",$nemail);
+        $nemail = self::replace("/\.coza$/",".co.za",$nemail);
+        $nemail = self::replace("/\.coza.+$/",".co.za",$nemail);
+        $nemail = self::replace("/\.co$/",".co.za",$nemail);
+        $nemail = self::replace("/\.co\/za$/",".co.za",$nemail);
+        $nemail = self::replace("/\.co\.co\.za$/",".co.za",$nemail);
 
         // fix org.za misspellings
-        $nemail = preg_replace("/\.org\.za.+$/",".org.za",$nemail);
+        $nemail = self::replace("/\.org\.za.+$/",".org.za",$nemail);
 
-        $nemail = preg_replace("/\.org\.co\.za$/",".org.za",$nemail);
+        $nemail = self::replace("/\.org\.co\.za$/",".org.za",$nemail);
 
         // fix ac.za misspellings
-        $nemail = preg_replace("/\.ac\.za.+$/",".ac.za",$nemail);
+        $nemail = self::replace("/\.ac\.za.+$/",".ac.za",$nemail);
 
-        $nemail = preg_replace("/\.ac\.zay$/",".ac.za",$nemail);
+        $nemail = self::replace("/\.ac\.zay$/",".ac.za",$nemail);
 
         // fix gov.za misspellings
-        $nemail = preg_replace("/\.gov\.za.+$/",".gov.za",$nemail);
-        $nemail = preg_replace("/sars\.cov\.za$/","sars.gov.za",$nemail);
+        $nemail = self::replace("/\.gov\.za.+$/",".gov.za",$nemail);
+        $nemail = self::replace("/sars\.cov\.za$/","sars.gov.za",$nemail);
 
 
-        $nemail = preg_replace("/\.gov\.co\.za$/",".gov.za",$nemail);
-        $nemail = preg_replace("/\.gv\.za$/",".gov.za",$nemail);
-        $nemail = preg_replace("/\.goz\.za$/",".gov.za",$nemail);
+        $nemail = self::replace("/\.gov\.co\.za$/",".gov.za",$nemail);
+        $nemail = self::replace("/\.gv\.za$/",".gov.za",$nemail);
+        $nemail = self::replace("/\.goz\.za$/",".gov.za",$nemail);
 
         // fix co.uk misspellings
-        $nemail = preg_replace("/\.co\.uk.+$/",".co.uk",$nemail);
+        $nemail = self::replace("/\.co\.uk.+$/",".co.uk",$nemail);
 
-        $nemail = preg_replace("/\.co\.ukco\.ukz$/",".co.uk",$nemail);
-        $nemail = preg_replace("/\.com\.uk$/",".co.uk",$nemail);
+        $nemail = self::replace("/\.co\.ukco\.ukz$/",".co.uk",$nemail);
+        $nemail = self::replace("/\.com\.uk$/",".co.uk",$nemail);
 
         // fix com misspellings
-        $nemail = preg_replace("/\.com.+$/",".com",$nemail);
-        $nemail = preg_replace("/\.coom$/",".com",$nemail);
-        $nemail = preg_replace("/\.c[a-z]m$/",".com",$nemail);
-        $nemail = preg_replace("/\.co[a-z]$/",".com",$nemail);
-        $nemail = preg_replace("/\.can$/",".com",$nemail);
-        $nemail = preg_replace("/\.cm$/",".com",$nemail);
-        $nemail = preg_replace("/\.caom$/",".com",$nemail);
-        $nemail = preg_replace("/\.[a-z]om$/",".com",$nemail);
-        $nemail = preg_replace("/\.doc\.com$/",".com",$nemail);
-        $nemail = preg_replace("/\.co\.com$/",".com",$nemail);
+        $nemail = self::replace("/\.com.+$/",".com",$nemail);
+        $nemail = self::replace("/\.coom$/",".com",$nemail);
+        $nemail = self::replace("/\.c[a-z]m$/",".com",$nemail);
+        $nemail = self::replace("/\.co[a-z]$/",".com",$nemail);
+        $nemail = self::replace("/\.can$/",".com",$nemail);
+        $nemail = self::replace("/\.cm$/",".com",$nemail);
+        $nemail = self::replace("/\.caom$/",".com",$nemail);
+        $nemail = self::replace("/\.[a-z]om$/",".com",$nemail);
+        $nemail = self::replace("/\.doc\.com$/",".com",$nemail);
+        $nemail = self::replace("/\.co\.com$/",".com",$nemail);
 
         // fix org misspellings
-        $nemail = preg_replace("/\.doc\.org$/",".org",$nemail);
+        $nemail = self::replace("/\.doc\.org$/",".org",$nemail);
 
         // fix net misspellings
-        $nemail = preg_replace("/\.net.+$/",".net",$nemail);
+        $nemail = self::replace("/\.net.+$/",".net",$nemail);
 
-        $nemail = preg_replace("/\.ne$/",".net",$nemail);
-        $nemail = preg_replace("/\.n[a-z]t$/",".net",$nemail);
+        $nemail = self::replace("/\.ne$/",".net",$nemail);
+        $nemail = self::replace("/\.n[a-z]t$/",".net",$nemail);
 
         // fix biz misspellings
-        $nemail = preg_replace("/\.biz.+$/",".biz",$nemail);
+        $nemail = self::replace("/\.biz.+$/",".biz",$nemail);
 
-        $nemail = preg_replace("/\.bjz$/",".biz",$nemail);
+        $nemail = self::replace("/\.bjz$/",".biz",$nemail);
 
         // fix info misspellings
-        $nemail = preg_replace("/\.info.+$/",".info",$nemail);
+        $nemail = self::replace("/\.info.+$/",".info",$nemail);
 
         // fix uncommon domain misspellings
-        $nemail = preg_replace("/capfspan\./","capespan.",$nemail);
-        $nemail = preg_replace("/livf\./","live.",$nemail);
-        $nemail = preg_replace("/codf\./","code.",$nemail);
+        $nemail = self::replace("/capfspan\./","capespan.",$nemail);
+        $nemail = self::replace("/livf\./","live.",$nemail);
+        $nemail = self::replace("/codf\./","code.",$nemail);
 
         // fix aol misspellings
-        $nemail = preg_replace("/aol\.co\.za$/","aol.com",$nemail);
-        $nemail = preg_replace("/aol\.uk$/","aol.com",$nemail);
-        $nemail = preg_replace("/aolc\.co\.za$/","aol.com",$nemail);
-        $nemail = preg_replace("/aol\.co\.za$/","aol.com",$nemail);
-        $nemail = preg_replace("/aol\.comaol\.com$/","aol.com",$nemail);
+        $nemail = self::replace("/aol\.co\.za$/","aol.com",$nemail);
+        $nemail = self::replace("/aol\.uk$/","aol.com",$nemail);
+        $nemail = self::replace("/aolc\.co\.za$/","aol.com",$nemail);
+        $nemail = self::replace("/aol\.co\.za$/","aol.com",$nemail);
+        $nemail = self::replace("/aol\.comaol\.com$/","aol.com",$nemail);
 
         // fix compuserv
-        $nemail = preg_replace("/compuserve/","",$nemail);
+        $nemail = self::replace("/compuserve/","",$nemail);
 
         // fix earthlink.net misspellings
-        $nemail = preg_replace("/earthlink\.com$/","earthlink.net",$nemail);
-        $nemail = preg_replace("/earhtlink\.net$/","earthlink.net",$nemail);
+        $nemail = self::replace("/earthlink\.com$/","earthlink.net",$nemail);
+        $nemail = self::replace("/earhtlink\.net$/","earthlink.net",$nemail);
 
         // fix absamail misspellings
-        $nemail = preg_replace("/^.?absamail.+$/","absamail.co.za",$nemail);
+        $nemail = self::replace("/^.?absamail.+$/","absamail.co.za",$nemail);
 
-        $nemail = preg_replace("/freemail\.absa\.co\.za$/","absamail.co.za",$nemail);
-        $nemail = preg_replace("/freemal\.absa\.co\.za$/","absamail.co.za",$nemail);
-        $nemail = preg_replace("/absamial\.co\.za$/","absamail.co.za",$nemail);
-        $nemail = preg_replace("/absameil\.co\.za$/","absamail.co.za",$nemail);
-        $nemail = preg_replace("/freemail\.co\.za$/","absamail.co.za",$nemail);
-        $nemail = preg_replace("/free-mail\.co\.za$/","absamail.co.za",$nemail);
+        $nemail = self::replace("/freemail\.absa\.co\.za$/","absamail.co.za",$nemail);
+        $nemail = self::replace("/freemal\.absa\.co\.za$/","absamail.co.za",$nemail);
+        $nemail = self::replace("/absamial\.co\.za$/","absamail.co.za",$nemail);
+        $nemail = self::replace("/absameil\.co\.za$/","absamail.co.za",$nemail);
+        $nemail = self::replace("/freemail\.co\.za$/","absamail.co.za",$nemail);
+        $nemail = self::replace("/free-mail\.co\.za$/","absamail.co.za",$nemail);
 
         $nemail = str_ireplace("freemail.abasa.co.za","absamail.co.za",$nemail);
         $nemail = str_ireplace("fre.abasa.co.za","absamail.co.za",$nemail);
@@ -299,34 +299,34 @@ final class EmailNormaliser
         $nemail = str_ireplace("acsamail.com","absamail.co.za",$nemail);
 
         // fix hotmail misspellings
-        $nemail = preg_replace("/^.?hotmail.+$/","hotmail.com",$nemail);
+        $nemail = self::replace("/^.?hotmail.+$/","hotmail.com",$nemail);
 
-        $nemail = preg_replace("/^otmail\.com/","hotmail.com",$nemail);
-        $nemail = preg_replace("/^htmail\.com/","hotmail.com",$nemail);
-        $nemail = preg_replace("/^hoymail\.com/","hotmail.com",$nemail);
-        $nemail = preg_replace("/^hotail\.com/","hotmail.com",$nemail);
-        $nemail = preg_replace("/^hotamil\.com/","hotmail.com",$nemail);
-        $nemail = preg_replace("/^homail\.com/","hotmail.com",$nemail);
-        $nemail = preg_replace("/^hormail\.com/","hotmail.com",$nemail);
-        $nemail = preg_replace("/^hotmai\.com/","hotmail.com",$nemail);
-        $nemail = preg_replace("/^hotmia\.com/","hotmail.com",$nemail);
-        $nemail = preg_replace("/^hotnail\.com/","hotmail.com",$nemail);
-        $nemail = preg_replace("/^hotmil\.com/","hotmail.com",$nemail);
-        $nemail = preg_replace("/^hotamail\.com/","hotmail.com",$nemail);
-        $nemail = preg_replace("/^hotmial\.com/","hotmail.com",$nemail);
-        $nemail = preg_replace("/^gotmail\.com/","hotmail.com",$nemail);
-        $nemail = preg_replace("/^hitmail\.com/","hotmail.com",$nemail);
-        $nemail = preg_replace("/^hptmail\.com/","hotmail.com",$nemail);
-        $nemail = preg_replace("/^hotmal\.com/","hotmail.com",$nemail);
-        $nemail = preg_replace("/^hotmsil\.com/","hotmail.com",$nemail);
-        $nemail = preg_replace("/^hotmeil\.com/","hotmail.com",$nemail);
-        $nemail = preg_replace("/^fotmail\.com/","hotmail.com",$nemail);
-        $nemail = preg_replace("/^hoptmail\.com/","hotmail.com",$nemail);
-        $nemail = preg_replace("/^holtmail\.com/","hotmail.com",$nemail);
-        $nemail = preg_replace("/^notmail\.com/","hotmail.com",$nemail);
+        $nemail = self::replace("/^otmail\.com/","hotmail.com",$nemail);
+        $nemail = self::replace("/^htmail\.com/","hotmail.com",$nemail);
+        $nemail = self::replace("/^hoymail\.com/","hotmail.com",$nemail);
+        $nemail = self::replace("/^hotail\.com/","hotmail.com",$nemail);
+        $nemail = self::replace("/^hotamil\.com/","hotmail.com",$nemail);
+        $nemail = self::replace("/^homail\.com/","hotmail.com",$nemail);
+        $nemail = self::replace("/^hormail\.com/","hotmail.com",$nemail);
+        $nemail = self::replace("/^hotmai\.com/","hotmail.com",$nemail);
+        $nemail = self::replace("/^hotmia\.com/","hotmail.com",$nemail);
+        $nemail = self::replace("/^hotnail\.com/","hotmail.com",$nemail);
+        $nemail = self::replace("/^hotmil\.com/","hotmail.com",$nemail);
+        $nemail = self::replace("/^hotamail\.com/","hotmail.com",$nemail);
+        $nemail = self::replace("/^hotmial\.com/","hotmail.com",$nemail);
+        $nemail = self::replace("/^gotmail\.com/","hotmail.com",$nemail);
+        $nemail = self::replace("/^hitmail\.com/","hotmail.com",$nemail);
+        $nemail = self::replace("/^hptmail\.com/","hotmail.com",$nemail);
+        $nemail = self::replace("/^hotmal\.com/","hotmail.com",$nemail);
+        $nemail = self::replace("/^hotmsil\.com/","hotmail.com",$nemail);
+        $nemail = self::replace("/^hotmeil\.com/","hotmail.com",$nemail);
+        $nemail = self::replace("/^fotmail\.com/","hotmail.com",$nemail);
+        $nemail = self::replace("/^hoptmail\.com/","hotmail.com",$nemail);
+        $nemail = self::replace("/^holtmail\.com/","hotmail.com",$nemail);
+        $nemail = self::replace("/^notmail\.com/","hotmail.com",$nemail);
 
         // fix webmail misspellings
-        $nemail = preg_replace("/^.?webmail.+$/","webmail.co.za",$nemail);
+        $nemail = self::replace("/^.?webmail.+$/","webmail.co.za",$nemail);
 
         $nemail = str_ireplace("webmail.com","webmail.co.za",$nemail);
         $nemail = str_ireplace("webail.co.za","webmail.co.za",$nemail);
@@ -345,11 +345,11 @@ final class EmailNormaliser
         $nemail = str_ireplace("newhorizaons.co.za","newhorizons.co.za",$nemail);
 
         // fix telkomsa.net misspellings
-        $nemail = preg_replace("/telkom\.s\.a\./","telkomsa.",$nemail);
-        $nemail = preg_replace("/telkom\.sa\./","telkomsa.",$nemail);
-        $nemail = preg_replace("/teljomsa\./","telkomsa.",$nemail);
+        $nemail = self::replace("/telkom\.s\.a\./","telkomsa.",$nemail);
+        $nemail = self::replace("/telkom\.sa\./","telkomsa.",$nemail);
+        $nemail = self::replace("/teljomsa\./","telkomsa.",$nemail);
 
-        $nemail = preg_replace("/^.?telkomsa.+$/","telkomsa.net",$nemail);
+        $nemail = self::replace("/^.?telkomsa.+$/","telkomsa.net",$nemail);
 
         $nemail = str_ireplace("telkon.net","telkomsa.net",$nemail);
         $nemail = str_ireplace("tepkomsa.net","telkomsa.net",$nemail);
@@ -357,7 +357,7 @@ final class EmailNormaliser
         $nemail = str_ireplace("telomsa.net","telkomsa.net",$nemail);
 
         // fix mweb misspellings
-        $nemail = preg_replace("/^.?mweb.+$/","mweb.co.za",$nemail);
+        $nemail = self::replace("/^.?mweb.+$/","mweb.co.za",$nemail);
 
         $nemail = str_ireplace("m.web.co.za","mweb.co.za",$nemail);
         $nemail = str_ireplace("m-web.co.za","mweb.co.za",$nemail);
@@ -369,28 +369,28 @@ final class EmailNormaliser
         $nemail = str_ireplace("standardcank.co.za","standardbank.co.za",$nemail);
 
         // fix gmail misspellings
-        $nemail = preg_replace("/^gmai\./","gmail",$nemail);
-        $nemail = preg_replace("/^gmial\./","gmail.",$nemail);
-        $nemail = preg_replace("/^gmaik\./","gmail.",$nemail);
-        $nemail = preg_replace("/^gmaial\./","gmail.",$nemail);
+        $nemail = self::replace("/^gmai\./","gmail",$nemail);
+        $nemail = self::replace("/^gmial\./","gmail.",$nemail);
+        $nemail = self::replace("/^gmaik\./","gmail.",$nemail);
+        $nemail = self::replace("/^gmaial\./","gmail.",$nemail);
 
-        $nemail = preg_replace("/^.?gmail.+$/","gmail.com",$nemail);
+        $nemail = self::replace("/^.?gmail.+$/","gmail.com",$nemail);
 
         // fix intekom.co.za misspellings
-        $nemail = preg_replace("/^.?intekom.+$/","intekom.co.za",$nemail);
+        $nemail = self::replace("/^.?intekom.+$/","intekom.co.za",$nemail);
         $nemail = str_ireplace("intelkom.co.za","intekom.co.za",$nemail);
 
         // fix netactive.co.za misspellings
-        $nemail = preg_replace("/^.?netactive.+$/","netactive.co.za",$nemail);
+        $nemail = self::replace("/^.?netactive.+$/","netactive.co.za",$nemail);
 
         // fix yahoo misspellings
         $nemail = str_ireplace("yaqhoo","yahoo",$nemail);
         $nemail = str_ireplace("yahoio.com","yahoo.com",$nemail);
 
-        $nemail = preg_replace("/yahoo\.co\.za$/","yahoo.com",$nemail);
+        $nemail = self::replace("/yahoo\.co\.za$/","yahoo.com",$nemail);
 
-        $nemail = preg_replace("/^.?yahoo/","yahoo",$nemail);
-        $nemail = preg_replace("/^.?yahooco\..+$/","yahoo.co.uk",$nemail);
+        $nemail = self::replace("/^.?yahoo/","yahoo",$nemail);
+        $nemail = self::replace("/^.?yahooco\..+$/","yahoo.co.uk",$nemail);
 
         // fix ananzi.co.za misspellings
         $nemail = str_ireplace("ananzi.com","ananzi.co.za",$nemail);
@@ -407,16 +407,16 @@ final class EmailNormaliser
         $nemail = str_ireplace("iafriva.co.za","iafrica.com",$nemail);
         $nemail = str_ireplace("iafrica.co.za","iafrica.com",$nemail);
 
-        $nemail = preg_replace("/^iafrica.+$/","iafrica.com",$nemail);
+        $nemail = self::replace("/^iafrica.+$/","iafrica.com",$nemail);
 
         // transunion
         $nemail = str_ireplace("transunionitc.co.za","transunion.co.za",$nemail);
 
         // fix rocketmail misspellings
-        $nemail = preg_replace("/rockftmail/","rocketmail",$nemail);
+        $nemail = self::replace("/rockftmail/","rocketmail",$nemail);
 
         // fix worldonline.co.za misspellings
-        $nemail = preg_replace("/^.?worldonline.+$/","worldonline.co.za",$nemail);
+        $nemail = self::replace("/^.?worldonline.+$/","worldonline.co.za",$nemail);
 
         $nemail = str_ireplace("worlonline.co.za","worldonline.co.za",$nemail);
         $nemail = str_ireplace("worlconlinc.co.za","worldonline.co.za",$nemail);
@@ -437,7 +437,7 @@ final class EmailNormaliser
         $nemail = str_ireplace("mjghty.co.za","mighty.co.za",$nemail);
 
         // fix polka.co.za misspellings
-        $nemail = preg_replace("/^.?polka.+$/","intekom.co.za",$nemail);
+        $nemail = self::replace("/^.?polka.+$/","intekom.co.za",$nemail);
 
         // fix nashuamobile.com misspellings
         $nemail = str_ireplace("nasuamobile.com","nashuamobile.com",$nemail);
@@ -446,10 +446,10 @@ final class EmailNormaliser
         $nemail = str_ireplace("xsinct.co.za","xsinet.co.za",$nemail);
 
         // terms to invalidate
-        $nemail = preg_replace("/^lists\./","@@",$nemail);
-        $nemail = preg_replace("/^list\./","@@",$nemail);
-        $nemail = preg_replace("/^listserv\./","@@",$nemail);
-        $nemail = preg_replace("/^listserver\./","@@",$nemail);
+        $nemail = self::replace("/^lists\./","@@",$nemail);
+        $nemail = self::replace("/^list\./","@@",$nemail);
+        $nemail = self::replace("/^listserv\./","@@",$nemail);
+        $nemail = self::replace("/^listserver\./","@@",$nemail);
 
         // domain name changes
         $nemail = str_ireplace("kkdisplay.co.za","storequip.co.za",$nemail);
@@ -462,138 +462,138 @@ final class EmailNormaliser
         $nemail = str_ireplace("iledi.co.za","kpec.co.za",$nemail);
 
         // domain spaces to invalidate
-        $nemail = preg_replace("/\.ac\.uk$/","@@",$nemail);
-        $nemail = preg_replace("/\.ac\.za$/","@@",$nemail);
-        $nemail = preg_replace("/\.edu$/","@@",$nemail);
-        $nemail = preg_replace("/\.edu\.za$/","@@",$nemail);
-        $nemail = preg_replace("/\.mil$/","@@",$nemail);
-        $nemail = preg_replace("/\.gov$/","@@",$nemail);
-        $nemail = preg_replace("/\.gov\.za$/","@@",$nemail);
-        $nemail = preg_replace("/\.gov\.uk$/","@@",$nemail);
-        $nemail = preg_replace("/\.gov\.sg$/","@@",$nemail);
-        $nemail = preg_replace("/\.gnu\.org$/","@@",$nemail);
-        $nemail = preg_replace("/\.org$/","@@",$nemail);
-        $nemail = preg_replace("/\.rr\.com$/","@@",$nemail);
-        $nemail = preg_replace("/\.qld$/","@@",$nemail);
-        $nemail = preg_replace("/\.nct$/","@@",$nemail);
-        $nemail = preg_replace("/\.brandt$/","@@",$nemail);
-        $nemail = preg_replace("/\.horn$/","@@",$nemail);
-        $nemail = preg_replace("/\.orh$/","@@",$nemail);
-        $nemail = preg_replace("/\.int$/","@@",$nemail);
-        $nemail = preg_replace("/\.hov$/","@@",$nemail);
+        $nemail = self::replace("/\.ac\.uk$/","@@",$nemail);
+        $nemail = self::replace("/\.ac\.za$/","@@",$nemail);
+        $nemail = self::replace("/\.edu$/","@@",$nemail);
+        $nemail = self::replace("/\.edu\.za$/","@@",$nemail);
+        $nemail = self::replace("/\.mil$/","@@",$nemail);
+        $nemail = self::replace("/\.gov$/","@@",$nemail);
+        $nemail = self::replace("/\.gov\.za$/","@@",$nemail);
+        $nemail = self::replace("/\.gov\.uk$/","@@",$nemail);
+        $nemail = self::replace("/\.gov\.sg$/","@@",$nemail);
+        $nemail = self::replace("/\.gnu\.org$/","@@",$nemail);
+        $nemail = self::replace("/\.org$/","@@",$nemail);
+        $nemail = self::replace("/\.rr\.com$/","@@",$nemail);
+        $nemail = self::replace("/\.qld$/","@@",$nemail);
+        $nemail = self::replace("/\.nct$/","@@",$nemail);
+        $nemail = self::replace("/\.brandt$/","@@",$nemail);
+        $nemail = self::replace("/\.horn$/","@@",$nemail);
+        $nemail = self::replace("/\.orh$/","@@",$nemail);
+        $nemail = self::replace("/\.int$/","@@",$nemail);
+        $nemail = self::replace("/\.hov$/","@@",$nemail);
 
         // country codes to invalidate
-        $nemail = preg_replace("/\.ac$/","@@",$nemail);
-        $nemail = preg_replace("/\.ae$/","@@",$nemail);
-        $nemail = preg_replace("/\.ar$/","@@",$nemail);
-        $nemail = preg_replace("/\.at$/","@@",$nemail);
-        $nemail = preg_replace("/\.au$/","@@",$nemail);
-        $nemail = preg_replace("/\.be$/","@@",$nemail);
-        $nemail = preg_replace("/\.bf$/","@@",$nemail);
-        $nemail = preg_replace("/\.bj$/","@@",$nemail);
-        $nemail = preg_replace("/\.bo$/","@@",$nemail);
-        $nemail = preg_replace("/\.br$/","@@",$nemail);
-        $nemail = preg_replace("/\.bt$/","@@",$nemail);
-        $nemail = preg_replace("/\.bw$/","@@",$nemail);
-        $nemail = preg_replace("/\.ca$/","@@",$nemail);
-        $nemail = preg_replace("/\.cc$/","@@",$nemail);
-        $nemail = preg_replace("/\.ch$/","@@",$nemail);
-        $nemail = preg_replace("/\.cl$/","@@",$nemail);
-        $nemail = preg_replace("/\.cm$/","@@",$nemail);
-        $nemail = preg_replace("/\.cn$/","@@",$nemail);
-        $nemail = preg_replace("/\.cu$/","@@",$nemail);
-        $nemail = preg_replace("/\.cy$/","@@",$nemail);
-        $nemail = preg_replace("/\.cz$/","@@",$nemail);
-        $nemail = preg_replace("/\.de$/","@@",$nemail);
-        $nemail = preg_replace("/\.dk$/","@@",$nemail);
-        $nemail = preg_replace("/\.do$/","@@",$nemail);
-        $nemail = preg_replace("/\.ec$/","@@",$nemail);
-        $nemail = preg_replace("/\.ed$/","@@",$nemail);
-        $nemail = preg_replace("/\.ee$/","@@",$nemail);
-        $nemail = preg_replace("/\.eg$/","@@",$nemail);
-        $nemail = preg_replace("/\.er$/","@@",$nemail);
-        $nemail = preg_replace("/\.es$/","@@",$nemail);
-        $nemail = preg_replace("/\.eu$/","@@",$nemail);
-        $nemail = preg_replace("/\.fi$/","@@",$nemail);
-        $nemail = preg_replace("/\.fj$/","@@",$nemail);
-        $nemail = preg_replace("/\.fk$/","@@",$nemail);
-        $nemail = preg_replace("/\.fr$/","@@",$nemail);
-        $nemail = preg_replace("/\.gh$/","@@",$nemail);
-        $nemail = preg_replace("/\.gr$/","@@",$nemail);
-        $nemail = preg_replace("/\.gt$/","@@",$nemail);
-        $nemail = preg_replace("/\.hk$/","@@",$nemail);
-        $nemail = preg_replace("/\.hr$/","@@",$nemail);
-        $nemail = preg_replace("/\.hu$/","@@",$nemail);
-        $nemail = preg_replace("/\.id$/","@@",$nemail);
-        $nemail = preg_replace("/\.ie$/","@@",$nemail);
-        $nemail = preg_replace("/\.il$/","@@",$nemail);
-        $nemail = preg_replace("/\.in$/","@@",$nemail);
-        $nemail = preg_replace("/\.ir$/","@@",$nemail);
-        $nemail = preg_replace("/\.is$/","@@",$nemail);
-        $nemail = preg_replace("/\.it$/","@@",$nemail);
-        $nemail = preg_replace("/\.je$/","@@",$nemail);
-        $nemail = preg_replace("/\.jo$/","@@",$nemail);
-        $nemail = preg_replace("/\.jp$/","@@",$nemail);
-        $nemail = preg_replace("/\.ke$/","@@",$nemail);
-        $nemail = preg_replace("/\.kr$/","@@",$nemail);
-        $nemail = preg_replace("/\.kw$/","@@",$nemail);
-        $nemail = preg_replace("/\.lb$/","@@",$nemail);
-        $nemail = preg_replace("/\.lc$/","@@",$nemail);
-        $nemail = preg_replace("/\.lk$/","@@",$nemail);
-        $nemail = preg_replace("/\.ls$/","@@",$nemail);
-        $nemail = preg_replace("/\.lu$/","@@",$nemail);
-        $nemail = preg_replace("/\.lv$/","@@",$nemail);
-        $nemail = preg_replace("/\.ma$/","@@",$nemail);
-        $nemail = preg_replace("/\.mk$/","@@",$nemail);
-        $nemail = preg_replace("/\.ml$/","@@",$nemail);
-        $nemail = preg_replace("/\.mm$/","@@",$nemail);
-        $nemail = preg_replace("/\.mt$/","@@",$nemail);
-        $nemail = preg_replace("/\.mu$/","@@",$nemail);
-        $nemail = preg_replace("/\.mx$/","@@",$nemail);
-        $nemail = preg_replace("/\.my$/","@@",$nemail);
-        $nemail = preg_replace("/\.mz$/","@@",$nemail);
-        $nemail = preg_replace("/\.na$/","@@",$nemail);
-        $nemail = preg_replace("/\.ng$/","@@",$nemail);
-        $nemail = preg_replace("/\.nl$/","@@",$nemail);
-        $nemail = preg_replace("/\.no$/","@@",$nemail);
-        $nemail = preg_replace("/\.np$/","@@",$nemail);
-        $nemail = preg_replace("/\.nu$/","@@",$nemail);
-        $nemail = preg_replace("/\.nz$/","@@",$nemail);
-        $nemail = preg_replace("/\.om$/","@@",$nemail);
-        $nemail = preg_replace("/\.pe$/","@@",$nemail);
-        $nemail = preg_replace("/\.pg$/","@@",$nemail);
-        $nemail = preg_replace("/\.ph$/","@@",$nemail);
-        $nemail = preg_replace("/\.pk$/","@@",$nemail);
-        $nemail = preg_replace("/\.pl$/","@@",$nemail);
-        $nemail = preg_replace("/\.pt$/","@@",$nemail);
-        $nemail = preg_replace("/\.py$/","@@",$nemail);
-        $nemail = preg_replace("/\.qa$/","@@",$nemail);
-        $nemail = preg_replace("/\.ro$/","@@",$nemail);
-        $nemail = preg_replace("/\.ru$/","@@",$nemail);
-        $nemail = preg_replace("/\.rw$/","@@",$nemail);
-        $nemail = preg_replace("/\.sa$/","@@",$nemail);
-        $nemail = preg_replace("/\.se$/","@@",$nemail);
-        $nemail = preg_replace("/\.sg$/","@@",$nemail);
-        $nemail = preg_replace("/\.si$/","@@",$nemail);
-        $nemail = preg_replace("/\.sk$/","@@",$nemail);
-        $nemail = preg_replace("/\.sy$/","@@",$nemail);
-        $nemail = preg_replace("/\.sz$/","@@",$nemail);
-        $nemail = preg_replace("/\.th$/","@@",$nemail);
-        $nemail = preg_replace("/\.tn$/","@@",$nemail);
-        $nemail = preg_replace("/\.tr$/","@@",$nemail);
-        $nemail = preg_replace("/\.tv$/","@@",$nemail);
-        $nemail = preg_replace("/\.tz$/","@@",$nemail);
-        $nemail = preg_replace("/\.tw$/","@@",$nemail);
-        $nemail = preg_replace("/\.ua$/","@@",$nemail);
-        $nemail = preg_replace("/\.ug$/","@@",$nemail);
-        $nemail = preg_replace("/\.us$/","@@",$nemail);
-        $nemail = preg_replace("/\.uy$/","@@",$nemail);
-        $nemail = preg_replace("/\.uz$/","@@",$nemail);
-        $nemail = preg_replace("/\.vn$/","@@",$nemail);
-        $nemail = preg_replace("/\.ye$/","@@",$nemail);
-        $nemail = preg_replace("/\.yu$/","@@",$nemail);
-        $nemail = preg_replace("/\.zm$/","@@",$nemail);
-        $nemail = preg_replace("/\.zw$/","@@",$nemail);
+        $nemail = self::replace("/\.ac$/","@@",$nemail);
+        $nemail = self::replace("/\.ae$/","@@",$nemail);
+        $nemail = self::replace("/\.ar$/","@@",$nemail);
+        $nemail = self::replace("/\.at$/","@@",$nemail);
+        $nemail = self::replace("/\.au$/","@@",$nemail);
+        $nemail = self::replace("/\.be$/","@@",$nemail);
+        $nemail = self::replace("/\.bf$/","@@",$nemail);
+        $nemail = self::replace("/\.bj$/","@@",$nemail);
+        $nemail = self::replace("/\.bo$/","@@",$nemail);
+        $nemail = self::replace("/\.br$/","@@",$nemail);
+        $nemail = self::replace("/\.bt$/","@@",$nemail);
+        $nemail = self::replace("/\.bw$/","@@",$nemail);
+        $nemail = self::replace("/\.ca$/","@@",$nemail);
+        $nemail = self::replace("/\.cc$/","@@",$nemail);
+        $nemail = self::replace("/\.ch$/","@@",$nemail);
+        $nemail = self::replace("/\.cl$/","@@",$nemail);
+        $nemail = self::replace("/\.cm$/","@@",$nemail);
+        $nemail = self::replace("/\.cn$/","@@",$nemail);
+        $nemail = self::replace("/\.cu$/","@@",$nemail);
+        $nemail = self::replace("/\.cy$/","@@",$nemail);
+        $nemail = self::replace("/\.cz$/","@@",$nemail);
+        $nemail = self::replace("/\.de$/","@@",$nemail);
+        $nemail = self::replace("/\.dk$/","@@",$nemail);
+        $nemail = self::replace("/\.do$/","@@",$nemail);
+        $nemail = self::replace("/\.ec$/","@@",$nemail);
+        $nemail = self::replace("/\.ed$/","@@",$nemail);
+        $nemail = self::replace("/\.ee$/","@@",$nemail);
+        $nemail = self::replace("/\.eg$/","@@",$nemail);
+        $nemail = self::replace("/\.er$/","@@",$nemail);
+        $nemail = self::replace("/\.es$/","@@",$nemail);
+        $nemail = self::replace("/\.eu$/","@@",$nemail);
+        $nemail = self::replace("/\.fi$/","@@",$nemail);
+        $nemail = self::replace("/\.fj$/","@@",$nemail);
+        $nemail = self::replace("/\.fk$/","@@",$nemail);
+        $nemail = self::replace("/\.fr$/","@@",$nemail);
+        $nemail = self::replace("/\.gh$/","@@",$nemail);
+        $nemail = self::replace("/\.gr$/","@@",$nemail);
+        $nemail = self::replace("/\.gt$/","@@",$nemail);
+        $nemail = self::replace("/\.hk$/","@@",$nemail);
+        $nemail = self::replace("/\.hr$/","@@",$nemail);
+        $nemail = self::replace("/\.hu$/","@@",$nemail);
+        $nemail = self::replace("/\.id$/","@@",$nemail);
+        $nemail = self::replace("/\.ie$/","@@",$nemail);
+        $nemail = self::replace("/\.il$/","@@",$nemail);
+        $nemail = self::replace("/\.in$/","@@",$nemail);
+        $nemail = self::replace("/\.ir$/","@@",$nemail);
+        $nemail = self::replace("/\.is$/","@@",$nemail);
+        $nemail = self::replace("/\.it$/","@@",$nemail);
+        $nemail = self::replace("/\.je$/","@@",$nemail);
+        $nemail = self::replace("/\.jo$/","@@",$nemail);
+        $nemail = self::replace("/\.jp$/","@@",$nemail);
+        $nemail = self::replace("/\.ke$/","@@",$nemail);
+        $nemail = self::replace("/\.kr$/","@@",$nemail);
+        $nemail = self::replace("/\.kw$/","@@",$nemail);
+        $nemail = self::replace("/\.lb$/","@@",$nemail);
+        $nemail = self::replace("/\.lc$/","@@",$nemail);
+        $nemail = self::replace("/\.lk$/","@@",$nemail);
+        $nemail = self::replace("/\.ls$/","@@",$nemail);
+        $nemail = self::replace("/\.lu$/","@@",$nemail);
+        $nemail = self::replace("/\.lv$/","@@",$nemail);
+        $nemail = self::replace("/\.ma$/","@@",$nemail);
+        $nemail = self::replace("/\.mk$/","@@",$nemail);
+        $nemail = self::replace("/\.ml$/","@@",$nemail);
+        $nemail = self::replace("/\.mm$/","@@",$nemail);
+        $nemail = self::replace("/\.mt$/","@@",$nemail);
+        $nemail = self::replace("/\.mu$/","@@",$nemail);
+        $nemail = self::replace("/\.mx$/","@@",$nemail);
+        $nemail = self::replace("/\.my$/","@@",$nemail);
+        $nemail = self::replace("/\.mz$/","@@",$nemail);
+        $nemail = self::replace("/\.na$/","@@",$nemail);
+        $nemail = self::replace("/\.ng$/","@@",$nemail);
+        $nemail = self::replace("/\.nl$/","@@",$nemail);
+        $nemail = self::replace("/\.no$/","@@",$nemail);
+        $nemail = self::replace("/\.np$/","@@",$nemail);
+        $nemail = self::replace("/\.nu$/","@@",$nemail);
+        $nemail = self::replace("/\.nz$/","@@",$nemail);
+        $nemail = self::replace("/\.om$/","@@",$nemail);
+        $nemail = self::replace("/\.pe$/","@@",$nemail);
+        $nemail = self::replace("/\.pg$/","@@",$nemail);
+        $nemail = self::replace("/\.ph$/","@@",$nemail);
+        $nemail = self::replace("/\.pk$/","@@",$nemail);
+        $nemail = self::replace("/\.pl$/","@@",$nemail);
+        $nemail = self::replace("/\.pt$/","@@",$nemail);
+        $nemail = self::replace("/\.py$/","@@",$nemail);
+        $nemail = self::replace("/\.qa$/","@@",$nemail);
+        $nemail = self::replace("/\.ro$/","@@",$nemail);
+        $nemail = self::replace("/\.ru$/","@@",$nemail);
+        $nemail = self::replace("/\.rw$/","@@",$nemail);
+        $nemail = self::replace("/\.sa$/","@@",$nemail);
+        $nemail = self::replace("/\.se$/","@@",$nemail);
+        $nemail = self::replace("/\.sg$/","@@",$nemail);
+        $nemail = self::replace("/\.si$/","@@",$nemail);
+        $nemail = self::replace("/\.sk$/","@@",$nemail);
+        $nemail = self::replace("/\.sy$/","@@",$nemail);
+        $nemail = self::replace("/\.sz$/","@@",$nemail);
+        $nemail = self::replace("/\.th$/","@@",$nemail);
+        $nemail = self::replace("/\.tn$/","@@",$nemail);
+        $nemail = self::replace("/\.tr$/","@@",$nemail);
+        $nemail = self::replace("/\.tv$/","@@",$nemail);
+        $nemail = self::replace("/\.tz$/","@@",$nemail);
+        $nemail = self::replace("/\.tw$/","@@",$nemail);
+        $nemail = self::replace("/\.ua$/","@@",$nemail);
+        $nemail = self::replace("/\.ug$/","@@",$nemail);
+        $nemail = self::replace("/\.us$/","@@",$nemail);
+        $nemail = self::replace("/\.uy$/","@@",$nemail);
+        $nemail = self::replace("/\.uz$/","@@",$nemail);
+        $nemail = self::replace("/\.vn$/","@@",$nemail);
+        $nemail = self::replace("/\.ye$/","@@",$nemail);
+        $nemail = self::replace("/\.yu$/","@@",$nemail);
+        $nemail = self::replace("/\.zm$/","@@",$nemail);
+        $nemail = self::replace("/\.zw$/","@@",$nemail);
 
         return $nemail;
     }
@@ -601,23 +601,23 @@ final class EmailNormaliser
     public static function fixCommonErrors(string $email): string
     {
         // fix common errors
-        $nemail = preg_replace("/^-{1,10}/","",$email);
-        $nemail = preg_replace("/^_{1,10}/","",$nemail);
-        $nemail = preg_replace("/-{2,10}/","-",$nemail);
-        $nemail = preg_replace("/\.{2,10}/",".",$nemail);
-        // $nemail = preg_replace("/^20/","",$nemail);
-        // $nemail = preg_replace("/%20/","",$nemail);
-        // $nemail = preg_replace("/^3[a-d]/","",$nemail);
-        $nemail = preg_replace("/^mailto\./","",$nemail);
-        $nemail = preg_replace("/^mailto/","",$nemail);
-        $nemail = preg_replace("/^smtp/","",$nemail);
-        $nemail = preg_replace("/^address/","",$nemail);
-        $nemail = preg_replace("/^addr/","",$nemail);
-        // $nemail = preg_replace("/^[0-9]/","@@",$nemail);
-        $nemail = preg_replace("/\.-|-\./",".",$nemail);
-        $nemail = preg_replace("/\.@|@\./","@",$nemail);
-        $nemail = preg_replace("/-@|@-/","@",$nemail);
-        $nemail = preg_replace("/_@|@_/","@",$nemail);
+        $nemail = self::replace("/^-{1,10}/","",$email);
+        $nemail = self::replace("/^_{1,10}/","",$nemail);
+        $nemail = self::replace("/-{2,10}/","-",$nemail);
+        $nemail = self::replace("/\.{2,10}/",".",$nemail);
+        // $nemail = self::replace("/^20/","",$nemail);
+        // $nemail = self::replace("/%20/","",$nemail);
+        // $nemail = self::replace("/^3[a-d]/","",$nemail);
+        $nemail = self::replace("/^mailto\./","",$nemail);
+        $nemail = self::replace("/^mailto/","",$nemail);
+        $nemail = self::replace("/^smtp/","",$nemail);
+        $nemail = self::replace("/^address/","",$nemail);
+        $nemail = self::replace("/^addr/","",$nemail);
+        // $nemail = self::replace("/^[0-9]/","@@",$nemail);
+        $nemail = self::replace("/\.-|-\./",".",$nemail);
+        $nemail = self::replace("/\.@|@\./","@",$nemail);
+        $nemail = self::replace("/-@|@-/","@",$nemail);
+        $nemail = self::replace("/_@|@_/","@",$nemail);
 
         return $nemail;
     }
@@ -671,5 +671,14 @@ final class EmailNormaliser
         $nemail = str_ireplace("duffuel@vaal.net","enviro@claydisposal.com",$nemail);
 
         return $nemail;
+    }
+
+    /**
+     * preg_replace() for the fixed rule patterns above: a regex error (which
+     * preg_replace reports as null) is a programming error, not an address.
+     */
+    private static function replace(string $pattern, string $replacement, string $subject): string
+    {
+        return preg_replace($pattern, $replacement, $subject) ?? throw new \LogicException('Address rule failed: ' . $pattern);
     }
 }

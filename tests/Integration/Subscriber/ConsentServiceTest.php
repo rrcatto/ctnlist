@@ -58,7 +58,8 @@ final class ConsentServiceTest extends IntegrationTestCase
         $muid = $this->createMessage('Offer', [$news]);
         $this->service(MessageLog::class)->ensure($user->uuid, $muid, 'NEWS');
 
-        $message = $consent->unsubscribe($user, (array) $lists->findById($news), 'list', 'Too many', $muid);
+        $list = $lists->findById($news) ?? self::fail('list');
+        $message = $consent->unsubscribe($user, $list, 'list', 'Too many', $muid);
         self::assertSame('You have been unsubscribed from News.', $message);
         self::assertFalse($this->eligible($id, $news));
         self::assertTrue($this->eligible($id, $deals), 'other lists untouched');
@@ -66,7 +67,7 @@ final class ConsentServiceTest extends IntegrationTestCase
         self::assertSame(1, (int) $this->db->fetchOne('SELECT sml_unsubscribe FROM smlog WHERE sml_muid = ?', [$muid]));
         self::assertSame('UNSUBSCRIBE', $this->db->fetchOne('SELECT sl_type FROM sendlog ORDER BY sl_id DESC LIMIT 1'));
 
-        $message = $consent->unsubscribe($user, (array) $lists->findById($news), 'spam', '');
+        $message = $consent->unsubscribe($user, $list, 'spam', '');
         self::assertStringContainsString('all local lists', $message);
         self::assertFalse($this->eligible($id, $deals), 'a global unsubscribe disables every membership');
     }

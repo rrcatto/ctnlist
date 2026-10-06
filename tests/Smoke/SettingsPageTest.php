@@ -41,7 +41,7 @@ final class SettingsPageTest extends SmokeTestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->saved = self::$db->query("SELECT * FROM options WHERE o_key LIKE 'setting:%'")->fetchAll(\PDO::FETCH_ASSOC);
+        $this->saved = self::rows("SELECT * FROM options WHERE o_key LIKE 'setting:%'");
         // Start from .env alone; the installation's own overrides are put back in tearDown().
         self::$db->exec("DELETE FROM options WHERE o_key LIKE 'setting:%'");
     }
@@ -76,10 +76,11 @@ final class SettingsPageTest extends SmokeTestCase
         $admin = self::client();
         self::loginAsAdmin($admin);
         $body = self::request($admin, 'GET', '/settings')['body'];
-        foreach (['Site identity', 'Contact details', 'Mail sender', 'SMTP servers', 'Subscription messages', 'Archives', 'Sign-in'] as $section) {
+        foreach (['Site identity', 'Contact details', 'Mail sender', 'Transactional mail', 'Subscription messages', 'Archives', 'Sign-in'] as $section) {
             self::assertStringContainsString('>' . $section . '</h2>', $body);
         }
-        self::assertDoesNotMatchRegularExpression('/name="(DB_|GDB_|APP_SECRET|APP_SETTINGS_KEY|APP_ENV|APP_DEBUG|APP_BASE_URL|TRUSTED_PROXIES|SUPPRESSION_PROVIDER|CONTACT_LOG_FILE|APP_LOG_DIR)/', $body, 'infrastructure stays in .env');
+        self::assertDoesNotMatchRegularExpression('/name="(DB_|GDB_|APP_SECRET|APP_SETTINGS_KEY|APP_ENV|APP_DEBUG|APP_BASE_URL|TRUSTED_PROXIES|SUPPRESSION_PROVIDER|CONTACT_LOG_FILE|APP_LOG_DIR|CATTOMAIL_)/', $body, 'infrastructure stays in .env');
+        self::assertStringNotContainsString('MAIL_SMTP_SERVERS_JSON', $body, 'campaign content goes to catto-mail, not SMTP failover servers');
     }
 
     public function testOverrideBadgesAndReset(): void
@@ -88,18 +89,47 @@ final class SettingsPageTest extends SmokeTestCase
         self::loginAsAdmin($admin);
         $name = 'Overridden ' . bin2hex(random_bytes(3));
 
-        $saved = self::post($admin, '/settings/site', ['APP_LIST_NAME' => $name, 'APP_ORGANISATION' => self::shown($admin, 'APP_ORGANISATION'), 'APP_ABOUT_US' => '']);
+        $saved = self::save($admin, 'site', ['[APP_LIST_NAME]' => $name]);
         self::assertStringContainsString('Site identity settings saved.', $saved);
-        self::assertMatchesRegularExpression('#for="setting-app_list_name">List name</label>\s*<span class="badge text-bg-primary"[^>]*>Database</span>#', $saved);
-        self::assertMatchesRegularExpression('#for="setting-app_organisation">Organisation</label>\s*<span class="badge text-bg-light border">\.env</span>#', $saved);
+        self::assertMatchesRegularExpression('#for="settings_site_APP_LIST_NAME">List name</label><span class="badge text-bg-primary"[^>]*>Database</span>#', $saved);
+        self::assertMatchesRegularExpression('#for="settings_site_APP_ORGANISATION">Organisation</label><span class="badge text-bg-light border">\.env</span>#', $saved);
         self::assertMatchesRegularExpression('#<span class="badge text-bg-secondary">Default</span>#', $saved, 'settings .env leaves unset');
         self::assertStringContainsString('</i>' . $name . '</a>', self::request(self::client(), 'GET', '/')['body'], 'applies immediately everywhere');
-        self::assertStringContainsString('no changes to save', self::post($admin, '/settings/site', ['APP_LIST_NAME' => $name, 'APP_ORGANISATION' => self::shown($admin, 'APP_ORGANISATION'), 'APP_ABOUT_US' => '']));
+        self::assertStringContainsString('no changes to save', self::save($admin, 'site', []));
 
-        self::assertStringContainsString('List name now comes from .env.', self::post($admin, '/settings/reset/APP_LIST_NAME', []));
+        self::assertStringContainsString('List name now comes from .env.', self::post($admin, '/settings/reset/APP_LIST_NAME'));
         self::assertStringNotContainsString($name, self::request(self::client(), 'GET', '/')['body']);
+    }
 
-        self::assertStringContainsString('must be a whole number', self::post($admin, '/settings/signin', ['AUTH_MAGIC_LINK_TTL' => 'soon']));
+    public function testInvalidInputIsShownAtItsFieldAndNothingIsSaved(): void
+    {
+        $admin = self::client();
+        self::loginAsAdmin($admin);
+
+        $response = self::submitForm($admin, '/settings', 'settings_contact', [
+            'settings_contact[APP_STREET_ADDRESS]' => '12 Kept Street',
+            'settings_contact[APP_FACEBOOK_URL]' => 'javascript:alert(1)',
+        ]);
+        self::assertSame(422, $response['status']);
+        $page = $response['body'];
+        self::assertCleanPage('/settings/contact', $page);
+        self::assertMatchesRegularExpression('#<input type="url"\s+id="settings_contact_APP_FACEBOOK_URL"[^>]*class="form-control is-invalid" aria-invalid="true" aria-describedby="[^"]*settings_contact_APP_FACEBOOK_URL_error1"[^>]*value="javascript:alert\(1\)"#', $page, 'the error is at the field, linked for screen readers, with the value kept');
+        self::assertMatchesRegularExpression('#id="settings_contact_APP_FACEBOOK_URL_error1">Enter a full web address#', $page);
+        self::assertStringContainsString('value="12 Kept Street"', $page, 'the other values are kept');
+        self::assertStringContainsString('class="nav-link active text-danger" id="tab-contact"', $page, 'the tab with errors is shown');
+        self::assertStringContainsString('nothing was saved', $page);
+        self::assertSame('0', (string) self::value("SELECT COUNT(*) FROM options WHERE o_key LIKE 'setting:%'"), 'nothing stored');
+
+        $number = self::submitForm($admin, '/settings', 'settings_signin', ['settings_signin[AUTH_MAGIC_LINK_TTL]' => 'soon']);
+        self::assertSame(422, $number['status']);
+        self::assertMatchesRegularExpression('#id="settings_signin_AUTH_MAGIC_LINK_TTL_error1">Enter a whole number#', $number['body']);
+        $range = self::submitForm($admin, '/settings', 'settings_signin', ['settings_signin[AUTH_MAGIC_LINK_TTL]' => '10']);
+        self::assertMatchesRegularExpression('#id="settings_signin_AUTH_MAGIC_LINK_TTL_error1">Enter a whole number of at least 60#', $range['body']);
+
+        $forged = self::submitForm($admin, '/settings', 'settings_site', ['settings_site[csrf]' => 'forged', 'settings_site[APP_LIST_NAME]' => 'Forged']);
+        self::assertSame(422, $forged['status'], 'a bad CSRF token is rejected');
+        self::assertStringContainsString('CSRF token is invalid', $forged['body']);
+        self::assertSame('0', (string) self::value("SELECT COUNT(*) FROM options WHERE o_key LIKE 'setting:%'"));
     }
 
     public function testSecretsNeverReachThePage(): void
@@ -107,32 +137,34 @@ final class SettingsPageTest extends SmokeTestCase
         $admin = self::client();
         self::loginAsAdmin($admin);
         $password = 'Pw-' . bin2hex(random_bytes(6));
-        $relayPassword = 'Relay-' . bin2hex(random_bytes(6));
-        $smtp = ['smtp_scheme' => 'smtp', 'smtp_host' => 'smtp.example.invalid', 'smtp_port' => '587', 'smtp_username' => 'user', 'smtp_options' => '',
-            'MAIL_RATE_PER_MINUTE' => '13', 'MAIL_BATCH_SIZE' => '600', 'MAIL_BATCH_DELAY' => '0', 'MAIL_BOUNCE_LIMIT' => '2'];
+        $dsn = ['[MAILER_DSN][host]' => 'smtp.example.invalid', '[MAILER_DSN][port]' => '587', '[MAILER_DSN][security]' => 'smtp', '[MAILER_DSN][username]' => 'user'];
 
-        $page = self::post($admin, '/settings/smtp', ['smtp_password' => $password, 'servers' => [
-            ['index' => '', 'position' => '1', 'active' => '1', 'host' => 'relay.example.invalid', 'port' => '587', 'security' => 'tls', 'username' => 'r', 'password' => $relayPassword, 'batchsize' => '600', 'delay' => '10', 'sendrate' => ''],
-        ]] + $smtp);
-        self::assertStringContainsString('SMTP servers settings saved.', $page, (string) (preg_match('#<div class="alert[^>]*>(.*?)<button#s', $page, $alert) ? trim(strip_tags($alert[1])) : 'no alert'));
+        $page = self::save($admin, 'smtp', $dsn + ['[MAILER_DSN][password]' => $password]);
+        self::assertStringContainsString('Transactional mail settings saved.', $page, (string) (preg_match('#<div class="alert[^>]*>(.*?)</div>#s', $page, $alert) ? trim(strip_tags($alert[1])) : 'no alert'));
         self::assertStringContainsString('value="smtp.example.invalid"', $page);
-        self::assertStringContainsString('value="relay.example.invalid"', $page);
         self::assertStringContainsString('placeholder="Leave empty to keep the current password"', $page);
-        foreach ([$password, $relayPassword, rawurlencode($password)] as $secret) {
+        foreach ([$password, rawurlencode($password)] as $secret) {
             self::assertStringNotContainsString($secret, $page, 'never in the page source');
         }
-        $stored = (string) self::$db->query("SELECT string_agg(o_value, ' ') FROM options WHERE o_key IN ('setting:MAILER_DSN', 'setting:MAIL_SMTP_SERVERS_JSON')")->fetchColumn();
+        $stored = self::storedSecrets();
         self::assertStringNotContainsString($password, $stored, 'nor stored as plaintext');
-        self::assertStringNotContainsString($relayPassword, $stored);
-        self::assertSame(2, substr_count($stored, 'enc:v1:'));
+        self::assertSame(1, substr_count($stored, 'enc:v1:'));
 
-        $kept = self::post($admin, '/settings/smtp', ['smtp_password' => '', 'servers' => [
-            ['index' => '0', 'position' => '1', 'active' => '1', 'host' => 'relay.example.invalid', 'port' => '587', 'security' => 'tls', 'username' => 'r', 'password' => '', 'batchsize' => '600', 'delay' => '10', 'sendrate' => ''],
-        ]] + $smtp);
-        self::assertStringContainsString('no changes to save', $kept, 'empty passwords keep the stored ones');
+        self::assertStringContainsString('no changes to save', self::save($admin, 'smtp', []), 'empty passwords keep the stored ones');
 
-        self::assertStringContainsString('every setting now comes from .env or its default', self::post($admin, '/settings/smtp/reset', []));
-        self::assertSame('0', (string) self::$db->query("SELECT COUNT(*) FROM options WHERE o_key IN ('setting:MAILER_DSN', 'setting:MAIL_SMTP_SERVERS_JSON')")->fetchColumn());
+        // A replacement password is saved only with a valid form; the page never shows it.
+        $failed = self::submitForm($admin, '/settings', 'settings_smtp', [
+            'settings_smtp[MAILER_DSN][password]' => 'Replacement-' . $password,
+            'settings_smtp[MAILER_DSN][port]' => '70000',
+        ]);
+        self::assertSame(422, $failed['status']);
+        self::assertMatchesRegularExpression('#id="settings_smtp_MAILER_DSN_port_error1">The port must be between 1 and 65535#', $failed['body']);
+        self::assertStringNotContainsString('Replacement-' . $password, $failed['body'], 'a rejected password is not redisplayed');
+        self::assertStringContainsString('value="smtp.example.invalid"', $failed['body'], 'the other values are kept');
+        self::assertSame($stored, self::storedSecrets(), 'the stored secrets are unchanged');
+
+        self::assertStringContainsString('every setting now comes from .env or its default', self::post($admin, '/settings/smtp/reset'));
+        self::assertSame('', self::storedSecrets());
     }
 
     private static function signIn(): \CurlHandle
@@ -144,41 +176,42 @@ final class SettingsPageTest extends SmokeTestCase
 
     private static function uuid(): string
     {
-        return (string) self::$db->query('SELECT s_uuid FROM subscribers WHERE s_id = ' . self::$staffId)->fetchColumn();
+        return (string) self::value('SELECT s_uuid FROM subscribers WHERE s_id = ' . self::$staffId);
     }
 
-    /** The value the page currently shows for a text setting. */
-    private static function shown(\CurlHandle $client, string $name): string
+    /**
+     * Submit a Settings tab as the page shows it, with $changes keyed by the
+     * field path inside the form (e.g. "[APP_LIST_NAME]"); returns the page
+     * after the redirect.
+     *
+     * @param array<string, string> $changes
+     */
+    private static function save(\CurlHandle $client, string $group, array $changes): string
     {
+        $overrides = [];
+        foreach ($changes as $path => $value) {
+            $overrides['settings_' . $group . $path] = $value;
+        }
+        $response = self::submitForm($client, '/settings', 'settings_' . $group, $overrides);
+        self::assertSame(302, $response['status'], "save {$group}: " . (preg_match_all('#class="invalid-feedback[^>]*>([^<]+)#', $response['body'], $m) ? implode('; ', $m[1]) : ''));
         $page = self::request($client, 'GET', '/settings')['body'];
-        return preg_match('#name="' . $name . '"[^>]*value="([^"]*)"#', $page, $m) === 1 ? html_entity_decode($m[1]) : '';
+        self::assertCleanPage('/settings', $page);
+        return $page;
     }
 
-    /** @param array<string, mixed> $fields */
-    private static function post(\CurlHandle $client, string $path, array $fields): string
+    /** POST a reset button (plain csrf field) and return the page after the redirect. */
+    private static function post(\CurlHandle $client, string $path): string
     {
         $form = self::request($client, 'GET', '/settings')['body'];
-        self::assertSame(1, preg_match('/name="csrf" value="([^"]+)"/', $form, $csrf));
-        $response = self::request($client, 'POST', $path, ['csrf' => html_entity_decode($csrf[1])] + self::flatten($fields));
-        self::assertSame(302, $response['status'], "POST {$path}");
+        $csrf = self::match('/name="csrf" value="([^"]+)"/', $form);
+        self::assertSame(302, self::request($client, 'POST', $path, ['csrf' => html_entity_decode($csrf[1])])['status'], "POST {$path}");
         $page = self::request($client, 'GET', '/settings')['body'];
         self::assertCleanPage($path, $page);
         return $page;
     }
 
-    /**
-     * Nested form fields (servers[0][host]) as flat POST names.
-     *
-     * @param array<string, mixed> $fields
-     * @return array<string, string>
-     */
-    private static function flatten(array $fields, string $prefix = ''): array
+    private static function storedSecrets(): string
     {
-        $flat = [];
-        foreach ($fields as $key => $value) {
-            $name = $prefix === '' ? (string) $key : $prefix . '[' . $key . ']';
-            $flat += is_array($value) ? self::flatten($value, $name) : [$name => (string) $value];
-        }
-        return $flat;
+        return (string) self::value("SELECT string_agg(o_value, ' ' ORDER BY o_key) FROM options WHERE o_key = 'setting:MAILER_DSN'");
     }
 }

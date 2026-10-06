@@ -12,6 +12,7 @@ use App\Repository\ListRepository;
 use App\Repository\MembershipRepository;
 use App\Repository\SubscriberRepository;
 use App\Suppression\SuppressionChecker;
+use App\Validator\InvalidField;
 use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -93,11 +94,18 @@ final class SubscriberAdmin
         return 'Subscriber saved.';
     }
 
-    /** @return int the number subscribed */
+    /**
+     * @return int the number subscribed
+     * @throws InvalidField when the input holds no usable address
+     */
     public function bulkSubscribe(string $input, int $priority, int $listId): int
     {
+        $emails = EmailNormaliser::extract($input);
+        if ($emails === []) {
+            throw new InvalidField('emails', 'No usable email addresses were found.');
+        }
         $added = [];
-        foreach (EmailNormaliser::extract($input) as $email) {
+        foreach ($emails as $email) {
             if ($this->subscriptions->subscribe($email, $priority, $listId)) {
                 $added[] = $email;
             }
@@ -119,11 +127,15 @@ final class SubscriberAdmin
             throw new \InvalidArgumentException('Unknown scope.');
         }
         if ($scope === 'list' && $this->lists->findById($listId) === null) {
-            throw new \InvalidArgumentException('The selected list does not exist.');
+            throw new InvalidField('listId', 'The selected list does not exist.');
+        }
+        $emails = EmailNormaliser::extract($input);
+        if ($emails === []) {
+            throw new InvalidField('emails', 'No usable email addresses were found.');
         }
         $count = 0;
         $now = $this->clock->now()->format('Y-m-d H:i:s');
-        foreach (EmailNormaliser::extract($input) as $email) {
+        foreach ($emails as $email) {
             $done = match ($scope) {
                 'domain' => $this->suppression->suppressDomain(EmailNormaliser::domain($email), 'SPAM'),
                 'bounce' => $this->suppression->suppressEmail($email, 'BOUNCE-ADMIN', $reason),
@@ -198,7 +210,8 @@ final class SubscriberAdmin
             return;
         }
         $list = $this->site->listName;
-        $url = rtrim($this->site->baseUrl, '/') . '/subscribe/' . rawurlencode($uuid) . ($muid !== '' ? '/' . rawurlencode($muid) : '');
+        // The subscriber's own profile page (it asks anyone else to verify the address first).
+        $url = rtrim($this->site->baseUrl, '/') . '/profile/subscriber/' . rawurlencode($uuid);
         $e = static fn(string $v): string => htmlspecialchars($v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $this->mailer->sendNotification(
             $muid, 'UPDATE-PROFILE', $this->site->fromAddress, $identity['s_email'], trim($identity['s_fname'] . ' ' . $identity['s_lname']),

@@ -1,25 +1,15 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}{{ title ?? 'Login' }}{% endblock %}
+{% block title %}Sign in{% endblock %}
 
 {% block content %}
-{% if heading is defined %}
-  <h1 class="h4">{{ heading }}</h1>
-  <p>{{ intro }}</p>
-{% endif %}
-<form name="loginform" action="{{ path('login_request') }}" method="post" class="app-narrow">
-  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-  <input type="hidden" name="return_action" value="{{ return_action }}">
-  {% if return_message_id is defined %}<input type="hidden" name="return_message_id" value="{{ return_message_id }}">{% endif %}
-  {% if return_list_id is defined %}<input type="hidden" name="return_list_id" value="{{ return_list_id }}">{% endif %}
+{{ form_start(form, {attr: {class: 'app-narrow'}}) }}
   <fieldset class="border rounded p-4">
     <legend>Sign in by email</legend>
-    <p>Enter your email address. We will send you a one-time sign-in link valid for 30 minutes.</p>
-    <div class="mb-3">
-      <label class="form-label" for="login-email">Email address</label>
-      <input class="form-control" id="login-email" name="email" type="email" maxlength="254" autocomplete="email" required>
-    </div>
-    <button class="btn btn-primary" type="submit">Email me a sign-in link</button>
+    <p>Enter your email address. We will send you a one-time sign-in link valid for {{ link_lifetime }}.</p>
+    {{ form_errors(form) }}
+    {{ form_row(form.email) }}
+    <button class="btn btn-primary" type="submit"><i class="bi bi-envelope-arrow-up me-1" aria-hidden="true"></i>Email me a sign-in link</button>
   </fieldset>
-</form>
+{{ form_end(form) }}
 {% endblock %}

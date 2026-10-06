@@ -1,0 +1,21 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Export subscribers{% endblock %}
+
+{% block content %}
+{% include 'layout/_page_header.html.twig' with {title: 'Export subscribers', description: 'Writes export-subscribers.txt (eligible addresses) and export-remove.txt (unsubscribed or ineligible addresses) to the installation’s logs directory, replacing earlier exports.'} %}
+{{ form_start(form, {attr: {class: 'card app-narrow ms-0'}}) }}
+  <div class="card-body">
+    {{ form_errors(form) }}
+    {{ form_row(form.listId) }}
+    <div class="row g-3">
+      <div class="col-sm-6">{{ form_row(form.offset, {row_attr: {class: 'mb-0'}}) }}</div>
+      <div class="col-sm-6">{{ form_row(form.limit, {row_attr: {class: 'mb-0'}}) }}</div>
+    </div>
+  </div>
+  <div class="card-footer d-flex flex-wrap gap-2">
+    <button class="btn btn-primary" type="submit"><i class="bi bi-download me-1" aria-hidden="true"></i>Write export files</button>
+    <a class="btn btn-outline-secondary" href="{{ path('admin_subscribers') }}">Cancel</a>
+  </div>
+{{ form_end(form) }}
+{% endblock %}

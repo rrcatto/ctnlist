@@ -7,13 +7,20 @@ namespace App\Controller;
 use App\Campaign\ForwardService;
 use App\Campaign\MessageService;
 use App\Campaign\ReactionService;
+use App\CattoMail\SendOutcome;
+use App\Config\SiteConfig;
+use App\Form\Model\ForwardRequest;
+use App\Form\Type\ForwardType;
+use App\Http\RequestThrottle;
 use App\Log\MessageLog;
+use App\Repository\ArchiveRepository;
 use App\Repository\MessageRepository;
 use App\Repository\SubscriberRepository;
 use App\Security\AuthenticationPrompt;
 use App\Security\Csrf;
 use App\Security\SubscriberUser;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Form\FormInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -37,6 +44,7 @@ final class MessageActionController extends AbstractController
         private readonly MessageRepository $messages,
         private readonly MessageLog $messageLog,
         private readonly AuthenticationPrompt $prompt,
+        private readonly RequestThrottle $throttle,
     ) {
     }
 
@@ -46,7 +54,7 @@ final class MessageActionController extends AbstractController
     public function forwardAsAdministrator(string $muid, #[CurrentUser] SubscriberUser $user): Response
     {
         $this->message($muid);
-        return $this->render('message/forward.html.twig', ['token' => $user->uuid, 'muid' => $muid]);
+        return $this->forwardPage($this->createForwardForm(self::forwardData($user->uuid, $muid)));
     }
 
     #[Route('/forward/{token}/{muid}', name: 'message_forward', methods: ['GET'])]
@@ -58,30 +66,45 @@ final class MessageActionController extends AbstractController
         if (!$this->isGranted('messages.manage')) {
             $this->requireDelivered($token, $muid);
         }
-        return $this->render('message/forward.html.twig', ['token' => strtolower($token), 'muid' => $muid]);
+        return $this->forwardPage($this->createForwardForm(self::forwardData(strtolower($token), $muid)));
     }
 
     #[Route('/forward', name: 'message_forward_submit', methods: ['POST'])]
-    #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
     public function forwardMessage(Request $request, #[CurrentUser] ?SubscriberUser $user, ForwardService $forwards): Response
     {
-        $token = $this->forwarder($request, $user);
-        $message = $this->message(trim($request->request->getString('muid')));
-        return $this->forwardResult($forwards, $token, $message, $request->request->getString('bemail'), 'Forward message');
+        $form = $this->createForwardForm(new ForwardRequest());
+        $form->handleRequest($request);
+        /** @var ForwardRequest $data */
+        $data = $form->getData();
+        if (!$form->isSubmitted() || !$form->isValid()) {
+            return $this->forwardPage($form, Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+        $token = $this->forwarder((string) $data->token, $user);
+        return $this->forwardResult($forwards, $token, $this->message(trim((string) $data->muid)), $data->emails, 'Forward message');
     }
 
-    /** The forward form on an archive page. */
+    /** The forward form on an archive page; invalid input shows the archive again with the form. */
     #[Route('/forward-archive', name: 'message_forward_archive', methods: ['POST'])]
-    #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
-    public function forwardArchive(Request $request, #[CurrentUser] ?SubscriberUser $user, ForwardService $forwards): Response
+    public function forwardArchive(Request $request, #[CurrentUser] ?SubscriberUser $user, ForwardService $forwards, ArchiveRepository $archives, SiteConfig $site): Response
     {
-        $token = $this->forwarder($request, $user);
-        $muid = trim($request->request->getString('muid'));
-        $message = $muid !== '' ? $this->message($muid) : $this->messages->findByArchiveId($request->request->getInt('aid'));
+        if (!$site->archiveEnabled) {
+            throw $this->createNotFoundException('The archive is not published.');
+        }
+        $form = $this->createForm(ForwardType::class, new ForwardRequest(), ['archive' => true, 'action' => $this->generateUrl('message_forward_archive')]);
+        $form->handleRequest($request);
+        /** @var ForwardRequest $data */
+        $data = $form->getData();
+        if (!$form->isSubmitted() || !$form->isValid()) {
+            $archive = $archives->find((int) $data->archiveId) ?? throw $this->createNotFoundException('Unknown archive.');
+            return $this->render('archive/show.html.twig', ['archive' => $archive, 'form' => $form], new Response(status: Response::HTTP_UNPROCESSABLE_ENTITY));
+        }
+        $token = $this->forwarder((string) $data->token, $user);
+        $muid = trim((string) $data->muid);
+        $message = $muid !== '' ? $this->message($muid) : $this->messages->findByArchiveId((int) $data->archiveId);
         if ($message === null) {
             return $this->result('Forward archive', 'Cannot find the message associated with this archive.');
         }
-        return $this->forwardResult($forwards, $token, $message, $request->request->getString('bemail'), 'Forward archive');
+        return $this->forwardResult($forwards, $token, $message, $data->emails, 'Forward archive');
     }
 
     #[Route('/{reaction}/{token}/{muid}', name: 'message_reaction', requirements: ['reaction' => 'like|dislike'], methods: ['GET'])]
@@ -127,8 +150,15 @@ final class MessageActionController extends AbstractController
         $muid = trim($request->request->getString('muid'));
         $this->requireDelivered($token, $muid);
         \assert($user !== null);
-        $sent = $messages->sendTo($muid, $user->email, 'RESEND');
-        return $this->result('Send message again', $sent ? 'The current version was sent.' : 'The message could not be sent.');
+        if (!$this->isGranted('messages.manage') && !$this->throttle->allow('forward', ['subscriber:' . $token])) {
+            return $this->tooMany('Send message again');
+        }
+        $outcome = $messages->sendTo($muid, $user->email, 'RESEND');
+        return $this->result('Send message again', match ($outcome->status) {
+            SendOutcome::SUBMITTED => 'The current version was sent.',
+            SendOutcome::DEFERRED => 'The current version will be sent shortly.',
+            default => 'The message could not be sent.',
+        });
     }
 
     /** The {usertrack} image: counts an open of a delivered message. */
@@ -153,6 +183,9 @@ final class MessageActionController extends AbstractController
     {
         if (!$this->isGranted('messages.manage')) {
             $this->requireDelivered($token, $message['m_uniqid']);
+        }
+        if (!$this->isGranted('messages.manage') && !$this->throttle->allow('forward', ['subscriber:' . $token])) {
+            return $this->tooMany($title);
         }
         $outcome = $forwards->forward($token, $message, $input);
         return $this->result($title, $outcome['problem'] ?? 'Forwarded the current message to ' . count($outcome['sent']) . ' recipient(s).');
@@ -181,19 +214,43 @@ final class MessageActionController extends AbstractController
     }
 
     /** The forwarder: the signed-in subscriber, or anyone when an administrator forwards. */
-    private function forwarder(Request $request, ?SubscriberUser $user): string
+    private function forwarder(string $token, ?SubscriberUser $user): string
     {
-        $token = strtolower(trim($request->request->getString('subscriber_token')));
+        $token = strtolower(trim($token));
         if (!$this->isOwner($token, $user)) {
             $this->denyAccessUnlessGranted('messages.manage');
         }
         return $token;
     }
 
+    private static function forwardData(string $token, string $muid): ForwardRequest
+    {
+        $data = new ForwardRequest();
+        $data->token = $token;
+        $data->muid = $muid;
+        return $data;
+    }
+
+    private function createForwardForm(ForwardRequest $data): FormInterface
+    {
+        return $this->createForm(ForwardType::class, $data, ['action' => $this->generateUrl('message_forward_submit')]);
+    }
+
+    private function forwardPage(FormInterface $form, int $status = Response::HTTP_OK): Response
+    {
+        return $this->render('message/forward.html.twig', ['form' => $form], new Response(status: $status));
+    }
+
     private function prompt(string $token, string $action, string $muid): Response
     {
         $context = $this->prompt->for(strtolower(trim($token)), $action, $muid) ?? throw $this->createNotFoundException('Unknown subscriber.');
         return $this->render('auth/prompt.html.twig', $context);
+    }
+
+    private function tooMany(string $title): Response
+    {
+        return $this->render('page/result.html.twig', ['title' => $title, 'message' => 'You have sent too many messages recently. Please try again later.'],
+            new Response(status: Response::HTTP_TOO_MANY_REQUESTS));
     }
 
     private function result(string $title, string $message): Response

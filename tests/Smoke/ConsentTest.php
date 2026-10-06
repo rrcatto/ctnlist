@@ -13,9 +13,7 @@ final class ConsentTest extends SmokeTestCase
     {
         parent::setUpBeforeClass();
         self::$muid = bin2hex(random_bytes(16));
-        $id = (int) self::$db->query(
-            "INSERT INTO messages (m_uniqid, m_subject) VALUES ('" . self::$muid . "', 'Consent fixture') RETURNING m_id"
-        )->fetchColumn();
+        $id = (int) self::value("INSERT INTO messages (m_uniqid, m_subject) VALUES ('" . self::$muid . "', 'Consent fixture') RETURNING m_id");
         self::$db->exec("INSERT INTO message_lists (ml_m_id, ml_l_id) SELECT {$id}, l_id FROM lists WHERE l_shortcode = 'ALL'");
     }
 
@@ -50,7 +48,7 @@ final class ConsentTest extends SmokeTestCase
         self::assertStringContainsString('Your subscription to ALL is confirmed.', $done['body']);
         self::assertTrue($this->allConfirmed());
 
-        self::assertSame(1, (int) self::$db->query("SELECT sml_unsubscribe + sml_confirms - 1 FROM smlog WHERE sml_muid = '" . self::$muid . "'")->fetchColumn(), 'both actions logged against the message');
+        self::assertSame(1, (int) self::value("SELECT sml_unsubscribe + sml_confirms - 1 FROM smlog WHERE sml_muid = '" . self::$muid . "'"), 'both actions logged against the message');
     }
 
     public function testOtherPeoplesLinksAndBadLinks(): void
@@ -73,13 +71,29 @@ final class ConsentTest extends SmokeTestCase
     {
         $general = self::request(self::client(), 'GET', '/subscribe')['body'];
         self::assertMatchesRegularExpression('#<h1 class="h3 mb-1">Subscribe( to [^<]+)?</h1>#', $general, 'a subscribe form, not a sign-in page');
-        self::assertStringContainsString('name="return_action" value="confirm"', $general);
-        self::assertStringContainsString('name="return_list_id"', $general, 'visitors choose a list');
+        self::assertStringContainsString('action="/subscribe/request"', $general);
+        self::assertStringContainsString('name="subscribe[listId]"', $general, 'visitors choose a list');
+
+        // Invalid input: the form again, with the address and list kept and nothing sent.
+        $allId = (string) self::value("SELECT l_id FROM lists WHERE l_shortcode = 'ALL'");
+        $visitor = self::client();
+        $invalid = self::submitForm($visitor, '/subscribe', 'subscribe', ['subscribe[email]' => 'not-an-address', 'subscribe[listId]' => $allId]);
+        self::assertSame(422, $invalid['status']);
+        self::assertMatchesRegularExpression('#id="subscribe_email_error1">Enter a valid email address#', $invalid['body']);
+        self::assertStringContainsString('value="not-an-address"', $invalid['body']);
+        self::assertMatchesRegularExpression('#name="subscribe\[listId\]" value="' . $allId . '" checked#', $invalid['body'], 'the chosen list is kept');
+        $noList = self::submitForm($visitor, '/subscribe', 'subscribe', ['subscribe[email]' => 'smoke-editor@ctnlist.test', 'subscribe[listId]' => null]);
+        self::assertSame(422, $noList['status']);
+        self::assertStringContainsString('Choose a list.', $noList['body']);
+        $sent = self::submitForm($visitor, '/subscribe', 'subscribe', ['subscribe[email]' => 'smoke-editor@ctnlist.test', 'subscribe[listId]' => $allId]);
+        self::assertSame(200, $sent['status']);
+        self::assertStringContainsString('emailed you a link to confirm your subscription', $sent['body'], 'subscription wording, not sign-in');
         self::assertStringNotContainsString('Sign in by email', $general);
 
         $anonymous = self::request(self::client(), 'GET', '/subscribe?m=' . self::$muid);
         self::assertStringContainsString('Subscribe to ALL', $anonymous['body'], 'the message\'s only list');
-        self::assertStringContainsString('name="return_action" value="confirm"', $anonymous['body']);
+        self::assertStringContainsString('action="/subscribe/request"', $anonymous['body']);
+        self::assertStringContainsString('name="subscribe[messageId]"', $anonymous['body'], 'the message is passed on');
 
         $client = self::client();
         self::loginAsAdmin($client);
@@ -104,7 +118,7 @@ final class ConsentTest extends SmokeTestCase
 
     private static function csrf(string $body): string
     {
-        self::assertSame(1, preg_match('/name="csrf" value="([^"]+)"/', $body, $match));
+        $match = self::match('/name="(?:\w+\[)?csrf\]?"[^>]*value="([^"]+)"/', $body);
         return html_entity_decode($match[1]);
     }
 }

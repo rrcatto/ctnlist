@@ -24,6 +24,16 @@ final class SiteLog
     ) {
     }
 
+    /**
+     * The path as recorded. Query strings are never logged (the sign-in token
+     * travels there); credentials carried in the path are masked: the HMAC of
+     * a one-click unsubscribe link would let any reader of the log use it.
+     */
+    public static function loggablePath(string $path): string
+    {
+        return (string) preg_replace('#^(/unsubscribe-link/[^/]+/[^/]+/[^/]+/)[^/]+#', '$1[signature]', $path);
+    }
+
     public function record(Request $request, ?SubscriberUser $user): void
     {
         try {
@@ -32,7 +42,7 @@ final class SiteLog
             $host = $ip !== '' ? @gethostbyaddr($ip) : false;
             $this->db->insert('sitelog', [
                 'stl_email' => $user?->email,
-                'stl_url' => mb_substr($request->getPathInfo(), 0, 253),
+                'stl_url' => mb_substr(self::loggablePath($request->getPathInfo()), 0, 253),
                 'stl_ip' => $ip,
                 'stl_host' => is_string($host) ? mb_substr($host, 0, 253) : null,
                 'stl_xfwdfor' => $forwarded !== '' ? mb_substr($forwarded, 0, 45) : null,

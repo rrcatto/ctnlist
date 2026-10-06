@@ -3,22 +3,17 @@
 {% block title %}Archives{% endblock %}
 
 {% block content %}
+{% include 'layout/_page_header.html.twig' with {title: 'Archives', description: 'Messages sent to the list, as they were first sent.'} %}
 {% if archives is empty %}
-  <p>There are no archives.</p>
+  {% include 'layout/_empty_state.html.twig' with {icon: 'archive', message: 'There are no archives.'} %}
 {% else %}
-  <div class="table-responsive">
-    <table class="table table-striped table-hover table-bordered">
-      <thead class="table-info"><tr><th>Archived message</th><th>Created</th><th>Views</th></tr></thead>
-      <tbody>
-      {% for archive in archives %}
-        <tr>
-          <td><a href="{{ path('archive', {id: archive.a_id}) }}">{{ archive.a_subject|slice(0, 80) }}...</a></td>
-          <td>{{ archive.a_datecreated }}</td>
-          <td>{{ archive.a_viewed }}</td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
+  <div class="list-group mb-3">
+    {% for archive in archives %}
+      <a class="list-group-item list-group-item-action d-flex flex-wrap justify-content-between align-items-center gap-2 py-3" href="{{ path('archive', {id: archive.a_id}) }}">
+        <span class="fw-semibold me-auto text-break">{{ archive.a_subject|length > 100 ? archive.a_subject|slice(0, 100) ~ '…' : archive.a_subject }}</span>
+        <span class="small text-body-secondary text-nowrap"><i class="bi bi-calendar3 me-1" aria-hidden="true"></i>{{ archive.a_datecreated|slice(0, 10) }}<span class="ms-3" title="Views"><i class="bi bi-eye me-1" aria-hidden="true"></i>{{ archive.a_viewed }}</span></span>
+      </a>
+    {% endfor %}
   </div>
   {% include '_pagination.html.twig' with {base: path('archives')} %}
 {% endif %}

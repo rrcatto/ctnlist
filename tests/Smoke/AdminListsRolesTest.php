@@ -46,19 +46,35 @@ final class AdminListsRolesTest extends SmokeTestCase
         $shortcode = 'S' . self::$suffix;
         $name = 'Smoke list ' . self::$suffix;
 
-        $page = self::post($client, '/lists', ['shortcode' => strtolower($shortcode), 'name' => $name, 'description' => 'd']);
-        self::assertStringContainsString('List created with ID', $page);
+        $page = self::submitAndFollow($client, '/lists', 'list', ['list[shortcode]' => strtolower($shortcode), 'list[name]' => $name, 'list[description]' => 'd']);
+        self::assertStringContainsString('List ' . $shortcode . ' created with ID', $page);
         self::assertStringContainsString('<code>' . $shortcode . '</code>', $page, 'shortcode stored in upper case');
 
-        self::assertStringContainsString('must contain 3 to 6', self::post($client, '/lists', ['shortcode' => 'ab', 'name' => 'x']));
-        self::assertStringContainsString('already exists', self::post($client, '/lists', ['shortcode' => $shortcode, 'name' => 'Smoke other ' . self::$suffix]));
-
-        $allId = (int) self::$db->query("SELECT l_id FROM lists WHERE l_shortcode = 'ALL'")->fetchColumn();
-        self::assertStringContainsString('System lists cannot be deleted.', self::post($client, '/lists/delete', ['list_id' => (string) $allId]));
+        $invalid = self::submitForm($client, '/lists', 'list', ['list[shortcode]' => 'ab', 'list[name]' => 'Kept name', 'list[description]' => 'Kept description']);
+        self::assertSame(422, $invalid['status']);
+        self::assertMatchesRegularExpression('#id="list_shortcode_error1">Use 3 to 6 uppercase letters or numbers#', $invalid['body']);
+        self::assertStringContainsString('value="Kept name"', $invalid['body'], 'values are kept');
+        self::assertStringContainsString('>Kept description</textarea>', $invalid['body']);
+        $taken = self::submitForm($client, '/lists', 'list', ['list[shortcode]' => $shortcode, 'list[name]' => 'Smoke other ' . self::$suffix]);
+        self::assertMatchesRegularExpression('#id="list_shortcode_error1">A list with that shortcode already exists#', $taken['body']);
+        $takenName = self::submitForm($client, '/lists', 'list', ['list[shortcode]' => 'X' . self::$suffix, 'list[name]' => $name]);
+        self::assertMatchesRegularExpression('#id="list_name_error1">A list with that name already exists#', $takenName['body']);
 
         $id = self::$db->prepare('SELECT l_id FROM lists WHERE l_shortcode = ?');
         $id->execute([$shortcode]);
         $listId = (string) $id->fetchColumn();
+        $edited = self::submitAndFollow($client, '/lists/' . $listId . '/edit', 'list', ['list[name]' => $name . ' renamed', 'list[description]' => 'New description']);
+        self::assertStringContainsString('List ' . $shortcode . ' saved.', $edited);
+        self::assertStringContainsString('New description', $edited);
+        $blank = self::submitForm($client, '/lists/' . $listId . '/edit', 'list', ['list[name]' => '']);
+        self::assertSame(422, $blank['status']);
+        self::assertMatchesRegularExpression('#id="list_name_error1">Enter a name#', $blank['body']);
+
+        $allId = (int) self::value("SELECT l_id FROM lists WHERE l_shortcode = 'ALL'");
+        self::assertStringContainsString('System lists cannot be deleted.', self::post($client, '/lists/delete', ['list_id' => (string) $allId]));
+        $system = self::request($client, 'GET', '/lists/' . $allId . '/edit');
+        self::assertSame(302, $system['status'], 'system lists cannot be edited');
+        self::assertStringContainsString('System lists cannot be changed.', self::request($client, 'GET', '/lists')['body']);
         self::assertStringContainsString('List deleted.', self::post($client, '/lists/delete', ['list_id' => $listId]));
         $id->execute([$shortcode]);
         self::assertFalse($id->fetchColumn(), 'list row removed');
@@ -71,9 +87,17 @@ final class AdminListsRolesTest extends SmokeTestCase
     {
         $client = self::client();
         self::loginAsAdmin($client);
-        foreach (['/lists', '/lists/delete', '/roles', '/roles/permissions', '/roles/assign'] as $path) {
+        foreach (['/lists/delete', '/roles/assign', '/roles/unassign'] as $path) {
             self::assertSame(403, self::request($client, 'POST', $path, ['csrf' => 'forged'])['status'], $path);
         }
+        // Symfony forms reject a forged token as a form error and change nothing.
+        foreach ([['/lists', 'list', ['list[shortcode]' => 'FORGE', 'list[name]' => 'Forged ' . self::$suffix]], ['/roles', 'role', ['role[key]' => 'forged', 'role[name]' => 'Forged ' . self::$suffix]]] as [$page, $form, $fields]) {
+            $response = self::submitForm($client, $page, $form, [$form . '[csrf]' => 'forged'] + $fields);
+            self::assertSame(422, $response['status'], $page);
+            self::assertStringContainsString('CSRF token is invalid', $response['body']);
+        }
+        self::assertSame('0', self::scalar("SELECT COUNT(*) FROM lists WHERE l_name = ?", ['Forged ' . self::$suffix]));
+        self::assertSame('0', self::scalar("SELECT COUNT(*) FROM roles WHERE r_name = ?", ['Forged ' . self::$suffix]));
     }
 
     public function testRolesPermissionsAndAssignment(): void
@@ -82,18 +106,24 @@ final class AdminListsRolesTest extends SmokeTestCase
         self::loginAsAdmin($admin);
         $key = 'smoke-editor-' . strtolower(self::$suffix);
 
-        self::assertStringContainsString('Role created.', self::post($admin, '/roles', ['key' => $key, 'name' => 'Smoke editor ' . self::$suffix], '/roles'));
-        self::assertStringContainsString('already exists', self::post($admin, '/roles', ['key' => $key, 'name' => 'Smoke editor 2 ' . self::$suffix], '/roles'));
-        self::assertStringContainsString('Invalid role details.', self::post($admin, '/roles', ['key' => 'Bad Key', 'name' => 'x'], '/roles'));
+        self::assertStringContainsString('Role created.', self::submitAndFollow($admin, '/roles', 'role', ['role[key]' => $key, 'role[name]' => 'Smoke editor ' . self::$suffix]));
+        $taken = self::submitForm($admin, '/roles', 'role', ['role[key]' => $key, 'role[name]' => 'Smoke editor 2 ' . self::$suffix]);
+        self::assertSame(422, $taken['status']);
+        self::assertMatchesRegularExpression('#id="role_key_error1">A role with that key already exists#', $taken['body']);
+        self::assertStringContainsString('value="Smoke editor 2 ' . self::$suffix . '"', $taken['body'], 'values are kept');
+        $bad = self::submitForm($admin, '/roles', 'role', ['role[key]' => 'Bad Key', 'role[name]' => '']);
+        self::assertMatchesRegularExpression('#id="role_key_error1">Use up to 64 lowercase letters#', $bad['body']);
+        self::assertMatchesRegularExpression('#id="role_name_error1">Enter a name#', $bad['body']);
 
         $roleId = self::scalar('SELECT r_id FROM roles WHERE r_key = ?', [$key]);
         $permissionId = self::scalar("SELECT ap_id FROM acl_permissions WHERE ap_key = 'lists.manage'");
-        $page = self::post($admin, '/roles/permissions', ['role_id' => $roleId, 'permission_ids[]' => $permissionId], '/roles');
+        $page = self::submitAndFollow($admin, '/roles/' . $roleId, 'role_permissions', ['role_permissions[permissions][]' => [$permissionId]]);
         self::assertStringContainsString('Permissions updated.', $page);
         self::assertSame('1', self::scalar('SELECT COUNT(*) FROM role_permissions WHERE rp_r_id = ?', [$roleId]));
 
         $systemRoleId = self::scalar("SELECT r_id FROM roles WHERE r_key = 'administrator'");
-        self::assertStringContainsString('fixed by the schema', self::post($admin, '/roles/permissions', ['role_id' => $systemRoleId], '/roles'));
+        $system = self::request($admin, 'POST', '/roles/' . $systemRoleId . '/permissions', self::formFields(self::request($admin, 'GET', '/roles/' . $roleId)['body'], 'role_permissions'));
+        self::assertSame(422, $system['status'], 'system-role permissions are fixed');
 
         $subscriberId = (string) self::$editorId;
         self::assertStringContainsString('Role assigned.', self::post($admin, '/roles/assign', ['subscriber_id' => $subscriberId, 'role_key' => $key], '/roles'));
@@ -131,7 +161,8 @@ final class AdminListsRolesTest extends SmokeTestCase
     private static function csrf(\CurlHandle $client, string $formPage): string
     {
         $body = self::request($client, 'GET', $formPage)['body'];
-        self::assertSame(1, preg_match('/name="csrf" value="([^"]+)"/', $body, $match), "CSRF field on {$formPage}");
+        // Any token on the page: manual forms and Symfony forms share the token id.
+        $match = self::match('/name="(?:\w+\[)?csrf\]?"[^>]*value="([^"]+)"/', $body, "CSRF field on {$formPage}");
         return html_entity_decode($match[1]);
     }
 

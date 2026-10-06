@@ -28,6 +28,7 @@ final class TemplateRenderer
         's_emailsleft' => PHP_INT_MAX,
         's_priority' => 0,
         's_last_interacted' => null,
+        's_delivery_state' => 'ok',
     ];
 
     public function __construct(
@@ -62,11 +63,17 @@ final class TemplateRenderer
             }
         };
 
-        $r('{advertise}', '<a href="' . $this->site->advertiseUrl . '">ADVERTISE</a>', $this->site->advertiseUrl);
-        $r('{facebook}', '<a href="' . $this->site->facebookUrl . '">FACEBOOK</a>', $this->site->facebookUrl);
-        $r('{twitter}', '<a href="' . $this->site->xUrl . '">TWITTER</a>', $this->site->xUrl);
-        // The Ecwid store is gone; old content that still contains {STORE} renders nothing.
+        $attr = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        // Site links: a link when the URL is configured, else nothing (never an empty href).
+        foreach (['{advertise}' => [$this->site->advertiseUrl, 'ADVERTISE'], '{facebook}' => [$this->site->facebookUrl, 'FACEBOOK'],
+            '{twitter}' => [$this->site->xUrl, 'TWITTER']] as $placeholder => [$url, $label]) {
+            $r($placeholder, $url === '' ? '' : '<a href="' . $attr($url) . '">' . $label . '</a>', $url);
+        }
+        // Retired placeholders render nothing rather than appear literally: {STORE}
+        // (the Ecwid store is gone) and {lms-booking} (never implemented: v5 only
+        // assigned it to unused variables, so it always printed as typed).
         $r('{STORE}', '', '');
+        $r('{lms-booking}', '', '');
 
         $subscribeUrl = $base . 'subscribe?m=' . rawurlencode($muid) . ($list !== '' ? '&l=' . rawurlencode($list) : '');
         $r('{subscribe}', '<a href="' . htmlspecialchars($subscribeUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">SUBSCRIBE</a>', $subscribeUrl);
@@ -79,14 +86,16 @@ final class TemplateRenderer
         // message) may themselves contain placeholders filled after them.
         if ($recipient === null) {
             $archiveLink();
-            // v5 leaves {booking}, {contact}, {lms-booking}, {baseurl} and
-            // {listshortcode} unreplaced in anonymous copies.
+            // Subscriber links become their plain labels. v5 meant to do this for
+            // {booking} and {contact} too but left them literal (a defect): an
+            // archive must not show raw placeholders, nor a link carrying anyone's {suid}.
             foreach (['{unsubscribe}' => 'UNSUBSCRIBE', '{forward}' => 'FORWARD', '{preferences}' => 'UPDATE',
+                '{booking}' => 'BOOKING FORM', '{contact}' => 'CONTACT FORM', '{baseurl}' => $base, '{listshortcode}' => $list,
                 '{firstname}' => '', '{lastname}' => '', '{subscription}' => '', '{emailsleft}' => '',
                 '{confirm}' => 'OPT IN', '{like}' => 'YES', '{dislike}' => 'NO'] as $placeholder => $value) {
                 $r($placeholder, $value, $value);
             }
-            $r('{usertrack}', '');
+            $r('{usertrack}', '', '');
             $r('{muid}', '', '');
             $r('{suid}', '', '');
             return new RenderedMessage($html, $text);
@@ -113,13 +122,15 @@ final class TemplateRenderer
         $preferences = $link($base . 'profile/subscriber/' . $suid);
         $r('{preferences}', '<a href="' . $preferences . '">UPDATE</a>', $preferences);
 
-        $booking = $link($this->linkTemplate($this->site->bookingUrl, $suid, $muid));
-        $r('{booking}', '<a href="' . $booking . '">BOOKING FORM</a>', $booking);
+        // No booking form configured: nothing, rather than a link to nowhere.
+        $booking = $this->site->bookingUrl === '' ? '' : $link($this->linkTemplate($this->site->bookingUrl, $suid, $muid));
+        $r('{booking}', $booking === '' ? '' : '<a href="' . $attr($booking) . '">BOOKING FORM</a>', $booking);
         $contact = $link($this->linkTemplate($this->site->contactUrl, $suid, $muid));
-        $r('{contact}', '<a href="' . $contact . '">CONTACT FORM</a>', $contact);
+        $r('{contact}', '<a href="' . $attr($contact) . '">CONTACT FORM</a>', $contact);
 
-        $r('{firstname}', $recipient['s_fname'], $recipient['s_fname']);
-        $r('{lastname}', $recipient['s_lname'], $recipient['s_lname']);
+        // Names are subscriber input: text in the HTML part, never markup.
+        $r('{firstname}', $attr($recipient['s_fname']), $recipient['s_fname']);
+        $r('{lastname}', $attr($recipient['s_lname']), $recipient['s_lname']);
         $r('{emailsleft}', (string) $recipient['s_emailsleft'], (string) $recipient['s_emailsleft']);
 
         if ($list !== '') {
@@ -132,7 +143,8 @@ final class TemplateRenderer
         $r('{like}', '<a href="' . $like . '">YES</a>', $like);
         $dislike = $link($base . 'dislike/' . $suid . '/' . $muid);
         $r('{dislike}', '<a href="' . $dislike . '">NO</a>', $dislike);
-        $r('{usertrack}', $proof ? '' : '<img src="' . $base . 'ut/' . $suid . '/' . $muid . '" width="0" height="0">');
+        // The open-tracking pixel exists only in HTML; the text part drops the placeholder.
+        $r('{usertrack}', $proof ? '' : '<img src="' . $base . 'ut/' . $suid . '/' . $muid . '" width="0" height="0">', '');
         $r('{baseurl}', $base, $base);
         $r('{listshortcode}', $list, $list);
         $r('{muid}', $muid, $muid);
