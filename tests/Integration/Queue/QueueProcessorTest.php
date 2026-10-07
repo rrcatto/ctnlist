@@ -207,7 +207,9 @@ final class QueueProcessorTest extends IntegrationTestCase
         $outcome = $this->service(QueueProcessor::class)->process();
         self::assertSame([SendOutcome::DEFERRED, 0], [$outcome->status, $outcome->staged]);
         self::assertSame(2, (int) $this->db->fetchOne('SELECT COUNT(*) FROM queue'));
-        self::assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM cattomail_send_jobs WHERE csj_muid = ?', [$muid]), 'the empty job is discarded');
+        // Its create may have reached catto-mail (the response was lost), so the empty job is kept as cancelled
+        // for the status page; it has no recipients and is never sent.
+        self::assertSame(['cancelled', 0], array_values((array) $this->db->fetchAssociative('SELECT csj_status, csj_total FROM cattomail_send_jobs WHERE csj_muid = ?', [$muid])));
 
         self::assertSame(2, $this->service(QueueProcessor::class)->process()->handedOff, 'a later run sends');
         self::assertCount(1, $this->fake->sendJobs);

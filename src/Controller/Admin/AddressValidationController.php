@@ -13,6 +13,7 @@ use App\Repository\CattoMailValidationRepository;
 use App\Repository\ListRepository;
 use App\Security\Csrf;
 use App\Security\SubscriberUser;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\FormError;
 use Symfony\Component\HttpFoundation\Request;
@@ -40,7 +41,8 @@ final class AddressValidationController extends AbstractController
     }
 
     #[Route('/address-validation', name: 'admin_validation', methods: ['GET', 'POST'])]
-    public function index(Request $request, AddressValidation $validation, CattoMailConfig $config, #[CurrentUser] SubscriberUser $user): Response
+    #[Route('/address-validation/page/{page}', name: 'admin_validation_page', defaults: ['page' => 1], requirements: ['page' => '\d+'], methods: ['GET'])]
+    public function index(Request $request, AddressValidation $validation, CattoMailConfig $config, #[CurrentUser] SubscriberUser $user, int $page = 1): Response
     {
         $lists = $this->lists->all();
         $form = $this->createForm(ValidationRequestType::class, ['listId' => $lists[0]['l_id'] ?? null], ['lists' => $lists]);
@@ -64,9 +66,11 @@ final class AddressValidationController extends AbstractController
                 $form->addError(new FormError($e->getMessage()));
             }
         }
+        $pagination = Pagination::fromRequest($request, max(1, $page), $this->validations->jobCount());
         return $this->render('admin/validation.html.twig', [
             'form' => $form,
-            'jobs' => $this->validations->recent(),
+            'jobs' => $this->validations->recent($pagination->perPage, $pagination->offset()),
+            'pagination' => $pagination,
             'problem' => $config->problem(),
             'classifications' => self::CLASSIFICATIONS,
         ], new Response(status: $form->isSubmitted() && !$form->isValid() ? 422 : 200));
@@ -89,11 +93,28 @@ final class AddressValidationController extends AbstractController
         ]);
     }
 
-    #[Route('/address-validation/{id}/refresh', name: 'admin_validation_refresh', requirements: ['id' => '\d+'], methods: ['POST'])]
+    /** Submit a job still waiting to reach catto-mail now (its stored Idempotency-Key prevents a duplicate). */
+    #[Route('/address-validation/{id}/submit', name: 'admin_validation_submit', requirements: ['id' => '\d+'], methods: ['POST'])]
     #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
-    public function refresh(int $id, AddressValidation $validation): Response
+    public function submit(int $id, AddressValidation $validation, #[CurrentUser] SubscriberUser $user, LoggerInterface $logger): Response
     {
         $job = $this->validations->job($id) ?? throw $this->createNotFoundException('Unknown validation job.');
+        $logger->notice('catto-mail recovery: {action} {reference} requested by {admin}.', ['action' => 'submit validation job', 'reference' => $job['cvj_uuid'], 'admin' => $user->uuid]);
+        try {
+            $validation->submit($job);
+            $this->addFlash('info', 'Submitted to catto-mail, or kept for the worker if catto-mail could not be reached; the state is shown below.');
+        } catch (CattoMailException $e) {
+            $this->addFlash('danger', $e->getMessage());
+        }
+        return $this->redirectToRoute('admin_validation_job', ['id' => $id]);
+    }
+
+    #[Route('/address-validation/{id}/refresh', name: 'admin_validation_refresh', requirements: ['id' => '\d+'], methods: ['POST'])]
+    #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
+    public function refresh(int $id, AddressValidation $validation, #[CurrentUser] SubscriberUser $user, LoggerInterface $logger): Response
+    {
+        $job = $this->validations->job($id) ?? throw $this->createNotFoundException('Unknown validation job.');
+        $logger->notice('catto-mail recovery: {action} {reference} requested by {admin}.', ['action' => 'reconcile validation job', 'reference' => $job['cvj_uuid'], 'admin' => $user->uuid]);
         try {
             $this->addFlash('info', 'catto-mail: ' . $validation->refresh($job) . '.');
         } catch (CattoMailException $e) {

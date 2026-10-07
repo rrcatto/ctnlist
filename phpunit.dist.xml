@@ -32,8 +32,9 @@
         <env name="BANLIST_TEST_ENV" value="dev/podman/banlist-test.env" force="false"/>
         <!-- The smoke suite drives the running podman stack over HTTP from
              inside the app container; override these for another instance. -->
-        <env name="SMOKE_BASE_URL" value="http://web" force="false"/>
-        <env name="SMOKE_DB_DSN" value="pgsql:host=db;port=5432;dbname=ctnlist" force="false"/>
+        <!-- The smoke installation and its disposable database (never the development one). -->
+        <env name="SMOKE_BASE_URL" value="http://web:8081" force="false"/>
+        <env name="SMOKE_DB_DSN" value="pgsql:host=db;port=5432;dbname=ctnlist_smoke" force="false"/>
         <env name="SMOKE_DB_USER" value="ctnlist" force="false"/>
         <env name="SMOKE_DB_PASS" value="ctnlist" force="false"/>
         <env name="SMOKE_ADMIN_EMAIL" value="admin@ctnlist.test" force="false"/>

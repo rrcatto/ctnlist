@@ -22,6 +22,8 @@ final class CattoMailConfigFactory
         #[Autowire('%env(default::CATTOMAIL_TRACK_CLICKS)%')] private readonly ?string $trackClicks,
         #[Autowire('%env(default::CATTOMAIL_API_CONNECT_HOST)%')] private readonly ?string $connectHost,
         #[Autowire('%kernel.environment%')] private readonly string $environment,
+        #[Autowire('%env(default::CATTOMAIL_WEBHOOK_BODY_RETENTION_DAYS)%')] private readonly ?string $webhookRetention = null,
+        #[Autowire('%env(default::CATTOMAIL_DETAIL_RETENTION_DAYS)%')] private readonly ?string $detailRetention = null,
     ) {
     }
 
@@ -40,6 +42,9 @@ final class CattoMailConfigFactory
             filter_var($this->trackClicks, FILTER_VALIDATE_BOOLEAN),
             // A development routing aid only; production always connects to the base URL's own host.
             in_array($this->environment, ['dev', 'test'], true) ? trim((string) $this->connectHost) : '',
+            // At least a week: a body may be needed to diagnose or reprocess a recent event.
+            is_numeric($this->webhookRetention) ? max(7, (int) $this->webhookRetention) : 90,
+            is_numeric($this->detailRetention) ? max(30, (int) $this->detailRetention) : 365,
         );
     }
 }

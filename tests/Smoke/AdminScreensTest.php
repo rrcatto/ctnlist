@@ -77,6 +77,8 @@ final class AdminScreensTest extends SmokeTestCase
     {
         $client = self::client();
         self::loginAsAdmin($client);
+        // At least three Send Log rows, for a previous and a next page (the smoke database starts empty).
+        self::$db->exec("INSERT INTO sendlog (sl_type, sl_email) VALUES ('SMOKE-PAGE', 'one@example.com'), ('SMOKE-PAGE', 'two@example.com'), ('SMOKE-PAGE', 'three@example.com')");
         $body = self::request($client, 'GET', '/sendlog/2?r=1')['body'];
 
         self::assertStringContainsString('<nav aria-label="Pagination">', $body);

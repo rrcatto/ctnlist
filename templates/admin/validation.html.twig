@@ -10,7 +10,7 @@
 
 <div class="row g-4">
   <div class="col-lg-4">
-    {{ form_start(form, {attr: {class: 'card'}}) }}
+    {{ form_start(form, {action: path('admin_validation'), attr: {class: 'card'}}) }}
       <div class="card-header fw-semibold">Validate addresses</div>
       <div class="card-body">
         {{ form_errors(form) }}
@@ -38,6 +38,7 @@
           </tbody>
         </table>
       </div>
+      {% include '_pagination.html.twig' with {base: path('admin_validation_page')} %}
     {% endif %}
   </div>
 </div>

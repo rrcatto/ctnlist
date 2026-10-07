@@ -20,6 +20,10 @@ namespace App\CattoMail;
  * - CATTOMAIL_API_CONNECT_HOST: development and test only: connect to this
  *   host (e.g. catto-mail's alias on the cattomail-dev network) for the base
  *   URL's host name; TLS is still verified for the base URL's host name.
+ * - CATTOMAIL_WEBHOOK_BODY_RETENTION_DAYS (90): raw bodies of processed
+ *   webhook events are removed after this; the event rows stay.
+ * - CATTOMAIL_DETAIL_RETENTION_DAYS (365): rendered content of refused jobs
+ *   and validation results superseded by newer ones are removed after this.
  */
 final class CattoMailConfig
 {
@@ -45,6 +49,8 @@ final class CattoMailConfig
         public readonly bool $trackOpens = false,
         public readonly bool $trackClicks = false,
         public readonly string $connectHost = '',
+        public readonly int $webhookBodyRetentionDays = 90,
+        public readonly int $detailRetentionDays = 365,
     ) {
         $this->webhookSecrets = array_values(array_filter([trim($webhookSecret), trim($previousWebhookSecret)], static fn(string $s): bool => $s !== ''));
         $this->currentSecret = trim($webhookSecret) !== '';

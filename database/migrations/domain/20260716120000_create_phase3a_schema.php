@@ -391,6 +391,9 @@ CREATE TABLE cattomail_validation_jobs (
     cvj_updated_at TIMESTAMP WITHOUT TIME ZONE,
     cvj_last_checked_at TIMESTAMP WITHOUT TIME ZONE,
     cvj_completed_at TIMESTAMP WITHOUT TIME ZONE,
+    -- Set when maintenance removed per-address results superseded by a newer
+    -- result for the same subscriber (the job's counts are kept).
+    cvj_detail_pruned_at TIMESTAMP WITHOUT TIME ZONE,
     CONSTRAINT uq_cvj_uuid UNIQUE (cvj_uuid),
     CONSTRAINT uq_cvj_idempotency_key UNIQUE (cvj_idempotency_key),
     CONSTRAINT uq_cvj_remote_id UNIQUE (cvj_remote_id),
@@ -524,14 +527,24 @@ CREATE UNIQUE INDEX uq_crp_campaign_delivery ON cattomail_recipients (crp_muid, 
 CREATE INDEX idx_crp_batch ON cattomail_recipients (crp_cb_id);
 CREATE INDEX idx_crp_subscriber ON cattomail_recipients (crp_s_uuid);
 CREATE INDEX idx_crp_message ON cattomail_recipients (crp_muid);
+-- Recipients still waiting for their job to be sealed (status page, hand-off).
+CREATE INDEX idx_crp_staged ON cattomail_recipients (crp_csj_id) WHERE crp_status = 'staged';
 
 -- Signed webhook events received from catto-mail, de-duplicated by event id
--- (delivery is at-least-once) and processed after the acknowledgement.
+-- (delivery is at-least-once) and processed after the acknowledgement. The
+-- raw body is kept until processed and then for
+-- CATTOMAIL_WEBHOOK_BODY_RETENTION_DAYS (ctnlist:maintenance sets it NULL and
+-- cwe_payload_pruned_at); the row, its outcome and its references stay.
+-- cwe_related_id: the catto-mail send job or validation job the event is
+-- about; cwe_recipient_ref: a message event's external_recipient_reference.
 CREATE TABLE cattomail_webhook_events (
     cwe_id BIGSERIAL PRIMARY KEY,
     cwe_event_id UUID NOT NULL,
     cwe_type VARCHAR(80) NOT NULL,
-    cwe_payload TEXT NOT NULL,
+    cwe_payload TEXT,
+    cwe_related_id UUID,
+    cwe_recipient_ref UUID,
+    cwe_payload_pruned_at TIMESTAMP WITHOUT TIME ZONE,
     cwe_received_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     cwe_processed_at TIMESTAMP WITHOUT TIME ZONE,
     cwe_outcome VARCHAR(200),
@@ -540,6 +553,9 @@ CREATE TABLE cattomail_webhook_events (
     CONSTRAINT uq_cwe_event_id UNIQUE (cwe_event_id)
 );
 CREATE INDEX idx_cwe_unprocessed ON cattomail_webhook_events (cwe_id) WHERE cwe_processed_at IS NULL;
+-- The events of one job (job and validation pages) and the bodies due for pruning.
+CREATE INDEX idx_cwe_related ON cattomail_webhook_events (cwe_related_id);
+CREATE INDEX idx_cwe_prunable ON cattomail_webhook_events (cwe_processed_at) WHERE cwe_payload IS NOT NULL AND cwe_processed_at IS NOT NULL;
 
 -- Explicit recipient global opt-outs reported to catto-mail
 -- (POST /v1/global-suppressions); never created by an ordinary unsubscribe.

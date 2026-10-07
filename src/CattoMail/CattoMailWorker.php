@@ -7,6 +7,7 @@ namespace App\CattoMail;
 use App\Repository\CattoMailOptOutRepository;
 use App\Repository\CattoMailSendRepository;
 use App\Repository\CattoMailValidationRepository;
+use App\Maintenance\DatabaseLock;
 use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
 
@@ -27,7 +28,7 @@ use Psr\Log\LoggerInterface;
  *    GET /v1/validation-jobs/{id} and results).
  *
  * Webhooks are the primary path; this pass is the safety net. Only one
- * worker runs at a time (WorkerLock); the time and summary of each pass are
+ * worker runs at a time (DatabaseLock); the time and summary of each pass are
  * kept for the integration status page (CattoMailActivity).
  */
 final class CattoMailWorker
@@ -49,7 +50,7 @@ final class CattoMailWorker
         private readonly GlobalOptOut $globalOptOut,
         private readonly ClockInterface $clock,
         private readonly LoggerInterface $logger,
-        private readonly WorkerLock $lock,
+        private readonly DatabaseLock $lock,
         private readonly CattoMailActivity $activity,
     ) {
     }
@@ -63,7 +64,7 @@ final class CattoMailWorker
      */
     public function run(): array
     {
-        if (!$this->lock->acquire()) {
+        if (!$this->lock->acquire(DatabaseLock::CATTOMAIL_WORKER)) {
             return ['skipped (another worker is running)' => 1];
         }
         try {
@@ -71,7 +72,7 @@ final class CattoMailWorker
             $this->activity->workerRan($report);
             return $report;
         } finally {
-            $this->lock->release();
+            $this->lock->release(DatabaseLock::CATTOMAIL_WORKER);
         }
     }
 

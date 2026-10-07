@@ -12,6 +12,12 @@
         <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Check now</button>
       </form>
     {% endif %}
+    {% if job.csj_status in ['open', 'ready'] and is_granted('queue.process') %}
+      <form method="post" action="{{ path('admin_delivery_retry', {id: job.csj_id}) }}" data-confirm="Hand this job to catto-mail now? Its stored keys make sure nothing is created or sent twice.">
+        <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+        <button class="btn btn-outline-primary" type="submit"><i class="bi bi-send me-1" aria-hidden="true"></i>Retry sending</button>
+      </form>
+    {% endif %}
     {% if job.csj_status == 'failed' and is_granted('queue.process') %}
       <form method="post" action="{{ path('admin_delivery_requeue', {id: job.csj_id}) }}" data-confirm="Return the subscribers of this failed job to the queue?">
         <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
@@ -22,8 +28,10 @@
   {% endblock %}
 {% endembed %}
 
-<p>{{ cm.job_status(job.csj_status) }} <span class="small text-body-secondary ms-2">{{ job.csj_remote_id ? 'catto-mail job ' ~ job.csj_remote_id : 'not created at catto-mail yet' }}{{ job.csj_completed_at ? ' · finished ' ~ job.csj_completed_at|slice(0, 16) }}</span></p>
+<p>{{ cm.category(category) }} {{ cm.job_status(job.csj_status) }} <span class="small text-body-secondary ms-2">{{ job.csj_remote_id ? 'catto-mail job ' ~ job.csj_remote_id : 'not created at catto-mail yet' }}{{ job.csj_completed_at ? ' · finished ' ~ job.csj_completed_at|slice(0, 16) }}</span></p>
 {% if job.csj_error %}<div class="alert {{ job.csj_status == 'failed' ? 'alert-danger' : 'alert-warning' }} small text-break" role="alert">{{ job.csj_status == 'failed' ? 'catto-mail refused this job: ' : 'Last attempt failed (it is retried automatically): ' }}{{ job.csj_error }}</div>{% endif %}
+<p class="small">Part of the <a href="{{ path('admin_delivery_run', {uuid: run.uuid}) }}">{{ run.kind }} run</a> (job {{ job.csj_seq }}){% if job.csj_remote_id %} · <a href="{{ path('admin_delivery_webhooks', {j: job.csj_remote_id}) }}">its webhook events</a>{% endif %}</p>
+{% if category == 'Stuck' %}<div class="alert alert-warning small" role="note">This job has not moved on for a long time. The worker keeps retrying it; you can also retry or check it now. Nothing is sent twice.</div>{% endif %}
 {% if summary is not empty %}<p class="small">{% for status, n in summary %}{% if n > 0 %}<span class="me-3 text-nowrap">{{ cm.message_status(status) }} {{ n }}</span>{% endif %}{% endfor %}</p>{% endif %}
 
 <form method="get" class="card card-body bg-body-tertiary mb-3" role="search" aria-label="Filter recipients">

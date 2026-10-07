@@ -3,6 +3,7 @@
 #            https://localhost:8543  (same, development certificate)
 #   mailpit  http://localhost:8125   (captures all outgoing mail)
 #   db       localhost:5434          (PostgreSQL 16, ctnlist/ctnlist)
+#   web:8081 (internal only)         the smoke-test installation (database ctnlist_smoke)
 name: ctnlist
 
 services:
@@ -37,13 +38,20 @@ services:
       - mailpit
     volumes:
       # Shared code at the path public_html/index.php hard-codes.
-      - ./:/usr/local/lib/php/ctnlist/6.0.4
+      - ./:/usr/local/lib/php/ctnlist/6.0.5
       # Per-installation public_html, .env and writable var/, as on a
       # deployed instance.
       - ./public_html:/var/www/ctnlist/public_html:ro
       - ./dev/podman/ctnlist.env:/var/www/ctnlist/.env:ro
       - instance-var:/var/www/ctnlist/var
       - logs:/var/www/ctnlist/logs
+      # A second installation for the smoke tests (served on web:8081,
+      # internal only) with its own disposable database ctnlist_smoke, so
+      # automated tests never write to the development database.
+      - ./public_html:/var/www/ctnlist-smoke/public_html:ro
+      - ./dev/podman/smoke.env:/var/www/ctnlist-smoke/.env:ro
+      - smoke-var:/var/www/ctnlist-smoke/var
+      - smoke-logs:/var/www/ctnlist-smoke/logs
 
   web:
     image: docker.io/library/nginx:1.30-alpine
@@ -57,8 +65,11 @@ services:
       # Generated development certificate (bin/dev, gitignored).
       - ./dev/podman/tls:/etc/nginx/tls:ro
       - ./public_html:/var/www/ctnlist/public_html:ro
+      - ./public_html:/var/www/ctnlist-smoke/public_html:ro
 
 volumes:
   pgdata:
   instance-var:
   logs:
+  smoke-var:
+  smoke-logs:

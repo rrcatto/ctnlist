@@ -86,6 +86,30 @@ final class CattoMailOptOutRepository
         $this->db->executeStatement("UPDATE cattomail_global_optouts SET cgo_status = 'lifted', cgo_lifted_at = ?, cgo_error = NULL WHERE cgo_id = ?", [$this->now(), $id]);
     }
 
+    /** A refused opt-out (never accepted by catto-mail) is to be reported again, e.g. after the capability was granted. */
+    public function reopenRejected(int $id): void
+    {
+        $this->db->executeStatement("UPDATE cattomail_global_optouts SET cgo_status = 'pending', cgo_error = NULL WHERE cgo_id = ? AND cgo_status = 'rejected' AND cgo_remote_id IS NULL", [$id]);
+    }
+
+    /** @return list<OptOut> opt-outs or withdrawals not yet reported, and refused ones (newest first) */
+    public function needingAttention(int $limit = 20): array
+    {
+        return array_map(self::hydrate(...), $this->db->fetchAllAssociative(
+            'SELECT ' . self::COLUMNS . " FROM cattomail_global_optouts WHERE cgo_status IN ('pending', 'lift_pending', 'rejected') ORDER BY cgo_id DESC LIMIT " . max(1, $limit)
+        ));
+    }
+
+    /** @return OptOut|null */
+    public function findByUuid(string $uuid): ?array
+    {
+        if (preg_match('/^[0-9a-f-]{36}$/i', $uuid) !== 1) {
+            return null;
+        }
+        $row = $this->db->fetchAssociative('SELECT ' . self::COLUMNS . ' FROM cattomail_global_optouts WHERE cgo_uuid = ?', [strtolower($uuid)]);
+        return $row === false ? null : self::hydrate($row);
+    }
+
     public function markRejected(int $id, string $error): void
     {
         $this->db->executeStatement("UPDATE cattomail_global_optouts SET cgo_status = 'rejected', cgo_error = ? WHERE cgo_id = ?", [mb_substr($error, 0, 2000), $id]);

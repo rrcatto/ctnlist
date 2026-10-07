@@ -27,7 +27,7 @@
         <td><a href="{{ path('admin_delivery_job', {id: job.csj_id}) }}">Job {{ job.csj_seq }}</a>{% if job.csj_remote_id %}<div class="small text-body-secondary text-break">{{ job.csj_remote_id }}</div>{% endif %}</td>
         <td class="small text-break"><code>{{ run.cr_uuid }}/{{ job.csj_seq }}</code></td>
         <td>{{ job.csj_list_shortcode ?: '—' }}</td>
-        <td>{{ cm.job_status(job.csj_status) }}{% if job.csj_error %}<div class="small text-danger text-break">{{ job.csj_error|slice(0, 200) }}</div>{% endif %}</td>
+        <td>{{ cm.category(categories[job.csj_id]) }} {{ cm.job_status(job.csj_status) }}{% if job.csj_error %}<div class="small text-danger text-break">{{ job.csj_error|slice(0, 200) }}</div>{% endif %}</td>
         <td class="text-end">{{ job.csj_total }}</td>
         <td class="small text-nowrap">{{ job.csj_submitted_at ? job.csj_submitted_at|slice(0, 16) : '—' }}</td>
         <td class="small text-nowrap">{{ job.csj_completed_at ? job.csj_completed_at|slice(0, 16) : '—' }}</td>

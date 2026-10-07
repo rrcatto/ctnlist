@@ -111,7 +111,7 @@ final class RouteSmokeTest extends SmokeTestCase
         '/processqueue', '/processqueue/{muid}', '/processqueue/{muid}/10',
         '/stop-send', '/sendtome/{muid}',
         '/delivery', '/delivery/message/{muid}', '/delivery/job/{jid}', '/delivery/job/{jid}/1', '/delivery/recipient/{ruuid}', '/delivery/run/{runuuid}',
-        '/delivery/webhooks', '/delivery/webhooks/1',
+        '/delivery/webhooks', '/delivery/webhooks/1', '/delivery/runs', '/delivery/runs/1', '/delivery/message/{muid}/1', '/address-validation/page/1',
         '/address-validation', '/address-validation/{vid}', '/address-validation/{vid}/1',
         '/sendlog', '/sendlog/1', '/sitelog', '/sitelog/1',
         '/message-views/{muid}', '/message-views/{muid}/1',

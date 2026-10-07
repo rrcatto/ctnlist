@@ -10,7 +10,7 @@ namespace App\Config;
  */
 final class SiteConfig
 {
-    public const VERSION = '6.0.4';
+    public const VERSION = '6.0.5';
 
     /**
      * @param list<array<string, mixed>> $syncDatabases SYNC_DATABASES_JSON entries

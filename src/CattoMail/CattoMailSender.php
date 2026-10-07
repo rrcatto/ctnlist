@@ -181,9 +181,13 @@ final class CattoMailSender
             return 0;
         }
         if ($job['csj_status'] === 'ready' && $job['csj_total'] === 0) {
-            if ($job['csj_remote_id'] === null) {
+            if ($job['csj_remote_id'] === null && $job['csj_attempts'] === 0) {
                 $this->outbox->deleteEmptyJob($jobId);
             } else {
+                // Created at catto-mail, or a create was attempted whose response was lost (replaying
+                // its key could create an empty job that was never there, so it is not replayed):
+                // kept as cancelled, so the status page counts it.
+                // catto-mail offers no cancel; the empty job stays collecting there and sends nothing.
                 $this->outbox->updateJobState($jobId, 'cancelled', null);
             }
             return 0;

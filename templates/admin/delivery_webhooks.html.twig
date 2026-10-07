@@ -3,7 +3,7 @@
 {% block title %}Webhook events{% endblock %}
 
 {% block content %}
-{% embed 'layout/_page_header.html.twig' with {title: 'Webhook events', description: 'Signed events received from catto-mail, de-duplicated by event id and processed after the acknowledgement. Unknown event types are kept and ignored; the raw bodies stay in the database.'} %}
+{% embed 'layout/_page_header.html.twig' with {title: 'Webhook events', description: 'Signed events received from catto-mail, de-duplicated by event id and processed after the acknowledgement. Unknown event types are kept and ignored. Raw bodies are never shown here; they are kept in the database until processed and then for the retention period.'} %}
   {% block actions %}<a class="btn btn-outline-secondary" href="{{ path('admin_delivery') }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>Integration</a>{% endblock %}
 {% endembed %}
 
@@ -11,6 +11,7 @@
   <div class="row g-2 align-items-end">
     <div class="col-sm-6 col-md-4">
       <label class="form-label small" for="webhook-filter">Show</label>
+      {% if related %}<input type="hidden" name="j" value="{{ related }}">{% endif %}
       <select class="form-select" id="webhook-filter" name="f">
         {% for value, label in filters %}<option value="{{ value }}"{{ value == filter ? ' selected' }}>{{ label }}</option>{% endfor %}
       </select>
@@ -22,6 +23,7 @@
   </div>
 </form>
 
+{% if related %}<p class="small">Only the events about catto-mail job <code>{{ related }}</code>. <a href="{{ path('admin_delivery_webhooks') }}">All events</a></p>{% endif %}
 {% if events is empty %}
   {% include 'layout/_empty_state.html.twig' with {icon: 'broadcast', message: 'No webhook events.', hint: filter ? 'Try showing all events.' : 'Events appear once catto-mail can reach this site\'s webhook endpoint.'} %}
 {% else %}
@@ -34,7 +36,7 @@
           <td><code>{{ event.cwe_type }}</code></td>
           <td class="small text-break">{{ event.cwe_event_id }}</td>
           <td class="small text-nowrap">{{ event.cwe_received_at|slice(0, 16) }}</td>
-          <td class="small text-nowrap">{{ event.cwe_processed_at ? event.cwe_processed_at|slice(0, 16) : '—' }}</td>
+          <td class="small text-nowrap">{{ event.cwe_processed_at ? event.cwe_processed_at|slice(0, 16) : '—' }}{% if event.pruned %}<div class="text-body-secondary">body pruned</div>{% endif %}</td>
           <td class="small text-break">
             {% if event.cwe_processed_at %}
               {% if event.cwe_outcome starts with 'failed:' %}<span class="badge text-bg-danger">failed</span> {{ event.cwe_outcome|slice(7, 150) }}
@@ -45,6 +47,12 @@
             {% endif %}
           </td>
           <td class="small text-nowrap">
+            {% if event.reprocessable and is_granted('queue.process') %}
+              <form method="post" action="{{ path('admin_delivery_reprocess', {event: event.cwe_event_id}) }}" class="mb-1" data-confirm="Process this event again? Its effects are applied at most once.">
+                <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+                <button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Process again</button>
+              </form>
+            {% endif %}
             {% if event.send_job_id %}<a href="{{ path('admin_delivery_job', {id: event.send_job_id}) }}">Send job {{ event.send_job_id }}</a>
             {% elseif event.validation_job_id and is_granted('subscribers.manage') %}<a href="{{ path('admin_validation_job', {id: event.validation_job_id}) }}">Validation job {{ event.validation_job_id }}</a>
             {% else %}—{% endif %}
@@ -54,6 +62,7 @@
       </tbody>
     </table>
   </div>
-  {% include '_pagination.html.twig' with {base: path('admin_delivery_webhooks'), query: filter ? '?f=' ~ filter|url_encode : ''} %}
+  {% set params = {f: filter, j: related}|filter(v => v) %}
+  {% include '_pagination.html.twig' with {base: path('admin_delivery_webhooks'), query: params ? '?' ~ params|url_encode : ''} %}
 {% endif %}
 {% endblock %}

@@ -66,6 +66,12 @@ final class CattoMailSendRepository
         return $this->db->fetchOne('SELECT 1 FROM cattomail_recipients r JOIN cattomail_send_jobs j ON j.csj_id = r.crp_csj_id WHERE j.csj_cr_id = ? LIMIT 1', [$runId]) !== false;
     }
 
+    /** The run has finished staging, or started before $abandonedBefore (its process is gone). */
+    public function runIsOver(int $runId, string $abandonedBefore): bool
+    {
+        return (bool) $this->db->fetchOne('SELECT cr_finished_at IS NOT NULL OR cr_created_at < ? FROM cattomail_runs WHERE cr_id = ?', [$abandonedBefore, $runId]);
+    }
+
     public function runKind(int $runId): string
     {
         return (string) $this->db->fetchOne('SELECT cr_kind FROM cattomail_runs WHERE cr_id = ?', [$runId]);
@@ -120,11 +126,16 @@ final class CattoMailSendRepository
     }
 
     /** @return list<SendJob> jobs of a message, newest first */
-    public function jobsForMessage(string $muid): array
+    public function jobsForMessage(string $muid, int $offset = 0, int $limit = 100): array
     {
         return array_map(self::hydrateJob(...), $this->db->fetchAllAssociative(
-            'SELECT ' . self::JOB_COLUMNS . ' FROM cattomail_send_jobs WHERE csj_muid = ? ORDER BY csj_id DESC', [$muid]
+            'SELECT ' . self::JOB_COLUMNS . ' FROM cattomail_send_jobs WHERE csj_muid = ? ORDER BY csj_id DESC LIMIT ' . max(1, $limit) . ' OFFSET ' . max(0, $offset), [$muid]
         ));
+    }
+
+    public function jobCountForMessage(string $muid): int
+    {
+        return (int) $this->db->fetchOne('SELECT COUNT(*) FROM cattomail_send_jobs WHERE csj_muid = ?', [$muid]);
     }
 
     /**

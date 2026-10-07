@@ -22,13 +22,82 @@ final class CattoMailWebhookRepository
     ) {
     }
 
+    /**
+     * The references kept when the body is pruned: the send job or validation
+     * job an event concerns (data.id, or a message event's
+     * data.message.send_job_id) and a message event's recipient reference.
+     */
+    private const REFERENCES = "related AS (SELECT CASE WHEN pg_input_is_valid(b.body, 'jsonb') THEN b.body::jsonb END AS doc FROM body b),
+        refs AS (SELECT
+            CASE WHEN (doc #>> '{data,message,send_job_id}') ~* '^[0-9a-f-]{36}$' THEN (doc #>> '{data,message,send_job_id}')::uuid
+                 WHEN (doc #>> '{data,id}') ~* '^[0-9a-f-]{36}$' THEN (doc #>> '{data,id}')::uuid END AS related_id,
+            CASE WHEN (doc #>> '{data,message,external_recipient_reference}') ~* '^[0-9a-f-]{36}$'
+                 THEN (doc #>> '{data,message,external_recipient_reference}')::uuid END AS recipient_ref
+            FROM related)";
+
     /** @return int|null the new row id, or null when the event was already received */
     public function store(string $eventId, string $type, string $payload): ?int
     {
         $id = $this->db->fetchOne(
-            'INSERT INTO cattomail_webhook_events (cwe_event_id, cwe_type, cwe_payload, cwe_received_at) VALUES (?, ?, ?, ?)
+            'WITH body AS (SELECT CAST(:payload AS TEXT) AS body), ' . self::REFERENCES . '
+             INSERT INTO cattomail_webhook_events (cwe_event_id, cwe_type, cwe_payload, cwe_related_id, cwe_recipient_ref, cwe_received_at)
+             SELECT :event, :type, :payload, refs.related_id, refs.recipient_ref, :at FROM refs
              ON CONFLICT (cwe_event_id) DO NOTHING RETURNING cwe_id',
-            [strtolower($eventId), mb_substr($type, 0, 80), $payload, $this->now()]
+            ['event' => strtolower($eventId), 'type' => mb_substr($type, 0, 80), 'payload' => $payload, 'at' => $this->now()]
+        );
+        return $id === false ? null : (int) $id;
+    }
+
+    /**
+     * Remove the raw bodies of events processed before $before (at most
+     * $limit rows per call; one statement, so a batch is all or nothing).
+     * Unprocessed events are never touched: their body is still needed.
+     * The references are filled first for rows stored before they existed.
+     *
+     * @return int bodies removed
+     */
+    public function pruneBodies(string $before, int $limit): int
+    {
+        return (int) $this->db->executeStatement(
+            "UPDATE cattomail_webhook_events e SET
+                cwe_related_id = COALESCE(e.cwe_related_id, r.related_id), cwe_recipient_ref = COALESCE(e.cwe_recipient_ref, r.recipient_ref),
+                cwe_payload = NULL, cwe_payload_pruned_at = :now
+             FROM (SELECT x.cwe_id,
+                     CASE WHEN (d.doc #>> '{data,message,send_job_id}') ~* '^[0-9a-f-]{36}$' THEN (d.doc #>> '{data,message,send_job_id}')::uuid
+                          WHEN (d.doc #>> '{data,id}') ~* '^[0-9a-f-]{36}$' THEN (d.doc #>> '{data,id}')::uuid END AS related_id,
+                     CASE WHEN (d.doc #>> '{data,message,external_recipient_reference}') ~* '^[0-9a-f-]{36}$'
+                          THEN (d.doc #>> '{data,message,external_recipient_reference}')::uuid END AS recipient_ref
+                   FROM cattomail_webhook_events x
+                   CROSS JOIN LATERAL (SELECT CASE WHEN pg_input_is_valid(x.cwe_payload, 'jsonb') THEN x.cwe_payload::jsonb END AS doc) d
+                   WHERE x.cwe_payload IS NOT NULL AND x.cwe_processed_at IS NOT NULL AND x.cwe_processed_at < :before
+                   ORDER BY x.cwe_processed_at LIMIT " . max(1, $limit) . ") r
+             WHERE e.cwe_id = r.cwe_id",
+            ['now' => $this->now(), 'before' => $before]
+        );
+    }
+
+    /** Bodies pruneBodies() would remove now (for --dry-run). */
+    public function prunableBodies(string $before): int
+    {
+        return (int) $this->db->fetchOne(
+            'SELECT COUNT(*) FROM cattomail_webhook_events WHERE cwe_payload IS NOT NULL AND cwe_processed_at IS NOT NULL AND cwe_processed_at < ?', [$before]
+        );
+    }
+
+    /**
+     * Process an event again (an administrator's recovery action): only one
+     * that has not been processed, or failed, and still has its body.
+     * Every effect is idempotent, so a repeat cannot apply anything twice.
+     *
+     * @return int|null the row to process, or null when not possible
+     * @phpstan-impure
+     */
+    public function reopen(string $eventId): ?int
+    {
+        $id = $this->db->fetchOne(
+            "UPDATE cattomail_webhook_events SET cwe_processed_at = NULL, cwe_outcome = NULL, cwe_attempts = 0
+             WHERE cwe_event_id = ? AND cwe_payload IS NOT NULL AND (cwe_processed_at IS NULL OR cwe_outcome LIKE 'failed:%') RETURNING cwe_id",
+            [strtolower($eventId)]
         );
         return $id === false ? null : (int) $id;
     }
@@ -77,47 +146,56 @@ final class CattoMailWebhookRepository
     public const FILTERS = ['' => 'All', 'unprocessed' => 'Not processed yet', 'failed' => 'Failed', 'ignored' => 'Ignored (unknown type or test)'];
 
     /**
-     * One page of received events for the diagnostic list. The raw body stays
-     * in the database; only the references needed to link an event to ctnlist
-     * (a send job, a validation job) are read from it.
+     * One page of received events for the diagnostic list, optionally only
+     * those about one catto-mail job ($relatedId). Raw bodies are never read
+     * here: events link to ctnlist through their stored references.
      *
      * @return list<array{cwe_event_id: string, cwe_type: string, cwe_received_at: string, cwe_processed_at: ?string, cwe_outcome: ?string,
-     *     cwe_error: ?string, cwe_attempts: int, send_job_id: ?int, validation_job_id: ?int}>
+     *     cwe_error: ?string, cwe_attempts: int, pruned: bool, reprocessable: bool, send_job_id: ?int, validation_job_id: ?int}>
      */
-    public function page(string $filter, int $offset, int $limit): array
+    public function page(string $filter, int $offset, int $limit, ?string $relatedId = null): array
     {
+        [$where, $params] = self::where($filter, $relatedId);
         $rows = $this->db->fetchAllAssociative(
             "SELECT e.cwe_event_id, e.cwe_type, e.cwe_received_at, e.cwe_processed_at, e.cwe_outcome, e.cwe_error, e.cwe_attempts,
+                    (e.cwe_payload IS NULL) AS pruned, e.cwe_payload IS NOT NULL AND (e.cwe_processed_at IS NULL OR e.cwe_outcome LIKE 'failed:%') AS reprocessable,
                     j.csj_id, v.cvj_id
              FROM cattomail_webhook_events e
-             CROSS JOIN LATERAL (SELECT CASE WHEN pg_input_is_valid(e.cwe_payload, 'jsonb') THEN e.cwe_payload::jsonb END AS body) p
-             LEFT JOIN cattomail_send_jobs j ON e.cwe_type LIKE 'send.%' AND j.csj_remote_id::text = (p.body #>> '{data,id}')
-                 OR e.cwe_type LIKE 'message.%' AND j.csj_remote_id::text = (p.body #>> '{data,message,send_job_id}')
-             LEFT JOIN cattomail_validation_jobs v ON e.cwe_type LIKE 'validation.%' AND v.cvj_remote_id::text = (p.body #>> '{data,id}')"
-            . self::where($filter) . ' ORDER BY e.cwe_id DESC LIMIT ' . max(1, $limit) . ' OFFSET ' . max(0, $offset)
+             LEFT JOIN cattomail_send_jobs j ON j.csj_remote_id = e.cwe_related_id
+             LEFT JOIN cattomail_validation_jobs v ON v.cvj_remote_id = e.cwe_related_id"
+            . $where . ' ORDER BY e.cwe_id DESC LIMIT ' . max(1, $limit) . ' OFFSET ' . max(0, $offset),
+            $params
         );
         return array_map(static fn(array $r): array => [
             'cwe_event_id' => (string) $r['cwe_event_id'], 'cwe_type' => (string) $r['cwe_type'], 'cwe_received_at' => (string) $r['cwe_received_at'],
             'cwe_processed_at' => $r['cwe_processed_at'] === null ? null : (string) $r['cwe_processed_at'],
             'cwe_outcome' => $r['cwe_outcome'] === null ? null : (string) $r['cwe_outcome'], 'cwe_error' => $r['cwe_error'] === null ? null : (string) $r['cwe_error'],
-            'cwe_attempts' => (int) $r['cwe_attempts'],
+            'cwe_attempts' => (int) $r['cwe_attempts'], 'pruned' => (bool) $r['pruned'], 'reprocessable' => (bool) $r['reprocessable'],
             'send_job_id' => $r['csj_id'] === null ? null : (int) $r['csj_id'], 'validation_job_id' => $r['cvj_id'] === null ? null : (int) $r['cvj_id'],
         ], $rows);
     }
 
-    public function count(string $filter): int
+    public function count(string $filter, ?string $relatedId = null): int
     {
-        return (int) $this->db->fetchOne('SELECT COUNT(*) FROM cattomail_webhook_events e' . self::where($filter));
+        [$where, $params] = self::where($filter, $relatedId);
+        return (int) $this->db->fetchOne('SELECT COUNT(*) FROM cattomail_webhook_events e' . $where, $params);
     }
 
-    private static function where(string $filter): string
+    /** @return array{0: string, 1: array<string, string>} */
+    private static function where(string $filter, ?string $relatedId): array
     {
-        return match ($filter) {
-            'unprocessed' => ' WHERE e.cwe_processed_at IS NULL',
-            'failed' => " WHERE e.cwe_outcome LIKE 'failed:%' OR (e.cwe_processed_at IS NULL AND e.cwe_error IS NOT NULL)",
-            'ignored' => " WHERE e.cwe_outcome LIKE 'ignored%' OR e.cwe_outcome = 'test event'",
+        $parts = array_filter([match ($filter) {
+            'unprocessed' => 'e.cwe_processed_at IS NULL',
+            'failed' => "(e.cwe_outcome LIKE 'failed:%' OR (e.cwe_processed_at IS NULL AND e.cwe_error IS NOT NULL))",
+            'ignored' => "(e.cwe_outcome LIKE 'ignored%' OR e.cwe_outcome = 'test event')",
             default => '',
-        };
+        }]);
+        $params = [];
+        if ($relatedId !== null && preg_match('/^[0-9a-f-]{36}$/i', $relatedId) === 1) {
+            $parts[] = 'e.cwe_related_id = :related';
+            $params['related'] = strtolower($relatedId);
+        }
+        return [$parts === [] ? '' : ' WHERE ' . implode(' AND ', $parts), $params];
     }
 
     private function now(): string

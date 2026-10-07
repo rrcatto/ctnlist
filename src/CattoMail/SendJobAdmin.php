@@ -8,6 +8,7 @@ use App\Repository\CattoMailSendRepository;
 use App\Repository\MessageRepository;
 use App\Repository\QueueRepository;
 use App\Repository\SubscriberRepository;
+use Psr\Clock\ClockInterface;
 
 /**
  * Returns the subscribers of a send job that catto-mail refused before
@@ -22,7 +23,37 @@ final class SendJobAdmin
         private readonly QueueRepository $queue,
         private readonly MessageRepository $messages,
         private readonly SubscriberRepository $subscribers,
+        private readonly CattoMailSender $sender,
+        private readonly ClockInterface $clock,
     ) {
+    }
+
+    /**
+     * An administrator's "retry now" for a job not yet sealed at catto-mail:
+     * the same as the worker's retry (stored remote id and Idempotency-Keys,
+     * so nothing is created or sent twice). Not while its run is still
+     * staging it.
+     *
+     * @return int recipients handed off
+     * @throws \InvalidArgumentException when the job cannot be retried now (with the reason)
+     * @throws CattoMailException when catto-mail refuses or cannot be reached (the job stays for the worker)
+     */
+    public function retrySending(int $jobId): int
+    {
+        $job = $this->outbox->job($jobId);
+        if ($job === null || !in_array($job['csj_status'], ['open', 'ready'], true)) {
+            throw new \InvalidArgumentException('Only a send job not yet sealed at catto-mail can be retried.');
+        }
+        // Without a configuration nothing can be sent; the job must not be marked as refused for that.
+        $problem = $this->sender->problem();
+        if ($problem !== null) {
+            throw new \InvalidArgumentException($problem);
+        }
+        if (!$this->outbox->runIsOver($job['csj_cr_id'], $this->clock->now()->modify('-3600 seconds')->format('Y-m-d H:i:s'))) {
+            throw new \InvalidArgumentException('Its run is still staging recipients; it is finished automatically.');
+        }
+        $this->outbox->closeJob($jobId);
+        return $this->sender->flushJob($jobId);
     }
 
     /** @return int subscribers returned to the queue */

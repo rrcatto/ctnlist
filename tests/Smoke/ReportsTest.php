@@ -38,6 +38,8 @@ final class ReportsTest extends SmokeTestCase
         $client = self::client();
         self::loginAsAdmin($client);
         $email = self::$admin['s_email'];
+        // A real sign-in email, so the Send Log has a MAGIC-LINK row for this address.
+        self::submitForm(self::client(), '/login', 'signin', ['signin[email]' => $email]);
 
         $sendLog = self::request($client, 'GET', '/sendlog?t=MAGIC&e=' . rawurlencode($email))['body'];
         self::assertStringContainsString('All time:', $sendLog);

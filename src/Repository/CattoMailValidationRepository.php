@@ -15,12 +15,12 @@ use Psr\Clock\ClockInterface;
  *
  * @phpstan-type ValidationJob array{cvj_id: int, cvj_uuid: string, cvj_idempotency_key: string, cvj_remote_id: ?string, cvj_scope: string,
  *     cvj_status: string, cvj_total: int, cvj_processed: int, cvj_counts: array<string, int>, cvj_results_complete: bool, cvj_error: ?string,
- *     cvj_created_at: string, cvj_completed_at: ?string, cvj_last_checked_at: ?string}
+ *     cvj_created_at: string, cvj_completed_at: ?string, cvj_last_checked_at: ?string, cvj_detail_pruned_at: ?string}
  */
 final class CattoMailValidationRepository
 {
     private const JOB_COLUMNS = 'cvj_id, cvj_uuid, cvj_idempotency_key, cvj_remote_id, cvj_scope, cvj_status, cvj_total, cvj_processed, cvj_counts,
-        cvj_results_complete, cvj_error, cvj_created_at, cvj_completed_at, cvj_last_checked_at';
+        cvj_results_complete, cvj_error, cvj_created_at, cvj_completed_at, cvj_last_checked_at, cvj_detail_pruned_at';
 
     /** Result columns, in catto-mail's field order. */
     public const RESULT_FIELDS = [
@@ -79,11 +79,16 @@ final class CattoMailValidationRepository
     }
 
     /** @return list<ValidationJob> newest first */
-    public function recent(int $limit = 50): array
+    public function recent(int $limit = 50, int $offset = 0): array
     {
         return array_map(self::hydrate(...), $this->db->fetchAllAssociative(
-            'SELECT ' . self::JOB_COLUMNS . ' FROM cattomail_validation_jobs ORDER BY cvj_id DESC LIMIT ' . max(1, $limit)
+            'SELECT ' . self::JOB_COLUMNS . ' FROM cattomail_validation_jobs ORDER BY cvj_id DESC LIMIT ' . max(1, $limit) . ' OFFSET ' . max(0, $offset)
         ));
+    }
+
+    public function jobCount(): int
+    {
+        return (int) $this->db->fetchOne('SELECT COUNT(*) FROM cattomail_validation_jobs');
     }
 
     /** @return list<ValidationJob> jobs not yet accepted by catto-mail */
@@ -250,6 +255,7 @@ final class CattoMailValidationRepository
             'cvj_error' => $row['cvj_error'] === null ? null : (string) $row['cvj_error'], 'cvj_created_at' => (string) $row['cvj_created_at'],
             'cvj_completed_at' => $row['cvj_completed_at'] === null ? null : (string) $row['cvj_completed_at'],
             'cvj_last_checked_at' => $row['cvj_last_checked_at'] === null ? null : (string) $row['cvj_last_checked_at'],
+            'cvj_detail_pruned_at' => $row['cvj_detail_pruned_at'] === null ? null : (string) $row['cvj_detail_pruned_at'],
         ];
     }
 }

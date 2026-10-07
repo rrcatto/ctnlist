@@ -34,5 +34,6 @@
       </tbody>
     </table>
   </div>
+  {% include '_pagination.html.twig' with {base: path('admin_delivery_message', {muid: message.m_uniqid})} %}
 {% endif %}
 {% endblock %}

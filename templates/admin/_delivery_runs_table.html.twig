@@ -1,0 +1,23 @@
+{# Send runs (CattoMailStatusRepository::runs()); variables: runs. #}
+{% import 'admin/_cattomail_macros.html.twig' as cm %}
+<div class="table-responsive">
+  <table class="table table-hover align-middle mb-0">
+    <thead class="table-light"><tr><th scope="col">Run</th><th scope="col">Message</th><th scope="col" class="text-end">Jobs</th><th scope="col" class="text-end">Recipients</th><th scope="col">Job states</th><th scope="col">Started</th></tr></thead>
+    <tbody>
+    {% for run in runs %}
+      <tr>
+        <td><a href="{{ path('admin_delivery_run', {uuid: run.cr_uuid}) }}">{{ run.cr_kind }}</a><div class="small text-body-secondary text-break">{{ run.cr_uuid }}</div></td>
+        <td>{% if run.cr_muid %}<a href="{{ path('admin_delivery_message', {muid: run.cr_muid}) }}">{{ run.m_subject ?: run.cr_muid }}</a>{% else %}—{% endif %}</td>
+        <td class="text-end">{{ run.jobs }}</td>
+        <td class="text-end">{{ run.recipients }}</td>
+        <td>
+          {% if run.stuck %}{{ cm.category('Stuck') }} {% endif %}
+          {% if run.failed %}{{ cm.category('Failed') }} {% endif %}
+          {% for status in run.statuses|split(', ') %}{{ cm.job_status(status) }} {% endfor %}
+        </td>
+        <td class="small text-nowrap">{{ run.cr_created_at|slice(0, 16) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>

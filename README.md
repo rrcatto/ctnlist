@@ -1,4 +1,4 @@
-# ctnlist 6.0.4
+# ctnlist 6.0.5
 
 ctnlist is a web-based mailing-list application created by Richard Royston Catto in 2009. Versions 5.0.x and 6.0.x are an incremental modernisation of the working v5.0 application, not a replacement of its established workflows.
 
@@ -29,6 +29,12 @@ Version 6.0.3 hands campaign delivery to the catto-mail smarthost and hardens th
   - placeholders never print literally;
   - one quality gate, `bin/dev check`.
 - **Profile pictures:** a subscriber can choose, crop and save one, and it shows beside their name in the site menu.
+
+Version 6.0.5 adds operational maintenance and recovery:
+- **Housekeeping:** `ctnlist:maintenance` (hourly, `--dry-run`) removes expired sign-in data and sessions, and raw webhook bodies and other temporary catto-mail detail after configurable retention periods. It never touches consent, delivery history or anything still needed for a retry.
+- **Diagnostics and recovery:** `ctnlist:diagnose` checks an installation without printing secrets. Stuck work is formally defined and shown on the Delivery pages, with safe, logged recovery actions (retry a job, a validation or an opt-out, reprocess a webhook event). Long histories are paginated.
+- **Test isolation:** smoke tests run against a separate, disposable installation and database, and `bin/dev check` proves the development database is untouched.
+- **Documentation:** data classification, retention, backups and the recovery procedure (see [Operations](#operations)).
 
 Version 6.0.4 makes the catto-mail integration operable in production:
 - **Integration status page** (Admin → Sending → Delivery): a "Check connection" button that names the failure (host, connection, TLS, key, permission); the last API success and error; a worker heartbeat; counts of pending and stuck work; send-run pages; and a webhook-event diagnostic page.
@@ -157,7 +163,7 @@ dev/podman/     development container files
 
 ## Deployment
 
-The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.0.4/` (the path is set in `public_html/index.php`). Run `composer install --no-dev` there. PHP needs the `gd` extension with JPEG and WebP support (profile pictures; `composer install` checks for it) and should have `exif` (phone photos are turned upright). The picture editor uploads only the cropped square (well under 1 MB); without JavaScript the original file is posted, so allow uploads of up to 8 MB (nginx `client_max_body_size`, PHP `upload_max_filesize`/`post_max_size`) or such uploads are refused.
+The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.0.5/` (the path is set in `public_html/index.php`). Run `composer install --no-dev` there. PHP needs the `gd` extension with JPEG and WebP support (profile pictures; `composer install` checks for it) and should have `exif` (phone photos are turned upright). The picture editor uploads only the cropped square (well under 1 MB); without JavaScript the original file is posted, so allow uploads of up to 8 MB (nginx `client_max_body_size`, PHP `upload_max_filesize`/`post_max_size`) or such uploads are refused.
 
 Each installation has its own directory containing:
 
@@ -334,7 +340,7 @@ The status page shows which of the two are set.
 - Webhook events are kept in full (`cattomail_webhook_events.cwe_payload`, which can contain recipient addresses and remote diagnostics) for diagnosis and de-duplication.
 - Address-validation results are kept per job.
 
-Nothing prunes these yet. A later change should remove processed webhook bodies after a retention period (e.g. 90 days), keeping the event id for de-duplication.
+`ctnlist:maintenance` removes webhook bodies after `CATTOMAIL_WEBHOOK_BODY_RETENTION_DAYS` and other temporary detail after `CATTOMAIL_DETAIL_RETENTION_DAYS` (see [Operations](#operations)).
 
 **Possible catto-mail contract enhancements** (not needed for correct operation; not worked around):
 - an authenticated health or identity endpoint, instead of reading a job that cannot exist;
@@ -354,7 +360,7 @@ The development stacks are separate (catto-mail's pod is on an internal network,
 4. In `dev/podman/ctnlist.env`:
    - `CATTOMAIL_API_BASE_URL=https://localhost`;
    - `CATTOMAIL_API_CONNECT_HOST=catto-mail` (TLS is still verified for `localhost`);
-   - `CATTOMAIL_CA_FILE=/usr/local/lib/php/ctnlist/6.0.4/dev/podman/cattomail-ca.pem`;
+   - `CATTOMAIL_CA_FILE=/usr/local/lib/php/ctnlist/6.0.5/dev/podman/cattomail-ca.pem`;
    - the API key and webhook secret;
    - for subscription mail, `APP_BASE_URL=https://localhost:8543/` (ctnlist's development HTTPS listener).
 
@@ -367,6 +373,94 @@ The development stacks are separate (catto-mail's pod is on an internal network,
 - **Campaigns:** for a campaign check, queue a message to a small list of test subscribers and process the queue as usual. Then follow the run on the Delivery page and in catto-mail's capture, and check the one-click link from the `List-Unsubscribe` header.
 
 All development mail then ends up in catto-mail's Mailpit (catto-mail's own capture mode); nothing reaches the Internet. Production uses public HTTPS in both directions and none of the development settings.
+
+## Operations
+
+### Commands and cron
+
+| Command | When | What |
+|---|---|---|
+| `ctnlist:cattomail:work` | every minute | Moves catto-mail work on: stored webhook events, unsent jobs, opt-outs, validation submissions, polling of jobs without a final state. Webhooks are the primary path; this is the safety net. |
+| `ctnlist:maintenance` | hourly | Housekeeping (below) and a count of stuck work. `--dry-run` only counts. |
+| `ctnlist:diagnose` | by hand | Configuration and health: required settings, secrets set or not (never their values), obsolete settings still present, writable directories, database, worker and maintenance heartbeats, stuck work. |
+| `ctnlist:cattomail:check` | by hand | The catto-mail connection check (`--e2e` only in development). |
+
+The two scheduled commands are kept separate: the worker must run often and be quick, and housekeeping need not. Each runs one at a time per database (PostgreSQL advisory locks), so overlapping cron runs skip.
+
+```cron
+* * * * *  CTNLIST_INSTANCE_DIR=/var/www/example /usr/local/lib/php/ctnlist/<version>/bin/console ctnlist:cattomail:work
+17 * * * * CTNLIST_INSTANCE_DIR=/var/www/example /usr/local/lib/php/ctnlist/<version>/bin/console ctnlist:maintenance
+```
+
+Output and exit status are the same for both. They print one line of counts when something was done, failed or found (every run with `-v`), never row content. They exit 1 when an item failed, and 0 when there was nothing to do or another run was in progress. Their last runs, and last failures, show on **Admin → Sending → Delivery** and in `ctnlist:diagnose`.
+
+### Operational data
+
+| Data | Class | Policy |
+|---|---|---|
+| Subscribers, consent and membership history (`list_subscription_events` is append-only), roles, suppression (ctnlist banlist, delivery states), the `ALL` list | Must be kept | Never pruned. |
+| Send Log, smlog and message activity, send runs, jobs and recipient outcomes, archives, the queue | Long-term history | Never pruned; they show whether ctnlist handed a message on and what became of it. |
+| Webhook events | History plus temporary body | The row, type, times, outcome, error and references (job, recipient) are kept; the raw body is removed `CATTOMAIL_WEBHOOK_BODY_RETENTION_DAYS` (default 90) after processing, never before. |
+| Rendered recipient content | Temporary | Cleared when its batch is accepted; for refused or cancelled jobs, `CATTOMAIL_DETAIL_RETENTION_DAYS` (default 365) after they finished (a requeue renders again). |
+| Send-job create bodies, Idempotency-Keys, catto-mail ids | Retry material, then compact history | Kept: they are small and are what makes a retry, or a restored database, safe. |
+| Address-validation results | History | Job counts and every subscriber's latest result are kept; results superseded by a newer result for the same subscriber are removed from jobs finished more than `CATTOMAIL_DETAIL_RETENTION_DAYS` ago (the job is marked). Results never change consent or memberships. |
+| Global opt-outs | Must be kept | Never pruned (they record an explicit request). |
+| Sign-in links (`auth_login_tokens`) | Temporary | Removed once used or expired and older than the sign-in rate windows (the rate limits count them). |
+| Sign-in sessions (`auth_sessions`), PHP sessions (`sessions`) | Temporary | Removed once expired or signed out, or past `session.gc_maxlifetime`. Active sessions are never touched. |
+| Site Log | History, personal data (IP addresses) | Kept, as in v5, unless `APP_SITELOG_RETENTION_DAYS` is set. |
+| `options` (settings overrides, status heartbeats) | Configuration | Kept. |
+
+Maintenance works in batches of at most 1,000 rows, each its own short transaction, and at most 50 batches per task per run; the rest waits for the next run.
+
+**Deleting subscribers.** Subscribers are not deleted: their consent events are append-only, and the Send Log, smlog and delivery rows refer to them. Removing a person's data on request would need an anonymisation design: replacing identifying fields while keeping the audit trail. That is future work, not part of maintenance.
+
+### Stuck work and recovery
+
+Work is **stuck** when the worker should long since have moved it on: twice `CATTOMAIL_RECONCILE_AFTER_SECONDS`, and at least ten minutes. That covers:
+- send jobs not sealed, or sealed but not reconciled within that time;
+- validation jobs not submitted or not reconciled;
+- opt-outs or withdrawals not reported;
+- webhook events not processed ten minutes after arrival.
+
+A job that is merely slow at catto-mail (dispatched, waiting days for final bounce knowledge) is not stuck while ctnlist keeps checking it. The Delivery pages label jobs Pending, Stuck, Failed, Cancelled, Completed or Awaiting reconciliation.
+
+Recovery actions, all POST + CSRF and recorded in the application log (administrator UUID, action, reference):
+- **Retry sending** an unsealed job (`queue.process`), with its stored keys: never while its run is still staging, and never when catto-mail is not configured.
+- **Check now** for a sealed job (`logs.view`).
+- **Return to queue** for a refused campaign job (`queue.process`).
+- **Process again** for an unprocessed or failed webhook event whose body is still kept (`queue.process`); its effects are applied at most once.
+- **Retry submission** or **Check now** for a validation job (`subscribers.manage`).
+- **Retry** for a pending or refused global opt-out (`subscribers.manage`).
+
+None of them sets a state by hand: each asks catto-mail, or repeats the stored request. There is no "send again" that bypasses the once-only protections.
+
+### Logs
+
+The application writes to standard error (PHP-FPM's log in production) and the installation's `logs/` (contact, import and export files). ctnlist does not rotate files: use the operating system's or container's mechanism (logrotate for `logs/` and PHP-FPM's log, journald or the container runtime for standard error). Maintenance logs counts only, never rows.
+
+### Backups and recovery
+
+Back up, per installation:
+- **the main PostgreSQL database**: all of the data above;
+- **the global suppression database** (`GDB_*`) where it is hosted, if this installation hosts it (it is shared by installations);
+- **the installation's `.env`**, which holds secrets that are **not in the database** and cannot be reconstructed from it:
+  - `APP_SETTINGS_KEY` decrypts the secret settings stored in the database (SMTP). A database backup without its key restores those settings unreadable; they would have to be entered again. Keep the key with the installation's secrets, not inside database dumps;
+  - `CATTOMAIL_API_KEY`, `CATTOMAIL_WEBHOOK_SECRET` and, during a rotation overlap, `CATTOMAIL_WEBHOOK_SECRET_PREVIOUS`. If lost, issue a new key and secret in catto-mail;
+  - `APP_SECRET`: it signs one-click unsubscribe links already in mailboxes; a new one invalidates them.
+
+  Never commit `.env` or keep backups in the repository.
+- `logs/` only if the contact, import or export files matter to you; `var/` is a cache and is not backed up.
+
+Recovery:
+1. Restore the database (and the suppression database, if hosted here).
+2. Restore the installation's `.env`.
+3. Install the matching ctnlist code version at its shared-code path (`composer install --no-dev`) and copy `public_html/`.
+4. `bin/console asset-map:compile` for the installation.
+5. Clear the installation's cache (`bin/console cache:clear`, or empty `var/cache/`).
+6. Restart PHP-FPM and re-enable the two cron entries.
+7. Let the worker reconcile. Pending catto-mail work carries its catto-mail ids and Idempotency-Keys, so the worker polls and finishes it rather than creating replacements. Check **Admin → Sending → Delivery** (Check connection, stuck work) and `ctnlist:diagnose`.
+
+The real end-to-end check against catto-mail (`bin/dev test-cattomail`) is a release step for when the new environment exists; the automated tests use the fake catto-mail.
 
 ## Database setup
 
@@ -381,7 +475,7 @@ Do not use those reset scripts for a database whose contents must be preserved.
 
 ## Development environment
 
-`bin/dev` runs a podman-compose stack that mirrors the production layout: nginx, PHP 8.5-FPM, PostgreSQL 16 and Mailpit.
+`bin/dev` runs a podman-compose stack that mirrors the production layout: nginx, PHP 8.5-FPM, PostgreSQL 16 and Mailpit. Besides the development installation it serves a second, internal-only installation for the smoke tests (`http://web:8081`, database `ctnlist_smoke`, recreated by every `bin/dev test`).
 
 ```bash
 bin/dev up          # build and start, composer install, migrations (including the test databases), seed admin@ctnlist.test
@@ -400,6 +494,8 @@ bin/dev test        # PHPUnit: unit, integration and smoke suites
 ```
 
 `bin/dev check` must pass before a change is handed over; it stops at the first failing step. `tests/Integration/RouteConventionsTest` checks the whole route table: every POST route is CSRF-protected (Symfony form or `#[IsCsrfTokenValid]`; the webhook, the signed one-click unsubscribe link and logout are documented exemptions), every administration route declares its permission, no state-changing route accepts GET, and every GET route is requested by the route smoke test.
+
+Smoke tests never touch the development installation or its database. They drive a second installation in the same stack, `/var/www/ctnlist-smoke` (served internally at `http://web:8081`, generated `dev/podman/smoke.env`), whose database `ctnlist_smoke` is dropped, migrated and seeded before every `bin/dev test`. Integration tests use `ctnlist_test`, each test in a rolled-back transaction. `SmokeTestCase` refuses any other database, and `bin/dev check` compares row counts of the development database before and after the tests and fails if anything changed.
 
 `tests/Smoke/RouteSmokeTest` requests every GET route of the running stack over HTTP, anonymously and as the development administrator, and checks status codes, login redirects, access control and PHP error output. Every new GET route must be added to it. `tests/Smoke/AuthFlowTest` covers sign-in links, auth cookies, logout and CSRF, `tests/Smoke/LayoutTest` the site layout and error pages, `tests/Smoke/AdminListsRolesTest` list and role administration, `AdminMessagesTemplatesTest`, `AdminQueueTest`, `AdminSubscribersTest` and `ReportsTest` the rest of the administration and the Site Log, and `ProfileTest`, `ConsentTest`, `MessageActionTest` and `ArchiveContactTest` the subscriber-facing pages. `tests/Unit` holds unit tests; `tests/Integration` boots the application against the `ctnlist_test` database (each test rolled back) and covers the services: suppression (including the banlist database, `ctnlist_banlist_test`), the send and message logs, mail, rendering, messages, the delivery queue, consent, contact and subscriber administration.
 

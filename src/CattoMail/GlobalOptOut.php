@@ -88,6 +88,25 @@ final class GlobalOptOut
     }
 
     /**
+     * An administrator's retry: report a pending opt-out or withdrawal now
+     * (same stored key), or report a refused one again. Never changes what
+     * the subscriber asked for.
+     *
+     * @return string the state afterwards
+     */
+    public function retry(string $uuid): string
+    {
+        $optOut = $this->optOuts->findByUuid($uuid) ?? throw new \InvalidArgumentException('Unknown opt-out.');
+        if ($optOut['cgo_status'] === 'rejected') {
+            $this->optOuts->reopenRejected($optOut['cgo_id']);
+        } elseif (!in_array($optOut['cgo_status'], ['pending', 'lift_pending'], true)) {
+            return $optOut['cgo_status'];
+        }
+        $this->report($this->optOuts->find($optOut['cgo_id']) ?? $optOut);
+        return ($this->optOuts->find($optOut['cgo_id']) ?? $optOut)['cgo_status'];
+    }
+
+    /**
      * Report a pending opt-out or lift to catto-mail; retryable failures are
      * kept for the worker.
      *

@@ -17,3 +17,10 @@
       complained: 'text-bg-danger', failed: 'text-bg-danger', suppressed: 'text-bg-dark'} -%}
   <span class="badge {{ styles[value] ?? 'text-bg-light border' }}">{{ value|replace({'_': ' '}) }}</span>
 {%- endmacro %}
+
+{# An administrator's view of a job (App\Maintenance\StuckWork::jobCategory()). #}
+{% macro category(value) %}
+  {%- set styles = {Pending: 'text-bg-info', Stuck: 'text-bg-warning', Failed: 'text-bg-danger', Cancelled: 'text-bg-secondary', Completed: 'text-bg-success',
+      'Awaiting reconciliation': 'text-bg-primary'} -%}
+  <span class="badge {{ styles[value] ?? 'text-bg-light border' }}">{{ value }}</span>
+{%- endmacro %}

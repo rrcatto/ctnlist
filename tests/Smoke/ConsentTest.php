@@ -15,6 +15,8 @@ final class ConsentTest extends SmokeTestCase
         self::$muid = bin2hex(random_bytes(16));
         $id = (int) self::value("INSERT INTO messages (m_uniqid, m_subject) VALUES ('" . self::$muid . "', 'Consent fixture') RETURNING m_id");
         self::$db->exec("INSERT INTO message_lists (ml_m_id, ml_l_id) SELECT {$id}, l_id FROM lists WHERE l_shortcode = 'ALL'");
+        // A second list, so the subscribe page offers a choice (the smoke database starts with ALL only).
+        self::$db->exec("INSERT INTO lists (l_shortcode, l_name) VALUES ('SMOKE', 'Smoke list') ON CONFLICT DO NOTHING");
     }
 
     public static function tearDownAfterClass(): void

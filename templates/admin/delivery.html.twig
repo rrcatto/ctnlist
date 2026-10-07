@@ -58,14 +58,67 @@
         {% if worker_stale %}
           <div class="alert alert-warning mt-2 mb-2" role="note"><i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>{{ activity.worker_run ? 'The worker last ran ' ~ activity.worker_run|slice(0, 16) ~ '.' : 'The worker has never run.' }} Check the cron entry.</div>
         {% endif %}
-        <p class="mb-0">Last run: {{ activity.worker_run ? activity.worker_run|slice(0, 16) : '—' }}{% if activity.worker_summary %}<br><span class="text-body-secondary">{{ activity.worker_summary }}</span>{% endif %}</p>
+        <p class="mb-1">Last run: {{ activity.worker_run ? activity.worker_run|slice(0, 16) : '—' }}{% if activity.worker_summary %}<br><span class="text-body-secondary">{{ activity.worker_summary }}</span>{% endif %}</p>
+        {% if activity.worker_failed %}<p class="mb-1">Last run with failures: {{ activity.worker_failed|slice(0, 16) }} <span class="text-body-secondary">(failed items are retried on the next run)</span></p>{% endif %}
+        <hr>
+        <p class="mb-1">Maintenance (<code>ctnlist:maintenance</code>, hourly): {{ maintenance.run ? 'last run ' ~ maintenance.run|slice(0, 16) : 'has never run' }}{% if maintenance.failed %}; last failure {{ maintenance.failed|slice(0, 16) }}{% endif %}</p>
+        {% if maintenance.summary %}<p class="mb-0 text-body-secondary">{{ maintenance.summary }}</p>{% endif %}
       </div>
     </div>
   </div>
 
   <div class="col-12">
+    {% set stuck_total = stuck|reduce((sum, n) => sum + n, 0) %}
+    <div class="card{{ stuck_total ? ' border-warning' }}">
+      <div class="card-header fw-semibold d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <span>Stuck work {{ stuck_total ? cm.category('Stuck') : '' }}</span>
+        <span class="small fw-normal text-body-secondary">Not moved on for {{ stuck_minutes }} minutes (twice the reconciliation interval)</span>
+      </div>
+      {% if stuck_total == 0 %}
+        <div class="card-body small"><i class="bi bi-check-circle text-success me-1" aria-hidden="true"></i>Nothing is stuck.</div>
+      {% else %}
+        <div class="card-body small pb-0">The worker retries all of these by itself. Persistent stuck work usually means the worker is not running, catto-mail cannot be reached, or the API key was refused (see Connection). Individual jobs can be retried from their pages.</div>
+        <ul class="list-group list-group-flush small">
+          {% for category, n in stuck %}{% if n > 0 %}<li class="list-group-item d-flex justify-content-between"><span>{{ category|capitalize }}</span><span class="fw-semibold">{{ n }}</span></li>{% endif %}{% endfor %}
+        </ul>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if optouts is not empty %}
+  <div class="col-12">
     <div class="card">
-      <div class="card-header fw-semibold">Pending and stuck work</div>
+      <div class="card-header fw-semibold">Global opt-outs needing attention</div>
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead class="table-light"><tr><th scope="col">Request</th><th scope="col">State</th><th scope="col">Requested</th><th scope="col">Last error</th><th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th></tr></thead>
+          <tbody>
+          {% for o in optouts %}
+            <tr>
+              <td class="small text-break">{{ o.cgo_uuid }}</td>
+              <td>{{ cm.category(o.cgo_status == 'rejected' ? 'Failed' : 'Pending') }} <span class="small">{{ o.cgo_status|replace({'_': ' '}) }}</span></td>
+              <td class="small text-nowrap">{{ o.cgo_requested_at|slice(0, 16) }}</td>
+              <td class="small text-break">{{ o.cgo_error ? o.cgo_error|slice(0, 160) : '—' }}</td>
+              <td class="text-end">
+                {% if is_granted('subscribers.manage') %}
+                  <form method="post" action="{{ path('admin_delivery_optout_retry', {uuid: o.cgo_uuid}) }}" data-confirm="Report this request to catto-mail again? (Its stored key prevents a duplicate.)">
+                    <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+                    <button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Retry</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header fw-semibold">Pending work</div>
       <div class="table-responsive">
         <table class="table table-sm align-middle mb-0">
           <tbody>
@@ -74,7 +127,7 @@
               ['Recipients staged, not yet handed off', counts.recipients_staged, 'Kept until their job is sealed; not in the Send Log yet.'],
               ['Send jobs being delivered', counts.jobs_in_flight, 'Sealed (queued, processing or dispatched); outcomes arrive by webhook and polling.'],
               ['Send jobs refused by catto-mail', counts.jobs_failed, 'Open the message\'s delivery page to see why; recipients can be returned to the queue.'],
-              ['Empty jobs left collecting at catto-mail', counts.jobs_empty_remote, 'Created at catto-mail but never given recipients (a lost response); the API offers no cancel, so they stay empty and send nothing.'],
+              ['Empty jobs possibly left at catto-mail', counts.jobs_empty_remote, 'Created at catto-mail (or created with the response lost) but never given recipients; the API offers no cancel, so they stay empty in collecting and send nothing.'],
               ['Validation jobs in progress', counts.validations_pending, ''],
               ['Global opt-outs or withdrawals to report', counts.optouts_pending, ''],
               ['Global opt-outs refused by catto-mail', counts.optouts_rejected, 'Usually the opt-out capability was withdrawn by the catto-mail operator.'],
@@ -96,28 +149,12 @@
 
   <div class="col-12">
     <div class="card">
-      <div class="card-header fw-semibold">Recent send runs</div>
+      <div class="card-header fw-semibold d-flex justify-content-between align-items-center">Recent send runs <a class="small fw-normal" href="{{ path('admin_delivery_runs') }}">All send runs</a></div>
       {% if runs is empty %}
         <div class="card-body">{% include 'layout/_empty_state.html.twig' with {icon: 'send', message: 'Nothing has been handed to catto-mail yet.'} %}</div>
       {% else %}
         <div class="card-body small text-body-secondary pb-0">A run is what was started here (a queue run, a proof, a resend or a forward). catto-mail jobs hold at most 10,000 recipients and one list each, so one run can be several jobs (external reference <code>&lt;run&gt;/&lt;job number&gt;</code>).</div>
-        <div class="table-responsive">
-          <table class="table table-hover align-middle mb-0">
-            <thead class="table-light"><tr><th scope="col">Run</th><th scope="col">Message</th><th scope="col" class="text-end">Jobs</th><th scope="col" class="text-end">Recipients</th><th scope="col">Job states</th><th scope="col">Started</th></tr></thead>
-            <tbody>
-            {% for run in runs %}
-              <tr>
-                <td><a href="{{ path('admin_delivery_run', {uuid: run.cr_uuid}) }}">{{ run.cr_kind }}</a><div class="small text-body-secondary text-break">{{ run.cr_uuid }}</div></td>
-                <td>{% if run.cr_muid %}<a href="{{ path('admin_delivery_message', {muid: run.cr_muid}) }}">{{ run.m_subject ?: run.cr_muid }}</a>{% else %}—{% endif %}</td>
-                <td class="text-end">{{ run.jobs }}</td>
-                <td class="text-end">{{ run.recipients }}</td>
-                <td>{% for status in run.statuses|split(', ') %}{{ cm.job_status(status) }} {% endfor %}</td>
-                <td class="small text-nowrap">{{ run.cr_created_at|slice(0, 16) }}</td>
-              </tr>
-            {% endfor %}
-            </tbody>
-          </table>
-        </div>
+        {% include 'admin/_delivery_runs_table.html.twig' %}
       {% endif %}
     </div>
   </div>

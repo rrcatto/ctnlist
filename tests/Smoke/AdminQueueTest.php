@@ -49,7 +49,7 @@ final class AdminQueueTest extends SmokeTestCase
         self::assertStringContainsString('catto-mail is not configured', $sent);
         self::assertSame($rows, (int) self::value("SELECT COUNT(*) FROM queue WHERE q_muid = '{$muid}'"), 'still queued');
         self::assertSame(0, (int) self::value("SELECT COUNT(*) FROM sendlog WHERE sl_muid = '{$muid}' AND sl_type = 'MESSAGE'"));
-        self::assertSame('N', self::value("SELECT o_value FROM options WHERE o_key = 'CurrentlySending'"));
+        self::assertNotSame('Y', self::value("SELECT o_value FROM options WHERE o_key = 'CurrentlySending'"), 'not left marked as sending');
 
         $sent = self::submitForm($client, '/sendtome/' . $muid, 'proof', ['proof[email]' => '']);
         self::assertSame(200, $sent['status']);

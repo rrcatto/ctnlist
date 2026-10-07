@@ -6,6 +6,12 @@
 {% block content %}
 {% embed 'layout/_page_header.html.twig' with {title: job.cvj_scope ?: 'Validation job ' ~ job.cvj_id, description: 'Results as catto-mail classified them. “unknown” and “temporarily unverifiable” are not invalid; a suggestion is only a suggestion.'} %}
   {% block actions %}
+    {% if job.cvj_status == 'pending' %}
+      <form method="post" action="{{ path('admin_validation_submit', {id: job.cvj_id}) }}" data-confirm="Submit this job to catto-mail now? Its stored key makes sure it is created only once.">
+        <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+        <button class="btn btn-outline-primary" type="submit"><i class="bi bi-send me-1" aria-hidden="true"></i>Retry submission</button>
+      </form>
+    {% endif %}
     <form method="post" action="{{ path('admin_validation_refresh', {id: job.cvj_id}) }}">
       <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
       <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Check now</button>
@@ -19,6 +25,8 @@
 {% if job.cvj_counts %}
   <p class="small mb-2">{% for c in classifications %}<span class="me-3 text-nowrap">{{ cm.classification(c) }} {{ job.cvj_counts[c] ?? 0 }}</span>{% endfor %}</p>
 {% endif %}
+{% if job.cvj_detail_pruned_at %}<p class="small text-body-secondary"><i class="bi bi-scissors me-1" aria-hidden="true"></i>Results superseded by a newer validation of the same subscriber were removed {{ job.cvj_detail_pruned_at|slice(0, 10) }} (retention); the counts above are this job's original counts.</p>{% endif %}
+{% if job.cvj_remote_id and is_granted('logs.view') %}<p class="small"><a href="{{ path('admin_delivery_webhooks', {j: job.cvj_remote_id}) }}">Webhook events for this job</a></p>{% endif %}
 {% if suggestions %}<p class="small"><i class="bi bi-lightbulb me-1" aria-hidden="true"></i>{{ suggestions }} suggested correction{{ suggestions == 1 ? '' : 's' }} (shown in the table; never applied: only the subscriber can change their address).</p>{% endif %}
 {% if job.cvj_error %}<div class="alert alert-danger small text-break" role="alert">{{ job.cvj_error }}</div>{% endif %}
 

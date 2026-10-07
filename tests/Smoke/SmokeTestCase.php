@@ -9,7 +9,7 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * Base for tests that drive the running podman stack over HTTP (from the app
- * container to SMOKE_BASE_URL) and inspect the development database. They
+ * container to SMOKE_BASE_URL, the smoke installation) and inspect its disposable database. They
  * exercise the web server, not the framework.
  */
 abstract class SmokeTestCase extends TestCase
@@ -24,6 +24,11 @@ abstract class SmokeTestCase extends TestCase
     public static function setUpBeforeClass(): void
     {
         self::$baseUrl = rtrim((string) getenv('SMOKE_BASE_URL'), '/');
+        // Smoke tests create subscribers and consent events, which are append-only: they must run against
+        // the disposable smoke installation (ctnlist_smoke, reset by bin/dev test), never the development database.
+        if (preg_match('/dbname=(ctnlist_smoke\w*)(;|$)/', (string) getenv('SMOKE_DB_DSN')) !== 1) {
+            self::fail('SMOKE_DB_DSN must point at the disposable smoke database (ctnlist_smoke), not ' . getenv('SMOKE_DB_DSN'));
+        }
         self::$db = new PDO(
             (string) getenv('SMOKE_DB_DSN'),
             (string) getenv('SMOKE_DB_USER'),
