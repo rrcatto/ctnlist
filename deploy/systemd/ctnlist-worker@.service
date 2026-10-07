@@ -1,0 +1,23 @@
+# catto-mail worker for one installation: systemctl enable --now ctnlist-worker@<installation>.timer
+# (the instance name is the directory under /var/www). Alternative to deploy/cron.
+# Set the code path to the release in the installation's public_html/index.php,
+# and update it with every release (systemctl daemon-reload).
+
+[Unit]
+Description=ctnlist catto-mail worker (%i)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+Environment=CTNLIST_INSTANCE_DIR=/var/www/%i
+ExecStart=/usr/bin/php /usr/local/lib/php/ctnlist/<version>/bin/console ctnlist:cattomail:work --no-interaction
+# The command holds a PostgreSQL advisory lock; a run that overlaps does nothing.
+TimeoutStartSec=600
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/www/%i/var /var/www/%i/logs

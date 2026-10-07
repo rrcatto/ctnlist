@@ -28,7 +28,8 @@ final class SiteLogListener
     {
         $request = $event->getRequest();
         $path = $request->getPathInfo();
-        if (str_starts_with($path, '/_') || str_starts_with($path, '/assets/')) {
+        // Health checks (monitor polling) are not visits.
+        if (str_starts_with($path, '/_') || str_starts_with($path, '/assets/') || $request->attributes->get('_route') === 'health') {
             return;
         }
         $user = $this->security->getUser();

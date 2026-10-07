@@ -30,6 +30,11 @@ final class CattoMailWebhookController extends AbstractController
     #[Route('/cattomail/webhook', name: 'cattomail_webhook', methods: ['POST'])]
     public function receive(Request $request, WebhookSignature $signatures, CattoMailWebhookRepository $events, LoggerInterface $logger): Response
     {
+        // A declared oversized body is refused before it is read; the actual length is checked too
+        // (chunked requests declare none). The signature is verified before anything is parsed.
+        if ((int) $request->headers->get('Content-Length', '0') > self::MAX_BODY_BYTES) {
+            return self::answer('payload-too-large', Response::HTTP_REQUEST_ENTITY_TOO_LARGE);
+        }
         $body = $request->getContent();
         if (strlen($body) > self::MAX_BODY_BYTES) {
             return self::answer('payload-too-large', Response::HTTP_REQUEST_ENTITY_TOO_LARGE);

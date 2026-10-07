@@ -112,6 +112,34 @@ final class TemplateRendererTest extends IntegrationTestCase
         self::assertStringNotContainsString(TemplateRenderer::PROOF_RECIPIENT['s_uuid'], $html);
     }
 
+    /**
+     * A booking or contact link that is not a web address (stored in the
+     * database or set in .env without the Settings form's validation) is
+     * never rendered as a link.
+     */
+    public function testOnlyWebAddressesBecomeBookingAndContactLinks(): void
+    {
+        $settings = $this->service(\App\Repository\SettingRepository::class);
+        $settings->set('APP_BOOKING_URL', 'javascript:alert(document.cookie)', false, null);
+        $settings->set('APP_CONTACT_URL', ' data:text/html,<script>alert(1)</script>', false, null);
+        $id = $this->createSubscriber('jane@example.com', 'Jane');
+        $muid = $this->createMessage('Hi');
+        $this->db->executeStatement('UPDATE messages SET m_html = ?, m_text = ? WHERE m_uniqid = ?', ['[{booking}][{contact}]', '[{booking}][{contact}]', $muid]);
+
+        $rendered = $this->render($muid, $this->subscriberUuid($id), '');
+        self::assertSame('[][]', $rendered->html);
+        self::assertSame('[][]', $rendered->text);
+    }
+
+    public function testBookingLinkTemplatesAreFilledIn(): void
+    {
+        $this->service(\App\Repository\SettingRepository::class)->set('APP_BOOKING_URL', '{BaseURL}book/{suid}', false, null);
+        $id = $this->createSubscriber('jane@example.com', 'Jane');
+        $muid = $this->createMessage('Hi');
+        $this->db->executeStatement('UPDATE messages SET m_html = ? WHERE m_uniqid = ?', ['{booking}', $muid]);
+        self::assertSame('<a href="https://ctnlist.test/book/' . $this->subscriberUuid($id) . '">BOOKING FORM</a>', $this->render($muid, $this->subscriberUuid($id), '')->html);
+    }
+
     private function render(string $muid, ?string $uuid, string $list): \App\Campaign\RenderedMessage
     {
         $message = $this->service(MessageRepository::class)->findByMuid($muid);

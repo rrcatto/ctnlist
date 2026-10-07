@@ -1,9 +1,16 @@
-{# Flash messages (addFlash('info'|'danger', …)); they close themselves after a few seconds (assets/app.js). #}
-{% for type, messages in app.flashes %}
-  {% for message in messages %}
-    <div class="alert alert-{{ type }} alert-dismissible fade show" role="alert" data-autoclose>
-      {{ message }}
-      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-    </div>
+{#
+  Flash messages (addFlash('info'|'danger', …)); they close themselves after a few seconds (assets/app.js).
+  Read only from a session that exists (post/redirect/get) or was started by this request: reading
+  app.flashes otherwise starts a session, a database read on every anonymous page, and the error
+  page could not be shown while the database is unavailable.
+#}
+{% if app.request.hasPreviousSession or (app.request.hasSession and app.request.session.started) %}
+  {% for type, messages in app.flashes %}
+    {% for message in messages %}
+      <div class="alert alert-{{ type }} alert-dismissible fade show" role="alert" data-autoclose>
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    {% endfor %}
   {% endfor %}
-{% endfor %}
+{% endif %}

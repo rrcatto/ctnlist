@@ -14,12 +14,26 @@ use Symfony\Component\Form\FormInterface;
 /** The Settings forms: input rules at their fields, and form data → RuntimeSettings::save(). */
 final class SettingsFormTest extends IntegrationTestCase
 {
+    /** Link templates keep their placeholders; only web addresses are accepted. */
+    public function testLinkTemplatesAcceptWebAddressesAndPlaceholders(): void
+    {
+        foreach (['{BaseURL}contact-form/{suid}/{muid}', 'https://booking.example.org/?s={suid}', 'http://intranet.example.org/form'] as $link) {
+            $form = $this->submit('contact', ['[APP_CONTACT_URL]' => $link, '[APP_BOOKING_URL]' => $link]);
+            self::assertCount(0, $this->field($form, '[APP_CONTACT_URL]')->getErrors(), $link);
+            self::assertCount(0, $this->field($form, '[APP_BOOKING_URL]')->getErrors(), $link);
+        }
+    }
+
     public function testInvalidInputIsReportedAtItsField(): void
     {
         foreach ([
             ['sender', '[MAIL_FROM_ADDRESS]', 'not-an-address', 'valid email'],
             ['sender', '[MAIL_TEST_ADDRESS]', 'x@', 'valid email'],
             ['contact', '[APP_FACEBOOK_URL]', 'javascript:alert(1)', 'full web address'],
+            ['contact', '[APP_FACEBOOK_URL]', 'data:text/html,<script>x</script>', 'full web address'],
+            ['contact', '[APP_BOOKING_URL]', 'javascript:alert(document.cookie)', 'Start the link with https://'],
+            ['contact', '[APP_CONTACT_URL]', 'data:text/html;base64,PHNjcmlwdD4=', 'Start the link with https://'],
+            ['sender', '[MAIL_FROM_NAME]', "Lists\r\nBcc: victim@example.net", 'one line'],
             ['signin', '[AUTH_MAGIC_LINK_TTL]', '10', 'at least 60'],
             ['signin', '[AUTH_MAGIC_LINK_TTL]', 'soon', 'whole number'],
             ['smtp', '[MAILER_DSN][host]', 'bad host/name', 'valid host name'],

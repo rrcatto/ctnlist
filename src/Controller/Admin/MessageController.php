@@ -9,6 +9,7 @@ use App\Campaign\MessageService;
 use App\Config\SiteConfig;
 use App\Form\Model\MessageDraft;
 use App\Form\Type\MessageType;
+use App\Http\ContentSecurityPolicy;
 use App\Http\Pagination;
 use App\Repository\ListRepository;
 use App\Repository\MessageRepository;
@@ -45,7 +46,7 @@ final class MessageController extends AbstractController
         ]);
     }
 
-    #[Route('/message/{muid}', name: 'admin_message', defaults: ['muid' => ''], methods: ['GET'])]
+    #[Route('/message/{muid}', name: 'admin_message', defaults: ['muid' => '', '_csp' => ContentSecurityPolicy::EDITOR], methods: ['GET'])]
     public function edit(string $muid, SiteConfig $site): Response
     {
         if ($muid === '') {
@@ -63,7 +64,7 @@ final class MessageController extends AbstractController
     }
 
     /** Save exactly what was entered (drafts may be incomplete); invalid input shows the editor again with everything kept. */
-    #[Route('/message', name: 'admin_message_save', methods: ['POST'])]
+    #[Route('/message', name: 'admin_message_save', defaults: ['_csp' => ContentSecurityPolicy::EDITOR], methods: ['POST'])]
     public function save(Request $request, MessageService $service): Response
     {
         $form = $this->messageForm(new MessageDraft());

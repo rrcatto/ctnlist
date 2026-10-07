@@ -3,9 +3,11 @@
 /**
  * Import map for the application's own JavaScript (Symfony AssetMapper).
  *
- * The entry point is assets/app.js; it also pulls in assets/styles/app.css.
- * There are no remote packages: Bootstrap and Bootstrap Icons are loaded from
- * their CDN in templates/base.html.twig.
+ * The entry point is assets/app.js. There are no remote packages: stylesheets
+ * (assets/styles/app.css and the vendored Bootstrap and Bootstrap Icons under
+ * assets/lib) are linked from templates/base.html.twig with asset(), and the
+ * Bootstrap bundle script likewise. The import map's inline scripts carry the
+ * Content-Security-Policy nonce.
  */
 return [
     'app' => [

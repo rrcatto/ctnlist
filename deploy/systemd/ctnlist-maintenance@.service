@@ -1,0 +1,20 @@
+# Hourly housekeeping for one installation: systemctl enable --now ctnlist-maintenance@<installation>.timer
+# Set the code path to the release in the installation's public_html/index.php.
+
+[Unit]
+Description=ctnlist maintenance (%i)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+Environment=CTNLIST_INSTANCE_DIR=/var/www/%i
+ExecStart=/usr/bin/php /usr/local/lib/php/ctnlist/<version>/bin/console ctnlist:maintenance --no-interaction
+TimeoutStartSec=1800
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectHome=yes
+ProtectSystem=strict
+ReadWritePaths=/var/www/%i/var /var/www/%i/logs

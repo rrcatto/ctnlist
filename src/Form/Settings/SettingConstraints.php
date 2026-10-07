@@ -30,11 +30,16 @@ final class SettingConstraints
     public static function for(array $setting): array
     {
         $constraints = self::required($setting) ? [new Assert\NotBlank(message: $setting['label'] . ' is required.')] : [];
+        // One-line values end up in mail headers (sender name, subjects) and links: no line breaks.
+        $singleLine = new Assert\Regex(pattern: '/[\r\n]/', match: false, message: 'Enter this on one line.');
         return [...$constraints, ...match ($setting['type']) {
             'email' => [new EmailAddress()],
             'url' => [new WebAddress()],
             'int' => [new WholeNumber(min: $setting['min'] ?? null)],
-            'text', 'textarea' => [new Assert\Length(max: 2000)],
+            'text' => [new Assert\Length(max: 2000), $singleLine],
+            'textarea' => [new Assert\Length(max: 2000)],
+            // A link template that becomes a clickable link in mail: only web addresses (never javascript: or data:).
+            'link' => [new Assert\Length(max: 2000), $singleLine, new Assert\Regex(pattern: '#^(https?://|\{BaseURL\})#i', message: 'Start the link with https://, http:// or {BaseURL}.')],
             default => [],
         }];
     }

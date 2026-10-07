@@ -61,6 +61,12 @@
     font-size: 0.9375rem;
 }
 
+/* Visually hidden headings (.visually-hidden is absolutely positioned) stay inside
+   the scrolling wrapper instead of widening the page on narrow screens. */
+.app-content .table-responsive {
+    position: relative;
+}
+
 .app-content .table > thead th {
     font-weight: 600;
     white-space: nowrap;

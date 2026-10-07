@@ -1,0 +1,21 @@
+# Scheduled ctnlist commands for one installation (template), e.g.
+# /etc/cron.d/ctnlist-<installation>. Replace <installation> and <version>
+# (the shared code path in that installation's public_html/index.php), and
+# update <version> with every release. Use either this file or the systemd
+# timers in deploy/systemd, not both.
+#
+# Both run as the PHP-FPM user with nothing but CTNLIST_INSTANCE_DIR, so they
+# read the same .env as the web server. Each holds a PostgreSQL advisory lock:
+# an overlapping run does nothing. Output appears only when work was done,
+# failed or found (cron mails it to MAILTO); the exit status is 1 when an item
+# failed.
+
+SHELL=/bin/sh
+PATH=/usr/local/bin:/usr/bin:/bin
+MAILTO=root
+
+# catto-mail worker: webhooks not yet processed, unsent jobs, opt-outs, validation, reconciliation.
+* * * * *   www-data  CTNLIST_INSTANCE_DIR=/var/www/<installation> php /usr/local/lib/php/ctnlist/<version>/bin/console ctnlist:cattomail:work --no-interaction
+
+# Housekeeping (retention, expired sign-in records, stuck-work count).
+17 * * * *  www-data  CTNLIST_INSTANCE_DIR=/var/www/<installation> php /usr/local/lib/php/ctnlist/<version>/bin/console ctnlist:maintenance --no-interaction

@@ -9,6 +9,7 @@ namespace App\Tests\Smoke;
  */
 final class AuthFlowTest extends SmokeTestCase
 {
+    private const PHP_SESSION = 'ctnlist_php_session';
     private const AUTH_COOKIE = 'ctnlist_session';
 
     public function testMagicLinkSignsInOnceAndReturnsToTheProfile(): void
@@ -25,6 +26,88 @@ final class AuthFlowTest extends SmokeTestCase
         $reuse = self::request(self::client(), 'GET', '/auth/verify?token=' . $token);
         self::assertSame(302, $reuse['status']);
         self::assertStringEndsWith('/login', $reuse['location'], 'a link can only be used once');
+    }
+
+    /**
+     * Session fixation: the PHP session (CSRF tokens, flashes) gets a new id at
+     * sign-in and the old one is destroyed, so an id planted before sign-in
+     * (and any CSRF token read from it) is worthless afterwards.
+     */
+    public function testSignInRotatesThePhpSession(): void
+    {
+        $client = self::client();
+        $login = self::request($client, 'GET', '/login');
+        $before = self::cookieValue($client, self::PHP_SESSION);
+        self::assertNotNull($before, 'the sign-in form starts a session (CSRF token)');
+        $oldToken = self::csrfToken($login['body']);
+
+        $signedIn = self::request($client, 'GET', '/auth/verify?token=' . self::issueLoginToken(self::$admin['s_id']));
+        self::assertSame(302, $signedIn['status']);
+        $after = self::cookieValue($client, self::PHP_SESSION);
+        self::assertNotNull($after);
+        self::assertNotSame($before, $after, 'a new session id after sign-in');
+        self::assertSame(0, (int) self::value('SELECT COUNT(*) FROM sessions WHERE ses_id = ?', [$before]), 'the old session is destroyed');
+
+        // A copy of the pre-sign-in session id carries no usable state.
+        $planted = self::client();
+        curl_setopt($planted, CURLOPT_COOKIE, self::PHP_SESSION . '=' . $before);
+        self::assertNotSame(302, self::request($planted, 'POST', '/logout', ['csrf' => $oldToken])['status'], 'its CSRF token is gone');
+    }
+
+    public function testLogoutEndsThePhpSession(): void
+    {
+        $client = self::client();
+        self::loginAsAdmin($client);
+        $page = self::request($client, 'GET', '/profile/subscriber/' . self::$admin['s_uuid'])['body'];
+        $session = self::cookieValue($client, self::PHP_SESSION);
+        self::assertNotNull($session);
+        self::assertSame(302, self::request($client, 'POST', '/logout', ['csrf' => self::csrfToken($page)])['status']);
+        self::assertSame(0, (int) self::value('SELECT COUNT(*) FROM sessions WHERE ses_id = ?', [$session]), 'the PHP session is destroyed at logout');
+    }
+
+    /** Two clicks of one link at the same moment (a double click, a link scanner): exactly one signs in. */
+    public function testParallelRedemptionSignsInOnce(): void
+    {
+        $token = self::issueLoginToken(self::$admin['s_id']);
+        $multi = curl_multi_init();
+        $handles = [];
+        for ($i = 0; $i < 4; $i++) {
+            $handle = curl_init(self::$baseUrl . '/auth/verify?token=' . $token);
+            curl_setopt_array($handle, [CURLOPT_RETURNTRANSFER => true, CURLOPT_HEADER => true, CURLOPT_FOLLOWLOCATION => false, CURLOPT_TIMEOUT => 60]);
+            curl_multi_add_handle($multi, $handle);
+            $handles[] = $handle;
+        }
+        do {
+            $status = curl_multi_exec($multi, $running);
+            if ($running > 0) {
+                curl_multi_select($multi);
+            }
+        } while ($running > 0 && $status === CURLM_OK);
+        $signedIn = 0;
+        foreach ($handles as $handle) {
+            $response = (string) curl_multi_getcontent($handle);
+            self::assertSame(302, curl_getinfo($handle, CURLINFO_HTTP_CODE));
+            if (preg_match('/^Set-Cookie: ' . self::AUTH_COOKIE . '=[A-Za-z0-9_-]{43};/mi', $response) === 1) {
+                $signedIn++;
+                self::assertMatchesRegularExpression('#^Location: /profile/subscriber/#mi', $response);
+            } else {
+                self::assertMatchesRegularExpression('#^Location: \S*/login\s*$#mi', $response);
+            }
+            curl_multi_remove_handle($multi, $handle);
+        }
+        curl_multi_close($multi);
+        self::assertSame(1, $signedIn, 'one sign-in from one link');
+    }
+
+    public function testAnExpiredLinkSignsNobodyIn(): void
+    {
+        $token = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '='); // a well-formed token, so only its age refuses it
+        self::$db->prepare('INSERT INTO auth_login_tokens (alt_s_id, alt_email, alt_token_hash, alt_created_at, alt_expires_at, alt_return_action) VALUES (?, ?, ?, ?, ?, ?)')
+            ->execute([self::$admin['s_id'], self::$admin['s_email'], hash('sha256', $token), date('Y-m-d H:i:s', time() - 3600), date('Y-m-d H:i:s', time() - 60), 'profile']);
+        $response = self::request(self::client(), 'GET', '/auth/verify?token=' . $token);
+        self::assertSame(302, $response['status']);
+        self::assertStringEndsWith('/login', $response['location']);
+        self::assertFalse(self::setsCookie($response['cookies'], self::AUTH_COOKIE));
     }
 
     public function testMagicLinkReturnsToTheRequestedAction(): void

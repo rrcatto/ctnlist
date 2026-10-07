@@ -25,6 +25,18 @@ final class RequestThrottleTest extends IntegrationTestCase
         self::assertTrue($throttle->allow('forward', [$ip]), 'actions are counted separately');
     }
 
+    /** Global opt-out requests and withdrawals: a fixed six per subscriber per hour (each calls catto-mail). */
+    public function testOptOutChangesHaveAFixedLimit(): void
+    {
+        $throttle = $this->service(RequestThrottle::class);
+        $subscriber = self::key();
+        for ($i = 1; $i <= 6; $i++) {
+            self::assertTrue($throttle->allow('optout', [$subscriber]), "change {$i}");
+        }
+        self::assertFalse($throttle->allow('optout', [$subscriber]), 'the seventh within the hour is refused');
+        self::assertTrue($throttle->allow('optout', [self::key()]), 'per subscriber');
+    }
+
     private static function key(): string
     {
         return bin2hex(random_bytes(8));

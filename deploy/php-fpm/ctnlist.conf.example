@@ -1,0 +1,53 @@
+; PHP-FPM pool for one ctnlist installation (template), e.g.
+; /etc/php/8.5/fpm/pool.d/ctnlist-<installation>.conf. Replace <installation>.
+;
+; The pool runs as www-data. The shared code tree (/usr/local/lib/php/ctnlist/<version>)
+; is owned by root and read-only to it; in the installation directory it can
+; read .env (group www-data, mode 640) and public_html/, and write only var/
+; and logs/ (see README "Deployment").
+
+[ctnlist-<installation>]
+user = www-data
+group = www-data
+
+listen = /run/php/ctnlist-<installation>.sock
+listen.owner = www-data
+listen.group = www-data
+listen.mode = 0660
+
+pm = dynamic
+pm.max_children = 10
+pm.start_servers = 2
+pm.min_spare_servers = 1
+pm.max_spare_servers = 3
+pm.max_requests = 500
+
+; No inherited environment: the installation's configuration comes from its
+; .env alone, exactly as for the cron worker (bin/console loads the same file
+; through CTNLIST_INSTANCE_DIR). Do not add env[...] overrides here; the
+; Delivery page and ctnlist:diagnose flag a worker whose configuration differs.
+clear_env = yes
+
+; Errors go to the log, never to the browser (APP_DEBUG=false does the same
+; for the application's own error pages).
+php_admin_flag[display_errors] = off
+php_admin_flag[log_errors] = on
+catch_workers_output = yes
+decorate_workers_output = no
+
+; Request limits matching nginx's client_max_body_size 32m: subscriber imports
+; (file at most 20 MB, pasted lists up to 10 MB) and message HTML.
+php_admin_value[upload_max_filesize] = 24M
+php_admin_value[post_max_size] = 32M
+php_admin_value[memory_limit] = 512M
+php_admin_value[max_execution_time] = 300
+
+; Session options are set by Symfony (config/packages/framework.yaml) and must
+; not be fixed here (php_admin_value blocks them). session.gc_maxlifetime is
+; read by ctnlist:maintenance from the CLI php.ini when it prunes PHP sessions:
+; keep it the same in the FPM and CLI php.ini (PHP's default, 1440, in both).
+
+; OPcache: each release has its own code path, so timestamps need not be
+; checked; reload PHP-FPM after deploying a release.
+php_admin_flag[opcache.enable] = on
+php_admin_flag[opcache.validate_timestamps] = off

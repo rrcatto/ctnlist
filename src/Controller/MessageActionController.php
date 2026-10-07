@@ -11,6 +11,7 @@ use App\CattoMail\SendOutcome;
 use App\Config\SiteConfig;
 use App\Form\Model\ForwardRequest;
 use App\Form\Type\ForwardType;
+use App\Http\ContentSecurityPolicy;
 use App\Http\RequestThrottle;
 use App\Log\MessageLog;
 use App\Repository\ArchiveRepository;
@@ -84,7 +85,7 @@ final class MessageActionController extends AbstractController
     }
 
     /** The forward form on an archive page; invalid input shows the archive again with the form. */
-    #[Route('/forward-archive', name: 'message_forward_archive', methods: ['POST'])]
+    #[Route('/forward-archive', name: 'message_forward_archive', defaults: ['_csp' => ContentSecurityPolicy::ARCHIVE], methods: ['POST'])]
     public function forwardArchive(Request $request, #[CurrentUser] ?SubscriberUser $user, ForwardService $forwards, ArchiveRepository $archives, SiteConfig $site): Response
     {
         if (!$site->archiveEnabled) {

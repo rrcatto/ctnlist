@@ -30,6 +30,12 @@ final class LogoutListener
         if ($token !== null) {
             $this->sessions->revokeByTokenHash(AuthCookie::hash($token), $this->clock->now()->format('Y-m-d H:i:s'));
         }
+        // Stateless firewall: Symfony's own session invalidation on logout does not run; end the PHP session too.
+        if ($request->hasPreviousSession()) {
+            $session = $request->getSession();
+            $session->start(); // an unstarted (lazy) session cannot be invalidated
+            $session->invalidate();
+        }
         if ($event->getResponse() !== null) {
             $this->cookie->clear($event->getResponse(), $request);
         }

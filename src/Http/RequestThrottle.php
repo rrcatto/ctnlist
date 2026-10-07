@@ -23,7 +23,12 @@ use Symfony\Component\RateLimiter\Storage\CacheStorage;
  */
 final class RequestThrottle
 {
-    private const SETTINGS = ['contact' => ['CONTACT_RATE_LIMIT', 5], 'forward' => ['FORWARD_RATE_LIMIT', 10]];
+    /**
+     * Each action's Settings name (null: a fixed limit) and default per hour.
+     * `optout`: requests and withdrawals of the catto-mail global opt-out by
+     * one subscriber; each one calls catto-mail, and nobody needs more.
+     */
+    private const SETTINGS = ['contact' => ['CONTACT_RATE_LIMIT', 5], 'forward' => ['FORWARD_RATE_LIMIT', 10], 'optout' => [null, 6]];
 
     public function __construct(
         private readonly RuntimeSettings $settings,
@@ -35,7 +40,7 @@ final class RequestThrottle
      * Consume one attempt for every key; false (nothing consumed) when any
      * key is already at its limit.
      *
-     * @param 'contact'|'forward' $action
+     * @param 'contact'|'forward'|'optout' $action
      * @param list<string> $keys
      */
     public function allow(string $action, array $keys): bool
@@ -44,7 +49,7 @@ final class RequestThrottle
         $factory = new RateLimiterFactory([
             'id' => $action,
             'policy' => 'sliding_window',
-            'limit' => max(1, $this->settings->int($name, $default)),
+            'limit' => $name === null ? $default : max(1, $this->settings->int($name, $default)),
             'interval' => '1 hour',
         ], new CacheStorage($this->cache));
         $limiters = array_map(static fn(string $key) => $factory->create(hash('sha256', strtolower(trim($key)))), $keys);

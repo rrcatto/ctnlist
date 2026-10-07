@@ -2,9 +2,10 @@
  * ctnlist site script, loaded on every page through the import map
  * ({{ importmap('app') }} in base.html.twig). Bootstrap's bundle, loaded
  * before this module runs, provides dropdowns, the collapsing navbar and
- * dismissible alerts.
+ * dismissible alerts. styles/app.css is linked from base.html.twig rather
+ * than imported here: AssetMapper maps CSS imports to data: script URLs,
+ * which the Content-Security-Policy (script-src 'self' + nonce) refuses.
  */
-import './styles/app.css';
 // The profile picture editor; it does nothing on pages without [data-profile-image].
 import './profile_image.js';
 

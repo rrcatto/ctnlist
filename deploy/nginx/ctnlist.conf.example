@@ -1,0 +1,114 @@
+# ctnlist production server block (template). One file per installation, e.g.
+# /etc/nginx/conf.d/ctnlist-<installation>.conf (http context). Replace:
+#   lists.example.org        the installation's host name (APP_BASE_URL)
+#   <installation>           its directory under /var/www (holds .env, public_html/, var/, logs/)
+# Install deploy/nginx/ctnlist-fastcgi.conf.example as
+# /etc/nginx/snippets/ctnlist-<installation>-fastcgi.conf (it names the PHP-FPM
+# socket) and adjust the include lines below. Check with: nginx -t
+#
+# Only public_html/ is web-accessible. .env, the shared code tree, vendor/,
+# var/ and logs/ are outside the document root and never served. Only the
+# front controller index.php is executed; any other *.php path is a 404.
+
+# Access log without query strings: the sign-in link (/auth/verify?token=...)
+# carries a one-time token, and other links carry subscriber identifiers.
+log_format ctnlist '$remote_addr - [$time_local] "$request_method $uri $server_protocol" $status $body_bytes_sent "$http_user_agent"';
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name lists.example.org;
+
+    # ACME (certificate renewal) over plain HTTP; everything else moves to HTTPS.
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/<installation>/public_html;
+    }
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name lists.example.org;
+
+    ssl_certificate     /etc/letsencrypt/live/lists.example.org/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/lists.example.org/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_session_cache shared:ctnlist_tls:10m;
+
+    root /var/www/<installation>/public_html;
+    index index.php;
+    server_tokens off;
+    access_log /var/log/nginx/ctnlist-<installation>.access.log ctnlist;
+    error_log  /var/log/nginx/ctnlist-<installation>.error.log;
+
+    # Largest legitimate requests: a subscriber import file (at most 20 MB, the
+    # form's limit) or a pasted address list, and message HTML. PHP's
+    # post_max_size/upload_max_filesize match (deploy/php-fpm).
+    client_max_body_size 32m;
+
+    # Headers for files nginx serves itself (the two static locations below).
+    # PHP responses get theirs, including the Content-Security-Policy and HSTS,
+    # from the application (App\Http\SecurityHeadersListener); adding them
+    # here as well would send them twice.
+
+    # Compiled AssetMapper files (bin/console asset-map:compile): content-hashed
+    # names, so they can be cached for good.
+    location ^~ /assets/ {
+        try_files $uri =404;
+        access_log off;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header Strict-Transport-Security "max-age=31536000" always;
+    }
+
+    # The prebuilt CKEditor bundle and its emoji list (copied with public_html/):
+    # not content-hashed, so cached for a week.
+    location ^~ /vendor/ {
+        try_files $uri =404;
+        access_log off;
+        add_header Cache-Control "public, max-age=604800" always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header Strict-Transport-Security "max-age=31536000" always;
+    }
+
+    # catto-mail webhooks are small signed JSON documents: refuse large bodies
+    # here, before PHP (the application also refuses anything over 1 MiB).
+    location = /cattomail/webhook {
+        client_max_body_size 1m;
+        try_files /index.php =404;
+        include snippets/ctnlist-<installation>-fastcgi.conf;
+    }
+
+    # Uptime monitor / load-balancer liveness: "OK" only; not worth an access-log line.
+    location = /health {
+        access_log off;
+        try_files /index.php =404;
+        include snippets/ctnlist-<installation>-fastcgi.conf;
+    }
+
+    # Existing files are served directly; everything else goes to the front controller.
+    location / {
+        try_files $uri /index.php$is_args$args;
+    }
+
+    # The only PHP entry point, reached through try_files only (a request for
+    # /index.php itself is a 404, so every page has one URL).
+    location = /index.php {
+        internal;
+        include snippets/ctnlist-<installation>-fastcgi.conf;
+    }
+
+    # Any other PHP file path is not an entry point.
+    location ~ \.php$ {
+        return 404;
+    }
+
+    # Dot files (.env copies, .git, editor files) are never served.
+    location ~ /\. {
+        deny all;
+    }
+}

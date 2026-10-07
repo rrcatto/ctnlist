@@ -48,8 +48,8 @@ final class SettingsCatalogue
                 'APP_FACEBOOK_URL' => ['width' => 'half', 'label' => 'Facebook page', 'type' => 'url', 'optional' => true, 'help' => 'Footer link and the {facebook} placeholder.'],
                 'APP_X_URL' => ['width' => 'half', 'label' => 'X (Twitter) page', 'type' => 'url', 'optional' => true, 'help' => 'The {twitter} placeholder.'],
                 'APP_ADVERTISE_URL' => ['width' => 'half', 'label' => 'Advertising page', 'type' => 'url', 'optional' => true, 'help' => 'The {advertise} placeholder.'],
-                'APP_BOOKING_URL' => ['width' => 'half', 'label' => 'Booking form link', 'type' => 'text', 'optional' => true, 'help' => 'The {booking} placeholder; may contain {BaseURL}, {suid} and {muid}.'],
-                'APP_CONTACT_URL' => ['width' => 'half', 'default' => '{BaseURL}contact-form/{suid}/{muid}', 'label' => 'Contact form link', 'type' => 'text', 'optional' => true, 'help' => 'The {contact} placeholder; may contain {BaseURL}, {suid} and {muid}.'],
+                'APP_BOOKING_URL' => ['width' => 'half', 'label' => 'Booking form link', 'type' => 'link', 'optional' => true, 'help' => 'The {booking} placeholder; may contain {BaseURL}, {suid} and {muid}.'],
+                'APP_CONTACT_URL' => ['width' => 'half', 'default' => '{BaseURL}contact-form/{suid}/{muid}', 'label' => 'Contact form link', 'type' => 'link', 'optional' => true, 'help' => 'The {contact} placeholder; may contain {BaseURL}, {suid} and {muid}.'],
             ],
         ],
         'sender' => [

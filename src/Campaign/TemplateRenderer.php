@@ -122,11 +122,13 @@ final class TemplateRenderer
         $preferences = $link($base . 'profile/subscriber/' . $suid);
         $r('{preferences}', '<a href="' . $preferences . '">UPDATE</a>', $preferences);
 
-        // No booking form configured: nothing, rather than a link to nowhere.
-        $booking = $this->site->bookingUrl === '' ? '' : $link($this->linkTemplate($this->site->bookingUrl, $suid, $muid));
+        // No booking or contact form configured (or not a web address): nothing, rather than a link to nowhere.
+        $booking = $this->linkTemplate($this->site->bookingUrl, $suid, $muid);
+        $booking = $booking === '' ? '' : $link($booking);
         $r('{booking}', $booking === '' ? '' : '<a href="' . $attr($booking) . '">BOOKING FORM</a>', $booking);
-        $contact = $link($this->linkTemplate($this->site->contactUrl, $suid, $muid));
-        $r('{contact}', '<a href="' . $attr($contact) . '">CONTACT FORM</a>', $contact);
+        $contact = $this->linkTemplate($this->site->contactUrl, $suid, $muid);
+        $contact = $contact === '' ? '' : $link($contact);
+        $r('{contact}', $contact === '' ? '' : '<a href="' . $attr($contact) . '">CONTACT FORM</a>', $contact);
 
         // Names are subscriber input: text in the HTML part, never markup.
         $r('{firstname}', $attr($recipient['s_fname']), $recipient['s_fname']);
@@ -168,9 +170,14 @@ final class TemplateRenderer
         return $this->render($message, self::PROOF_RECIPIENT, $listShortcode, true);
     }
 
-    /** Fill {BaseURL}, {suid} and {muid} in a configured link (BookingURL, ContactURL). */
+    /**
+     * Fill {BaseURL}, {suid} and {muid} in a configured link (BookingURL,
+     * ContactURL). Only a web address is ever used as a link: anything else
+     * (javascript:, data:, a typo) counts as not configured.
+     */
     private function linkTemplate(string $url, string $suid, string $muid): string
     {
-        return str_ireplace(['{BaseURL}', '{suid}', '{muid}'], [$this->site->baseUrl, $suid, $muid], $url);
+        $link = str_ireplace(['{BaseURL}', '{suid}', '{muid}'], [$this->site->baseUrl, $suid, $muid], $url);
+        return preg_match('#^https?://#i', $link) === 1 ? $link : '';
     }
 }

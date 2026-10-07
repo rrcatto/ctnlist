@@ -1,0 +1,24 @@
+# FastCGI to the installation's PHP-FPM pool, included by the locations of
+# deploy/nginx/ctnlist.conf.example. Install as
+# /etc/nginx/snippets/ctnlist-<installation>-fastcgi.conf and replace
+# <installation> (the pool socket of deploy/php-fpm/ctnlist.conf.example).
+
+fastcgi_pass unix:/run/php/ctnlist-<installation>.sock;
+include fastcgi_params;
+fastcgi_param SCRIPT_FILENAME $realpath_root/index.php;
+fastcgi_param SCRIPT_NAME /index.php;
+fastcgi_param DOCUMENT_ROOT $realpath_root;
+fastcgi_param HTTPS $https if_not_empty;
+
+# nginx is the edge: PHP sees the client's address as REMOTE_ADDR, and HTTPS
+# from the line above, so the application needs no proxy trust. Client-supplied
+# forwarding headers are dropped rather than passed on. Behind another proxy or
+# load balancer, remove these four lines, have that proxy set
+# X-Forwarded-For/-Proto, and list only its address in TRUSTED_PROXIES.
+fastcgi_param HTTP_X_FORWARDED_FOR "";
+fastcgi_param HTTP_X_FORWARDED_PROTO "";
+fastcgi_param HTTP_X_FORWARDED_PORT "";
+fastcgi_param HTTP_X_FORWARDED_HOST "";
+
+# Queue processing and imports can take minutes.
+fastcgi_read_timeout 300s;

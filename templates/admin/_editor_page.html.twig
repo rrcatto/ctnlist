@@ -1,8 +1,9 @@
 {#
   Layout for pages with the CKEditor HTML editor (message and template forms).
   The editor attaches to the textarea marked data-html-editor. CKEditor's prebuilt
-  bundle is a static file in public_html/vendor/ckeditor5/; its configuration
-  (assets/ckeditor/) goes through AssetMapper. Other pages load none of it.
+  bundle is a static file in public_html/vendor/ckeditor5/ (with the emoji list it
+  would otherwise fetch from CKEditor's CDN); its configuration (assets/ckeditor/)
+  goes through AssetMapper. Other pages load none of it.
 #}
 {% extends 'base.html.twig' %}
 
@@ -13,5 +14,5 @@
 
 {% block javascripts %}
   <script src="{{ asset('vendor/ckeditor5/ckeditor5.umd.js') }}"></script>
-  <script src="{{ asset('ckeditor/editor.js') }}"></script>
+  <script src="{{ asset('ckeditor/editor.js') }}" data-emoji-definitions="{{ asset('vendor/ckeditor5/emoji/16/en.json') }}"></script>
 {% endblock %}

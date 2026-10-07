@@ -92,21 +92,29 @@ final class LayoutTest extends SmokeTestCase
     public function testSharedAssets(): void
     {
         $client = self::client();
-        $body = self::request($client, 'GET', '/privacy')['body'];
+        $page = self::request($client, 'GET', '/privacy');
+        $body = $page['body'];
 
-        self::assertDoesNotMatchRegularExpression('/unify-|fontawesome|font-awesome|jquery|fonts\.googleapis|ckeditor|es-module-shims/i', $body);
+        self::assertDoesNotMatchRegularExpression('/unify-|fontawesome|font-awesome|jquery|fonts\.googleapis|ckeditor|es-module-shims|cdn\.jsdelivr\.net/i', $body);
         self::assertDoesNotMatchRegularExpression('/\bfa[srb]? fa-|\bg-(color|bg|py|pa|mb|font)-|\bu-(btn|heading|icon)/', $body, 'no Font Awesome or Unify classes');
         self::assertStringNotContainsString('X-UA-Compatible', $body);
         self::assertStringNotContainsString('rc-webs', $body);
         self::assertStringNotContainsString('id="datetime"', $body, 'no live clock');
-        self::assertStringContainsString('bootstrap@5.3.8/dist/css/bootstrap.min.css', $body);
-        self::assertStringContainsString('bootstrap-icons@', $body);
-        self::assertStringContainsString('<script type="importmap">', $body);
-
-        foreach (['/assets/styles/app-[^"]+\.css', '/assets/app-[^"]+\.js', '/assets/images/favicon-[^"]+\.svg'] as $pattern) {
+        // Everything comes from this site (Bootstrap and the icons are vendored under assets/lib), and the
+        // inline import map carries the Content-Security-Policy nonce.
+        $nonce = self::match('#<script type="importmap" nonce="([A-Za-z0-9_-]+)">#', $body, 'the import map with its nonce')[1];
+        self::assertStringContainsString("script-src 'self' 'nonce-{$nonce}'", $page['headers']['content-security-policy'] ?? '');
+        self::assertStringContainsString("frame-ancestors 'none'", $page['headers']['content-security-policy'] ?? '');
+        $files = [];
+        foreach (['/assets/styles/app-[^"]+\.css', '/assets/app-[^"]+\.js', '/assets/images/favicon-[^"]+\.svg', '/assets/lib/bootstrap/bootstrap\.min-[^"]+\.css',
+            '/assets/lib/bootstrap/bootstrap\.bundle\.min-[^"]+\.js', '/assets/lib/bootstrap-icons/bootstrap-icons\.min-[^"]+\.css'] as $pattern) {
             $match = self::match('#"(' . $pattern . ')"#', $body, $pattern);
-            self::assertSame(200, self::request($client, 'GET', $match[1])['status'], $match[1]);
+            $file = self::request($client, 'GET', $match[1]);
+            self::assertSame(200, $file['status'], $match[1]);
+            $files[$pattern] = $file['body'];
         }
+        $font = self::match('#url\("?(fonts/bootstrap-icons-[^"?)]+\.woff2)#', (string) end($files), 'the icon font, with its versioned name');
+        self::assertSame(200, self::request($client, 'GET', '/assets/lib/bootstrap-icons/' . $font[1])['status'], 'the icon font is served');
         self::assertMatchesRegularExpression('#<link rel="icon" href="/assets/images/favicon-[^"]+\.svg"#', $body);
         self::assertStringContainsString('<footer class="app-footer', $body);
         self::assertStringContainsString('href="/privacy"', $body);
@@ -201,7 +209,14 @@ final class LayoutTest extends SmokeTestCase
         self::loginAsAdmin($client);
 
         foreach (['/message', '/template'] as $page) {
-            $body = self::request($client, 'GET', $page)['body'];
+            $response = self::request($client, 'GET', $page);
+            $body = $response['body'];
+            // The editor's own policy: CKEditor writes inline styles, authored content may show https images; scripts stay nonce-only.
+            $policy = $response['headers']['content-security-policy'] ?? '';
+            self::assertStringContainsString("style-src 'self' 'unsafe-inline'", $policy, $page);
+            self::assertStringContainsString("img-src 'self' data: blob: https:", $policy, $page);
+            self::assertStringNotContainsString('unsafe-eval', $policy, $page);
+            self::assertStringContainsString('data-emoji-definitions="/vendor/ckeditor5/emoji/16/en.json"', $body, $page . ': the emoji list comes from this site, not CKEditor\'s CDN');
             self::assertStringContainsString('src="/vendor/ckeditor5/ckeditor5.umd.js"', $body, $page);
             self::assertStringContainsString('href="/vendor/ckeditor5/ckeditor5.css"', $body, $page);
             $editor = self::match('#src="(/assets/ckeditor/editor-[^"]+\.js)"#', $body, $page);
@@ -209,9 +224,12 @@ final class LayoutTest extends SmokeTestCase
         }
         self::assertSame(200, self::request($client, 'GET', $editor[1])['status']);
         self::assertSame(200, self::request($client, 'GET', '/vendor/ckeditor5/ckeditor5.umd.js')['status']);
+        self::assertSame(200, self::request($client, 'GET', '/vendor/ckeditor5/emoji/16/en.json')['status']);
 
         foreach (['/messages', '/lists', '/'] as $page) {
-            self::assertStringNotContainsStringIgnoringCase('ckeditor', self::request($client, 'GET', $page)['body'], $page);
+            $response = self::request($client, 'GET', $page);
+            self::assertStringNotContainsStringIgnoringCase('ckeditor', $response['body'], $page);
+            self::assertStringContainsString("style-src 'self';", $response['headers']['content-security-policy'] ?? '', $page . ': no inline styles outside the editor');
         }
     }
 

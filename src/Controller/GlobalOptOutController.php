@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\CattoMail\GlobalOptOut;
+use App\Http\RequestThrottle;
 use App\Security\Csrf;
 use App\Security\SubscriberUser;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -23,10 +24,13 @@ final class GlobalOptOutController extends AbstractController
 {
     #[Route('/no-contact', name: 'global_optout', methods: ['POST'])]
     #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
-    public function request(Request $request, #[CurrentUser] ?SubscriberUser $user, GlobalOptOut $optOut): Response
+    public function request(Request $request, #[CurrentUser] ?SubscriberUser $user, GlobalOptOut $optOut, RequestThrottle $throttle): Response
     {
         if ($user === null) {
             return $this->redirectToRoute('login');
+        }
+        if (!$throttle->allow('optout', ['subscriber:' . $user->uuid])) {
+            return self::tooMany($this);
         }
         if (!$optOut->isAvailable()) {
             throw $this->createNotFoundException('Stopping email from every sender is not available on this site.');
@@ -47,10 +51,13 @@ final class GlobalOptOutController extends AbstractController
 
     #[Route('/no-contact/withdraw', name: 'global_optout_withdraw', methods: ['POST'])]
     #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
-    public function withdraw(#[CurrentUser] ?SubscriberUser $user, GlobalOptOut $optOut): Response
+    public function withdraw(#[CurrentUser] ?SubscriberUser $user, GlobalOptOut $optOut, RequestThrottle $throttle): Response
     {
         if ($user === null) {
             return $this->redirectToRoute('login');
+        }
+        if (!$throttle->allow('optout', ['subscriber:' . $user->uuid])) {
+            return self::tooMany($this);
         }
         $state = $optOut->withdraw($user->id);
         $this->addFlash('info', match ($state) {
@@ -59,5 +66,11 @@ final class GlobalOptOutController extends AbstractController
             default => 'Your withdrawal is recorded and will be passed on to the mail service shortly.',
         } . ' This does not re-subscribe you: to receive our lists again, subscribe to them.');
         return $this->redirectToRoute('profile');
+    }
+
+    private static function tooMany(self $controller): Response
+    {
+        return $controller->render('page/result.html.twig', ['title' => 'No email from any sender',
+            'message' => 'You have changed this too many times recently. Please try again later.'], new Response(status: Response::HTTP_TOO_MANY_REQUESTS));
     }
 }

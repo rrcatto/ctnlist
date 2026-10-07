@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Twig;
 
 use App\Config\SiteConfig;
+use App\Http\ContentSecurityPolicy;
 use App\Security\SubscriberUser;
 use App\Subscriber\ProfileImages;
 use Twig\Extension\AbstractExtension;
@@ -22,6 +23,7 @@ final class AppExtension extends AbstractExtension implements GlobalsInterface
         private readonly SiteConfig $site,
         private readonly AdminCounters $counters,
         private readonly ProfileImages $profileImages,
+        private readonly ContentSecurityPolicy $csp,
     ) {
     }
 
@@ -35,6 +37,8 @@ final class AppExtension extends AbstractExtension implements GlobalsInterface
     {
         return [
             new TwigFunction('profile_image_url', fn(mixed $user): string => $this->profileImages->url($user instanceof SubscriberUser ? $user->id : null)),
+            // The page's Content-Security-Policy nonce, for the import map's inline scripts.
+            new TwigFunction('csp_nonce', fn(): string => $this->csp->nonce()),
         ];
     }
 }

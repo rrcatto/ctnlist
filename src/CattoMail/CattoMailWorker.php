@@ -7,6 +7,7 @@ namespace App\CattoMail;
 use App\Repository\CattoMailOptOutRepository;
 use App\Repository\CattoMailSendRepository;
 use App\Repository\CattoMailValidationRepository;
+use App\Config\ConfigFingerprint;
 use App\Maintenance\DatabaseLock;
 use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
@@ -52,6 +53,7 @@ final class CattoMailWorker
         private readonly LoggerInterface $logger,
         private readonly DatabaseLock $lock,
         private readonly CattoMailActivity $activity,
+        private readonly ConfigFingerprint $fingerprint,
     ) {
     }
 
@@ -69,7 +71,7 @@ final class CattoMailWorker
         }
         try {
             $report = $this->pass();
-            $this->activity->workerRan($report);
+            $this->activity->workerRan($report, $this->fingerprint->value());
             return $report;
         } finally {
             $this->lock->release(DatabaseLock::CATTOMAIL_WORKER);

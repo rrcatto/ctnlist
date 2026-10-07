@@ -7,6 +7,7 @@ namespace App\Controller;
 use App\Config\SiteConfig;
 use App\Form\Model\ForwardRequest;
 use App\Form\Type\ForwardType;
+use App\Http\ContentSecurityPolicy;
 use App\Http\Pagination;
 use App\Repository\ArchiveRepository;
 use App\Security\SubscriberUser;
@@ -48,7 +49,7 @@ final class ArchiveController extends AbstractController
      * One archive; signed-in visitors can forward it. The token/MUID form
      * comes from the {archive} link in a delivered message.
      */
-    #[Route('/archive/{id}/{token}/{muid}', name: 'archive', defaults: ['token' => '', 'muid' => ''], requirements: ['id' => '\d+'], methods: ['GET'])]
+    #[Route('/archive/{id}/{token}/{muid}', name: 'archive', defaults: ['token' => '', 'muid' => '', '_csp' => ContentSecurityPolicy::ARCHIVE], requirements: ['id' => '\d+'], methods: ['GET'])]
     public function show(int $id, string $token, string $muid, #[CurrentUser] ?SubscriberUser $user): Response
     {
         $this->requireEnabled();

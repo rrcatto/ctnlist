@@ -6,6 +6,7 @@ namespace App\Controller\Admin;
 
 use App\Form\Model\TemplateDraft;
 use App\Form\Type\TemplateType;
+use App\Http\ContentSecurityPolicy;
 use App\Http\Pagination;
 use App\Repository\TemplateRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -33,7 +34,7 @@ final class TemplateController extends AbstractController
         ]);
     }
 
-    #[Route('/template/{id}', name: 'admin_template', defaults: ['id' => 0], requirements: ['id' => '\d+'], methods: ['GET'])]
+    #[Route('/template/{id}', name: 'admin_template', defaults: ['id' => 0, '_csp' => ContentSecurityPolicy::EDITOR], requirements: ['id' => '\d+'], methods: ['GET'])]
     public function edit(int $id): Response
     {
         $draft = $id === 0 ? new TemplateDraft() : TemplateDraft::fromTemplate($this->templates->find($id) ?? throw $this->createNotFoundException('Template does not exist.'));
@@ -41,7 +42,7 @@ final class TemplateController extends AbstractController
     }
 
     /** Save exactly what was entered; invalid input shows the editor again with everything kept. */
-    #[Route('/template/{id}', name: 'admin_template_save', defaults: ['id' => 0], requirements: ['id' => '\d+'], methods: ['POST'])]
+    #[Route('/template/{id}', name: 'admin_template_save', defaults: ['id' => 0, '_csp' => ContentSecurityPolicy::EDITOR], requirements: ['id' => '\d+'], methods: ['POST'])]
     public function save(int $id, Request $request): Response
     {
         if ($id !== 0 && $this->templates->find($id) === null) {

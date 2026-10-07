@@ -38,7 +38,7 @@ services:
       - mailpit
     volumes:
       # Shared code at the path public_html/index.php hard-codes.
-      - ./:/usr/local/lib/php/ctnlist/6.0.5
+      - ./:/usr/local/lib/php/ctnlist/6.0.6
       # Per-installation public_html, .env and writable var/, as on a
       # deployed instance.
       - ./public_html:/var/www/ctnlist/public_html:ro

@@ -103,6 +103,13 @@ final class MagicLinkAuthenticator extends AbstractAuthenticator
     {
         /** @var array{session_token: string, redirect: string} $result */
         $result = $request->attributes->get(self::RESULT);
+        // The firewall is stateless, so Symfony does not rotate the PHP session (CSRF tokens, flash
+        // messages) at sign-in: rotate it here, so a session id planted before sign-in is worthless after it.
+        if ($request->hasPreviousSession()) {
+            $session = $request->getSession();
+            $session->start(); // sessions start lazily; an unstarted one cannot be regenerated
+            $session->migrate(true);
+        }
         $response = new RedirectResponse($result['redirect']);
         $response->headers->setCookie($this->cookie->create($result['session_token'], $request));
         return $response;

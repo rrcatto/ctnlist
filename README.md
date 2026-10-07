@@ -1,4 +1,4 @@
-# ctnlist 6.0.5
+# ctnlist 6.0.6
 
 ctnlist is a web-based mailing-list application created by Richard Royston Catto in 2009. Versions 5.0.x and 6.0.x are an incremental modernisation of the working v5.0 application, not a replacement of its established workflows.
 
@@ -30,16 +30,28 @@ Version 6.0.3 hands campaign delivery to the catto-mail smarthost and hardens th
   - one quality gate, `bin/dev check`.
 - **Profile pictures:** a subscriber can choose, crop and save one, and it shows beside their name in the site menu.
 
+Version 6.0.4 makes the catto-mail integration operable in production:
+- **Integration status page** (Admin → Sending → Delivery): a "Check connection" button that names the failure (host, connection, TLS, key, permission); the last API success and error; a worker heartbeat; counts of pending and stuck work; send-run pages; and a webhook-event diagnostic page.
+- **Hardening:** queue staging can no longer stage one queue row twice when queue runs overlap; job states only move forward, even when updates race; bounce and complaint effects commit with their once-only claim; one open global opt-out per subscriber; a single-instance worker with meaningful exit codes.
+- **Other changes:** clearer administrator errors (with catto-mail's field errors), an explicit confirmation for the global opt-out, and `ctnlist:cattomail:check` plus the optional real end-to-end check `bin/dev test-cattomail`. `bin/dev up` re-attaches the development catto-mail network automatically. The unused `MAIL_UNSUBSCRIBE_ADDRESS` is removed.
+
 Version 6.0.5 adds operational maintenance and recovery:
 - **Housekeeping:** `ctnlist:maintenance` (hourly, `--dry-run`) removes expired sign-in data and sessions, and raw webhook bodies and other temporary catto-mail detail after configurable retention periods. It never touches consent, delivery history or anything still needed for a retry.
 - **Diagnostics and recovery:** `ctnlist:diagnose` checks an installation without printing secrets. Stuck work is formally defined and shown on the Delivery pages, with safe, logged recovery actions (retry a job, a validation or an opt-out, reprocess a webhook event). Long histories are paginated.
 - **Test isolation:** smoke tests run against a separate, disposable installation and database, and `bin/dev check` proves the development database is untouched.
 - **Documentation:** data classification, retention, backups and the recovery procedure (see [Operations](#operations)).
 
-Version 6.0.4 makes the catto-mail integration operable in production:
-- **Integration status page** (Admin → Sending → Delivery): a "Check connection" button that names the failure (host, connection, TLS, key, permission); the last API success and error; a worker heartbeat; counts of pending and stuck work; send-run pages; and a webhook-event diagnostic page.
-- **Hardening:** queue staging can no longer stage one queue row twice when queue runs overlap; job states only move forward, even when updates race; bounce and complaint effects commit with their once-only claim; one open global opt-out per subscriber; a single-instance worker with meaningful exit codes.
-- **Other changes:** clearer administrator errors (with catto-mail's field errors), an explicit confirmation for the global opt-out, and `ctnlist:cattomail:check` plus the optional real end-to-end check `bin/dev test-cattomail`. `bin/dev up` re-attaches the development catto-mail network automatically. The unused `MAIL_UNSUBSCRIBE_ADDRESS` is removed.
+Version 6.0.6 hardens the HTTP boundary and prepares production deployment:
+- **Security:**
+  - a strict Content-Security-Policy: scripts only from the site and by nonce, no framing; Bootstrap and Bootstrap Icons are served by the site instead of a CDN, and CKEditor's emoji list is served locally;
+  - sign-in replaces the PHP session id and logout destroys it;
+  - booking and contact links must be web addresses, and one-line settings refuse line breaks;
+  - requests to stop email from every sender are rate-limited, and the webhook refuses oversized bodies before reading them;
+  - error pages reveal nothing and render even while the database is down; anonymous pages no longer start a session.
+- **Deployment:** templates for nginx, PHP-FPM, cron and systemd (`deploy/`); a documented new-installation and release procedure with permissions and request limits (see [Deployment](#deployment)); `ctnlist:diagnose --production` as the go-live preflight, including whether the worker runs with the web server's configuration; `GET /health` for monitors.
+- **Other changes:** every route refuses the wrong method with 405, and regression tests cover sessions, sign-in tokens, headers, links, limits and diagnostics. Tables no longer widen pages on phones.
+
+The real end-to-end check against catto-mail (`bin/dev test-cattomail`) is still to be run, once the new production server exists.
 
 ## Platform and upgrades
 
@@ -47,7 +59,8 @@ Version 6.0.4 makes the catto-mail integration operable in production:
 - Symfony 8.1 (including Symfony Security, Twig and Mailer) with Doctrine DBAL 4
 - PostgreSQL with versioned Phinx migrations
 - Symfony Mailer for transactional mail only (`src/Mail/`: sign-in links, invitations, notifications, contact acknowledgements, throttled); campaign content (queue sends, proofs, resends, forwards) is delivered by the catto-mail smarthost through its HTTPS API (`src/CattoMail/`)
-- Symfony Forms and Validator for every input form; symfony/html-sanitizer (archive pages) and symfony/rate-limiter (contact form, forwards)
+- Symfony Forms and Validator for every input form; symfony/html-sanitizer (archive pages) and symfony/rate-limiter (contact form, forwards and resends, global opt-out changes)
+- Bootstrap 5.3 and Bootstrap Icons served by the site through Symfony AssetMapper (no CDN, no Node or npm), under a strict Content-Security-Policy
 - PHP `gd` (with JPEG and WebP) and `exif` for profile pictures
 - permanent RFC 9562 UUIDv7 subscriber identifiers
 - `subscribers` as the canonical identity table
@@ -60,6 +73,7 @@ Version 6.0.4 makes the catto-mail integration operable in production:
 - roles, permissions and ACL: custom roles can be created, renamed, deleted and given permissions; subscribers are found by search to assign roles, and each role lists its members (`roles.manage` manages roles and membership, `acl.manage` additionally changes permissions; system roles are fixed)
 - CSRF protection for state-changing actions
 - separate PostgreSQL global email/domain suppression database
+- production templates (nginx, PHP-FPM, cron, systemd) and a production preflight, `ctnlist:diagnose --production`
 
 ## Restored v5 functionality
 
@@ -152,46 +166,91 @@ A message can be saved without any audience. `ALL` is available for general camp
 bin/            console (Symfony), dev (podman development environment)
 config/         Symfony configuration; phinx/ (migration configs, default ban.env location)
 database/       Phinx migrations (domain/, banlist/), destructive development reset scripts
-assets/         application CSS and JavaScript for Symfony AssetMapper (app.js, styles/app.css, ckeditor/ editor configuration, images/)
+assets/         application CSS and JavaScript for Symfony AssetMapper (app.js, styles/app.css, ckeditor/ editor configuration, images/, lib/ vendored Bootstrap and Bootstrap Icons)
 importmap.php   AssetMapper import map (entry point: assets/app.js)
-public_html/    per-installation web root: front controller (index.php) and vendor/ckeditor5/ (prebuilt CKEditor 5 bundle)
-src/            application code, namespace App\ (Controller/, Repository/ and domain folders: Campaign/, Queue/, Mail/, CattoMail/, Log/, Subscriber/, Security/, Suppression/; Form/ and Validator/; Command/ for console commands)
+public_html/    per-installation web root: front controller (index.php) and vendor/ckeditor5/ (prebuilt CKEditor 5 bundle and its emoji list)
+deploy/         production templates: nginx server block and FastCGI snippet, PHP-FPM pool, cron entries, systemd units
+src/            application code, namespace App\ (Controller/, Repository/ and domain folders: Campaign/, Queue/, Mail/, CattoMail/, Log/, Subscriber/, Security/, Suppression/, Maintenance/; Config/ (settings, production rules), Http/ (headers, CSP, rate limits, pagination), Session/, Twig/, Util/; Form/ and Validator/; Command/ for console commands)
 templates/      Twig templates: base.html.twig and layout/ (navbar, admin bar, flash messages, footer) form the site layout
-tests/          PHPUnit: Unit/, Integration/ (application against the ctnlist_test database), Smoke/ (HTTP against the running stack), Support/ (FakeCattoMail)
+tests/          PHPUnit: Unit/, Integration/ (application against the ctnlist_test database), Smoke/ (HTTP against the stack's smoke installation), Support/ (FakeCattoMail)
 dev/podman/     development container files
 ```
 
 ## Deployment
 
-The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.0.5/` (the path is set in `public_html/index.php`). Run `composer install --no-dev` there. PHP needs the `gd` extension with JPEG and WebP support (profile pictures; `composer install` checks for it) and should have `exif` (phone photos are turned upright). The picture editor uploads only the cropped square (well under 1 MB); without JavaScript the original file is posted, so allow uploads of up to 8 MB (nginx `client_max_body_size`, PHP `upload_max_filesize`/`post_max_size`) or such uploads are refused.
+### Requirements
 
-Each installation has its own directory containing:
+- PHP 8.4.1 or later (developed on 8.5) with PHP-FPM and the extensions `pdo_pgsql`, `openssl` (encrypted settings), `gd` with JPEG and WebP support (profile pictures), `mbstring`, `fileinfo` (upload type checks), `dom` and `xml`, and `session`; `intl` and `curl` are recommended, `exif` turns phone photos upright. `composer install` and `ctnlist:diagnose` check them.
+- PostgreSQL 16 (the main database; the shared suppression database where this server hosts it).
+- nginx in front of PHP-FPM (never Apache). There is no Node or npm build: frontend files are served by Symfony AssetMapper.
 
-- `public_html/`: a copy of the repository's `public_html/`, used as the web server's document root. nginx serves existing files directly and passes everything else to `index.php` (see `dev/podman/nginx.conf`);
-- `.env`, one level above `public_html/` (start from `.env.example`);
-- writable `var/` (Symfony cache and logs) and `logs/` (contact log, import log and export files) directories.
+### Layout and permissions
 
-The compiled Symfony container embeds absolute paths, so clear each installation's cache after deploying a new version (or empty its `var/cache/`).
+The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.0.6/` (the path is set in `public_html/index.php`): owned by root, read-only to the PHP-FPM user (`www-data`), with `composer install --no-dev --optimize-autoloader` run there. Each installation has its own directory, e.g. `/var/www/<installation>`:
 
-The application's CSS, JavaScript and images (`assets/`) are served by Symfony AssetMapper. In production compile them once per installation after copying `public_html/`; the versioned files are written to that installation's `public_html/assets/` and nginx serves them as static files. Without this step the pages load without their styles and scripts. In development (`APP_DEBUG=true`) PHP serves them directly and no compile step is needed. Bootstrap and Bootstrap Icons come from the jsDelivr CDN with subresource integrity; there is no Node or npm build.
+| Path | Owner, mode | What |
+|---|---|---|
+| `.env` | root (or the deploying user) : `www-data`, `640` | configuration and secrets, one level above the web root; start from `.env.example` |
+| `public_html/` | root, read-only | the web root: a copy of the release's `public_html/` (`index.php`, `vendor/ckeditor5/`) |
+| `public_html/assets/` | `www-data`, writable | compiled AssetMapper files (`asset-map:compile`) |
+| `var/` | `www-data`, writable | Symfony cache and logs; not backed up |
+| `logs/` | `www-data`, writable | contact log, import log, export files |
 
-Console commands and migrations act on one installation, selected with `CTNLIST_INSTANCE_DIR`:
+Nothing else is writable by PHP. Only `public_html/` is web-accessible; `.env`, the code tree, `vendor/`, `var/` and `logs/` are never served. Run every console command for the installation as `www-data` (`sudo -u www-data env CTNLIST_INSTANCE_DIR=… php bin/console …`) so the cache it builds stays writable by PHP-FPM.
+
+### New installation
+
+The new server starts from an empty database; there are no upgrade migrations (see Database setup).
+
+1. Create the PostgreSQL role and database (a generated password, e.g. `openssl rand -base64 24`).
+2. Install the code at `/usr/local/lib/php/ctnlist/<version>/` and run `composer install --no-dev --optimize-autoloader`.
+3. Create the installation directory with the layout above; copy the release's `public_html/` into it.
+4. Write `.env` from `.env.example`. Generate each secret (`APP_SECRET`: `openssl rand -hex 32`; `APP_INSTANCE_ID`: `openssl rand -hex 16`; `APP_SETTINGS_KEY`: `openssl rand -base64 32`), never reuse documentation or another installation's values; `APP_ENV=prod`, `APP_DEBUG=false`, the public `https://` `APP_BASE_URL`, `DB_*`, `GDB_ENV_DIRECTORY`/`GDB_ENV_FILE` (the suppression database's `ban.env`), `MAILER_DSN`, the catto-mail credentials and webhook secret, and the real sender and administrator addresses (`APP_ADMIN_EMAIL` becomes the first administrator at its first sign-in).
+5. Create the schema: `CTNLIST_INSTANCE_DIR=/var/www/<installation> composer migrate-paralegal` (and `composer migrate-banlist` where this server hosts the suppression database; see Database setup).
+6. As `www-data`: `bin/console asset-map:compile`, then `bin/console cache:clear` (which warms the production cache).
+7. PHP-FPM pool from `deploy/php-fpm/ctnlist.conf.example`; nginx from `deploy/nginx/` (`nginx -t`, reload); TLS certificate.
+8. The scheduled commands from `deploy/cron/ctnlist.cron.example` or the systemd timers in `deploy/systemd/` (one of the two).
+9. Preflight: `sudo -u www-data env CTNLIST_INSTANCE_DIR=/var/www/<installation> php bin/console ctnlist:diagnose --production` must report no ERROR (the worker and maintenance warnings clear after their first runs). `https://<host>/health` answers `OK`.
+10. Register `<APP_BASE_URL>cattomail/webhook` in catto-mail with the webhook secret, then run the real end-to-end check (`bin/dev test-cattomail`, see [catto-mail integration](#catto-mail-integration)): it is deferred until the new environment exists and must pass before campaigns are sent.
+
+### New release
+
+Install the new version beside the old one (`/usr/local/lib/php/ctnlist/<new version>/`, `composer install --no-dev --optimize-autoloader`), then per installation: copy the release's `public_html/index.php` and `public_html/vendor/`, run `asset-map:compile` and `cache:clear` as `www-data`, point the cron entries or systemd units at the new path, reload PHP-FPM, and run `ctnlist:diagnose --production`, which reports a front controller that still loads the old tree, a missing CKEditor copy and stale compiled assets. Compiled assets are written to the installation's own `public_html/assets/`; installations never share them.
+
+### Request limits
+
+| Request | Limit |
+|---|---|
+| Any request | nginx `client_max_body_size 32m`; PHP `post_max_size 32M`, `upload_max_filesize 24M`, `max_execution_time 300` (`deploy/php-fpm`) |
+| Subscriber import file | 20 MB, `.txt`/`.csv` (form validation); pasted address lists up to 10 MB |
+| Profile picture | the editor posts only the cropped square (well under 1 MB); without JavaScript the original (up to 8 MB) |
+| catto-mail webhook | 1 MiB: nginx `client_max_body_size 1m` on `/cattomail/webhook`, and the application refuses a larger declared or actual body before verifying the signature |
+| Message subject, names, settings | field lengths in the forms (e.g. subject 200, one-line settings 2,000 characters) |
+
+### Health check
+
+`GET /health` answers `OK` (`text/plain`, `no-store`) while PHP-FPM and the application run, for an uptime monitor or load balancer. It reveals nothing else, queries no database and is not recorded in the Site Log. Configuration and worker health are in `ctnlist:diagnose` and on **Admin → Sending → Delivery**, never public.
+
+### Console commands
+
+Console commands and migrations act on one installation, selected with `CTNLIST_INSTANCE_DIR` (in production, run them as `www-data`):
 
 ```bash
 CTNLIST_INSTANCE_DIR=/var/www/example bin/console cache:clear
 CTNLIST_INSTANCE_DIR=/var/www/example bin/console asset-map:compile
 CTNLIST_INSTANCE_DIR=/var/www/example composer migrate-paralegal
+CTNLIST_INSTANCE_DIR=/var/www/example bin/console ctnlist:diagnose --production
 ```
 
 ## Configuration
 
-Per-installation settings are read from `.env` outside the public web directory. Start with `.env.example`. `APP_ENV` is `prod`, `dev` or `test`. `TRUSTED_PROXIES` lists reverse proxies whose `X-Forwarded-*` headers are trusted.
+Per-installation settings are read from `.env` outside the public web directory. Start with `.env.example`. `APP_ENV` is `prod`, `dev` or `test`. `TRUSTED_PROXIES` lists reverse proxies whose `X-Forwarded-*` headers are trusted (client IP for rate limits and logs, HTTPS detection). With nginx passing requests straight to PHP-FPM (`deploy/nginx`), PHP sees the client address and HTTPS directly and the snippet drops client-supplied forwarding headers; list a proxy only when one sits in front of nginx, and never `0.0.0.0/0` (`ctnlist:diagnose` warns).
 
 The main application uses `DB_*` settings. The separate global suppression database uses `GDB_*` settings in an externally managed `ban.env`. Set `GDB_ENV_DIRECTORY` and, when necessary, `GDB_ENV_FILE` in the installation `.env` (default: `config/phinx/ban.env` in the shared tree); the same variables can be exported when running the banlist Phinx configuration. `SUPPRESSION_PROVIDER=none` disables the suppression database and is only accepted with `APP_ENV` `dev` or `test`.
 
 Transactional mail (sign-in links, invitations, notifications, contact acknowledgements) goes through the SMTP server in `MAILER_DSN`, throttled to `MAIL_RATE_PER_MINUTE`. Campaign content goes through catto-mail (`CATTOMAIL_*`, below). Optional legacy synchronisation targets use `SYNC_DATABASES_JSON`.
 
-Sign-in links expire after `AUTH_MAGIC_LINK_TTL` seconds and are rate-limited per address (`AUTH_MAGIC_LINK_MAX_PER_EMAIL` within `AUTH_MAGIC_LINK_EMAIL_WINDOW`) and per client IP (`AUTH_MAGIC_LINK_MAX_PER_IP` within `AUTH_MAGIC_LINK_IP_WINDOW`); a signed-in session lasts `AUTH_SESSION_TTL` seconds. The sign-in page and email state the link lifetime in words from the same setting. Contact messages are limited per hour per client IP and per address (`CONTACT_RATE_LIMIT`, default 5), forwards and resends per subscriber (`FORWARD_RATE_LIMIT`, default 10; holders of `messages.manage` are exempt); over a limit the page answers 429. Contact-form submissions are appended to `CONTACT_LOG_FILE` (default: the installation's `logs/contact.log`). Bulk-subscribe and import logs (`emails_added.txt`) and the export files (`export-subscribers.txt`, `export-remove.txt`) are written to `APP_LOG_DIR` (default: the installation's `logs/`).
+Sign-in links expire after `AUTH_MAGIC_LINK_TTL` seconds and are rate-limited per address (`AUTH_MAGIC_LINK_MAX_PER_EMAIL` within `AUTH_MAGIC_LINK_EMAIL_WINDOW`) and per client IP (`AUTH_MAGIC_LINK_MAX_PER_IP` within `AUTH_MAGIC_LINK_IP_WINDOW`); a signed-in session lasts `AUTH_SESSION_TTL` seconds. The sign-in page and email state the link lifetime in words from the same setting. Contact messages are limited per hour per client IP and per address (`CONTACT_RATE_LIMIT`, default 5), forwards and resends per subscriber (`FORWARD_RATE_LIMIT`, default 10; holders of `messages.manage` are exempt), and requests or withdrawals of the catto-mail global opt-out to six per subscriber per hour (each one calls catto-mail); over a limit the page answers 429. Public subscribe requests and the confirmation prompts on subscriber links send sign-in links, so the sign-in limits apply to them. There is no CAPTCHA. Contact-form submissions are appended to `CONTACT_LOG_FILE` (default: the installation's `logs/contact.log`). Bulk-subscribe and import logs (`emails_added.txt`) and the export files (`export-subscribers.txt`, `export-remove.txt`) are written to `APP_LOG_DIR` (default: the installation's `logs/`).
 
 ### Settings page
 
@@ -202,17 +261,20 @@ Administrators, and any role given the `settings.manage` permission, can change 
 - SMTP passwords are encrypted in the database with AES-256-GCM using the dedicated `APP_SETTINGS_KEY` from `.env` (32 random bytes, Base64; generate with `openssl rand -base64 32`). The key is needed only once a secret is saved there; without it the SMTP section explains what to add. Passwords are never sent to the browser (leave the field empty to keep the current one) and never logged.
 - **Do not change `APP_SETTINGS_KEY` while encrypted settings exist**: they become unreadable, and mail that needs them fails (the Settings page reports it) until they are entered again or reset. A future key rotation must decrypt with the old key and re-encrypt with the new key before the new key is deployed.
 - Stay in `.env` only: `APP_SECRET`, `APP_SETTINGS_KEY`, `APP_ENV`/`APP_DEBUG`, `APP_INSTANCE_ID`, the catto-mail settings (`CATTOMAIL_*`), the database and suppression-database settings, `TRUSTED_PROXIES`, `APP_BASE_URL`/`APP_DOMAIN`, `APP_TIMEZONE`, file paths (`CONTACT_LOG_FILE`, `APP_LOG_DIR`), the auth cookie name, `APP_ADMIN_EMAIL` and the synchronisation targets.
-
-Deployment is otherwise unchanged (including `asset-map:compile` per installation).
+- Web addresses must be `http(s)://`; the booking and contact links must start with `https://`, `http://` or `{BaseURL}`; one-line values (names, subjects) cannot contain line breaks.
 
 ### Security notes
 
-- Secrets are generated, never typed: `APP_SECRET` with `openssl rand -hex 32`, `APP_INSTANCE_ID` with `openssl rand -hex 16`, `APP_SETTINGS_KEY` with `openssl rand -base64 32` (`bin/dev ensure-env` does this for the development stack and never replaces an existing key).
-- Every page carries `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, a `Permissions-Policy`, HSTS over HTTPS, and a Content-Security-Policy that stops framing by other sites, `<base>`/plugin injection and form posts to other sites. A full script/style policy (nonces for the import map, the CDN and CKEditor) is a later change. Static files are served by nginx, which can add the same headers there.
-- The auth cookie is HttpOnly, SameSite=Lax and Secure whenever `APP_BASE_URL` is https.
-- Bootstrap and Bootstrap Icons stay on jsDelivr with subresource integrity: vendoring them with AssetMapper would not bring the icon fonts along. CKEditor 5 is a prebuilt bundle in `public_html/vendor/ckeditor5/`, loaded only on the message and template editors.
-- Message HTML shown on the site (the public archive) is sanitised (`config/packages/html_sanitizer.yaml`); mail is sent as composed.
-- Logs never contain secrets, setting values or tokens; the Site Log omits query strings and masks one-click unsubscribe signatures. Configure the web server's access log not to record query strings for `/auth/verify`, which carries the sign-in token.
+- Secrets are generated, never typed: `APP_SECRET` with `openssl rand -hex 32`, `APP_INSTANCE_ID` with `openssl rand -hex 16`, `APP_SETTINGS_KEY` with `openssl rand -base64 32` (`bin/dev ensure-env` does this for the development stack and never replaces an existing key). `.env.example` leaves every secret empty; `ctnlist:diagnose --production` refuses short or placeholder values.
+- **Methods and CSRF.** GET never changes state (tracking excepted: the open pixel, the archive view counter, the contact-link engagement bump; and `GET /auth/verify`, which uses up its one-time token). Every POST is a Symfony form or carries the `ctnlist` CSRF token, except the signed catto-mail webhook, the signed one-click unsubscribe link and logout (firewall CSRF). A wrong method gets 405 before any controller runs.
+- **Access control** is enforced by the controllers (`#[IsGranted]` with ACL permissions; administrators hold every permission); links are only hidden in the templates. Roles and permissions can only be granted by someone who holds them.
+- **Sign-in.** Links carry 256-bit random tokens, stored only as SHA-256 hashes, valid once and for `AUTH_MAGIC_LINK_TTL`; parallel clicks sign in once. Requesting a link answers the same for every address. Sign-in rotates the PHP session id (CSRF tokens and messages) and logout destroys it, besides revoking the auth session. Return paths are built from fixed internal routes, never from request values.
+- **Cookies.** The auth cookie (`AUTH_SESSION_COOKIE`) is HttpOnly, SameSite=Lax, host-only, path `/`, lives `AUTH_SESSION_TTL`, and is Secure whenever the request is HTTPS or `APP_BASE_URL` is https. The PHP session cookie (CSRF tokens, flash messages) is HttpOnly, SameSite=Lax, a browser-session cookie, and Secure on HTTPS requests (`cookie_secure: auto`), so the development stack keeps working over plain http. Anonymous pages without a form set no cookie.
+- **Headers.** Every application response carries `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin` (subscriber UUIDs are in paths), a `Permissions-Policy`, HSTS over HTTPS, and a Content-Security-Policy (`App\Http\ContentSecurityPolicy`): `default-src 'self'`; scripts from the site plus a per-request nonce for the import map (no `unsafe-eval`, no `unsafe-inline`); styles, fonts and connections from the site only; images from the site, `data:` and `blob:` (the profile picture editor); `object-src 'none'`, `base-uri 'none'`, `form-action 'self'`, and `frame-ancestors 'none'` (no page may be framed; nothing needs embedding). The message and template editors (CKEditor writes inline styles) and the public archive page (authored campaign HTML keeps its inline styles and remote images) allow inline styles and https images; scripts stay nonce-only there too. In debug mode Symfony removes the policy from its own exception pages. nginx adds `nosniff`, caching and HSTS to the static files it serves (`deploy/nginx`).
+- **Frontend files are served by the site.** Bootstrap 5.3.8 and Bootstrap Icons 1.13.1 (with their font files) are vendored under `assets/lib/` and served through AssetMapper, verified against the jsDelivr SRI hashes they were loaded with before (`assets/lib/README.md`); there is no runtime CDN. CKEditor 5 (48.3.0) is a prebuilt bundle in `public_html/vendor/ckeditor5/`, with the emoji list it would otherwise fetch from CKEditor's CDN, loaded only on the message and template editors.
+- **Output.** Twig escapes everything. The only HTML printed as such on the site is message HTML on the public archive, after the sanitiser (`config/packages/html_sanitizer.yaml`: no scripts, event handlers, `javascript:` links, frames or forms). Mail is sent as composed; subscriber names and configured URLs are escaped in its HTML part. Booking and contact links (`APP_BOOKING_URL`, `APP_CONTACT_URL`) must start with `https://`, `http://` or `{BaseURL}`, and anything else is never rendered as a link; web addresses in Settings must be http(s); one-line settings (sender name, subjects) cannot contain line breaks.
+- **Errors.** With `APP_DEBUG=false` error pages show no exception, SQL, path or trace, also while the database is unavailable; the details go to the log.
+- **Logs** never contain secrets, setting values, tokens or message bodies; the Site Log omits query strings and masks one-click unsubscribe signatures. The nginx template's access-log format records no query strings (the sign-in link carries its token there).
 
 ### Message placeholders
 
@@ -287,10 +349,10 @@ A job only moves forward, decided in one SQL statement, so a late webhook or a s
 - Handled: `validation.completed`/`failed` (results fetched), `send.completed`/`failed` (job and message states fetched), `message.hard_bounced`, `message.complained`. Unknown types are kept and ignored.
 - States never move backwards, so late or reordered events change nothing.
 
-**Worker.** Webhooks are the primary path; the worker is the safety net. Run `ctnlist:cattomail:work` from cron every minute, per installation:
+**Worker.** Webhooks are the primary path; the worker is the safety net. Run `ctnlist:cattomail:work` every minute per installation, as the PHP-FPM user, from cron or a systemd timer (templates in `deploy/`, see [Commands and cron](#commands-and-cron)):
 
-```bash
-* * * * * CTNLIST_INSTANCE_DIR=/var/www/example /usr/local/lib/php/ctnlist/<version>/bin/console ctnlist:cattomail:work
+```cron
+* * * * *  www-data  CTNLIST_INSTANCE_DIR=/var/www/example php /usr/local/lib/php/ctnlist/<version>/bin/console ctnlist:cattomail:work --no-interaction
 ```
 
 Each pass:
@@ -337,7 +399,7 @@ The status page shows which of the two are set.
 **What is stored.**
 - Rendered recipient content is kept only until its batch is accepted, then cleared.
 - Recipient rows keep the address, subject, states and references.
-- Webhook events are kept in full (`cattomail_webhook_events.cwe_payload`, which can contain recipient addresses and remote diagnostics) for diagnosis and de-duplication.
+- Webhook events are kept for diagnosis and de-duplication; their raw bodies (`cattomail_webhook_events.cwe_payload`, which can contain recipient addresses and remote diagnostics) only until the retention period below.
 - Address-validation results are kept per job.
 
 `ctnlist:maintenance` removes webhook bodies after `CATTOMAIL_WEBHOOK_BODY_RETENTION_DAYS` and other temporary detail after `CATTOMAIL_DETAIL_RETENTION_DAYS` (see [Operations](#operations)).
@@ -360,7 +422,7 @@ The development stacks are separate (catto-mail's pod is on an internal network,
 4. In `dev/podman/ctnlist.env`:
    - `CATTOMAIL_API_BASE_URL=https://localhost`;
    - `CATTOMAIL_API_CONNECT_HOST=catto-mail` (TLS is still verified for `localhost`);
-   - `CATTOMAIL_CA_FILE=/usr/local/lib/php/ctnlist/6.0.5/dev/podman/cattomail-ca.pem`;
+   - `CATTOMAIL_CA_FILE=/usr/local/lib/php/ctnlist/6.0.6/dev/podman/cattomail-ca.pem`;
    - the API key and webhook secret;
    - for subscription mail, `APP_BASE_URL=https://localhost:8543/` (ctnlist's development HTTPS listener).
 
@@ -382,15 +444,17 @@ All development mail then ends up in catto-mail's Mailpit (catto-mail's own capt
 |---|---|---|
 | `ctnlist:cattomail:work` | every minute | Moves catto-mail work on: stored webhook events, unsent jobs, opt-outs, validation submissions, polling of jobs without a final state. Webhooks are the primary path; this is the safety net. |
 | `ctnlist:maintenance` | hourly | Housekeeping (below) and a count of stuck work. `--dry-run` only counts. |
-| `ctnlist:diagnose` | by hand | Configuration and health: required settings, secrets set or not (never their values), obsolete settings still present, writable directories, database, worker and maintenance heartbeats, stuck work. |
+| `ctnlist:diagnose` | by hand | Configuration and health: required settings, secrets set or not (never their values), PHP extensions, database and suppression database, schema, obsolete settings, writable directories, worker and maintenance heartbeats, whether the worker runs with the web server's configuration, stuck work. With `--production` (automatic under `APP_ENV=prod`) also the production rules: `APP_ENV`/`APP_DEBUG`, secret strength and placeholders, a public https `APP_BASE_URL`, a real mail transport, catto-mail configured, suppression provider, `TRUSTED_PROXIES`, example addresses, the installation's front controller and CKEditor copy, compiled assets, code and `.env` permissions. ERROR lines make the exit status 1. It sends no mail and calls no external service. |
 | `ctnlist:cattomail:check` | by hand | The catto-mail connection check (`--e2e` only in development). |
 
 The two scheduled commands are kept separate: the worker must run often and be quick, and housekeeping need not. Each runs one at a time per database (PostgreSQL advisory locks), so overlapping cron runs skip.
 
 ```cron
-* * * * *  CTNLIST_INSTANCE_DIR=/var/www/example /usr/local/lib/php/ctnlist/<version>/bin/console ctnlist:cattomail:work
-17 * * * * CTNLIST_INSTANCE_DIR=/var/www/example /usr/local/lib/php/ctnlist/<version>/bin/console ctnlist:maintenance
+* * * * *  www-data  CTNLIST_INSTANCE_DIR=/var/www/example php /usr/local/lib/php/ctnlist/<version>/bin/console ctnlist:cattomail:work --no-interaction
+17 * * * * www-data  CTNLIST_INSTANCE_DIR=/var/www/example php /usr/local/lib/php/ctnlist/<version>/bin/console ctnlist:maintenance --no-interaction
 ```
+
+Complete templates: `deploy/cron/ctnlist.cron.example` (`/etc/cron.d`) or the systemd timers in `deploy/systemd/` (`ctnlist-worker@<installation>.timer`, `ctnlist-maintenance@<installation>.timer`). Run them as the PHP-FPM user with nothing but `CTNLIST_INSTANCE_DIR`, so they read the same `.env` as the web server: the worker records a fingerprint of its configuration (installation, environment, database, base URL, catto-mail credentials, keys; hashes only), and the Delivery page and `ctnlist:diagnose` warn when it differs from theirs. The PHP-FPM pool template keeps `clear_env = yes` and no `env[…]` overrides for the same reason. `ctnlist:maintenance` prunes PHP sessions by the CLI's `session.gc_maxlifetime`: keep it equal in the FPM and CLI `php.ini`.
 
 Output and exit status are the same for both. They print one line of counts when something was done, failed or found (every run with `-v`), never row content. They exit 1 when an item failed, and 0 when there was nothing to do or another run was in progress. Their last runs, and last failures, show on **Admin → Sending → Delivery** and in `ctnlist:diagnose`.
 
@@ -436,7 +500,7 @@ None of them sets a state by hand: each asks catto-mail, or repeats the stored r
 
 ### Logs
 
-The application writes to standard error (PHP-FPM's log in production) and the installation's `logs/` (contact, import and export files). ctnlist does not rotate files: use the operating system's or container's mechanism (logrotate for `logs/` and PHP-FPM's log, journald or the container runtime for standard error). Maintenance logs counts only, never rows.
+The application writes to standard error (PHP-FPM's log in production, with `catch_workers_output` in the pool template; uncaught exceptions are logged there at `critical` with their details, which the browser never sees) and the installation's `logs/` (contact, import and export files; created by PHP, so readable by `www-data` and the deploying user only). ctnlist does not rotate files: use the operating system's or container's mechanism (logrotate for `logs/` and PHP-FPM's log, journald or the container runtime for standard error). Maintenance logs counts only, never rows.
 
 ### Backups and recovery
 
@@ -454,11 +518,11 @@ Back up, per installation:
 Recovery:
 1. Restore the database (and the suppression database, if hosted here).
 2. Restore the installation's `.env`.
-3. Install the matching ctnlist code version at its shared-code path (`composer install --no-dev`) and copy `public_html/`.
-4. `bin/console asset-map:compile` for the installation.
-5. Clear the installation's cache (`bin/console cache:clear`, or empty `var/cache/`).
-6. Restart PHP-FPM and re-enable the two cron entries.
-7. Let the worker reconcile. Pending catto-mail work carries its catto-mail ids and Idempotency-Keys, so the worker polls and finishes it rather than creating replacements. Check **Admin → Sending → Delivery** (Check connection, stuck work) and `ctnlist:diagnose`.
+3. Install the matching ctnlist code version at its shared-code path (`composer install --no-dev --optimize-autoloader`) and copy its `public_html/` (see [Deployment](#deployment) for ownership and permissions).
+4. As `www-data`: `bin/console asset-map:compile` for the installation.
+5. As `www-data`: clear the installation's cache (`bin/console cache:clear`, or empty `var/cache/`).
+6. Restart PHP-FPM and re-enable the two cron entries (or systemd timers).
+7. Run `ctnlist:diagnose --production`, then let the worker reconcile. Pending catto-mail work carries its catto-mail ids and Idempotency-Keys, so the worker polls and finishes it rather than creating replacements. Check **Admin → Sending → Delivery** (Check connection, stuck work).
 
 The real end-to-end check against catto-mail (`bin/dev test-cattomail`) is a release step for when the new environment exists; the automated tests use the fake catto-mail.
 
@@ -487,19 +551,19 @@ The application is at http://localhost:8180 (and https://localhost:8543 with a g
 ## Testing and validation
 
 ```bash
-bin/dev check       # the quality gate: all of the below plus Twig/YAML/container lint and composer validate + audit
+bin/dev check       # the quality gate: all of the below plus Twig/YAML/container lint and composer validate + audit, then a check that the development database is untouched
 bin/dev lint        # php -l over public_html/index.php, src/ and tests/
 bin/dev analyse     # PHPStan level 8
 bin/dev test        # PHPUnit: unit, integration and smoke suites
 ```
 
-`bin/dev check` must pass before a change is handed over; it stops at the first failing step. `tests/Integration/RouteConventionsTest` checks the whole route table: every POST route is CSRF-protected (Symfony form or `#[IsCsrfTokenValid]`; the webhook, the signed one-click unsubscribe link and logout are documented exemptions), every administration route declares its permission, no state-changing route accepts GET, and every GET route is requested by the route smoke test.
+`bin/dev check` must pass before a change is handed over; it stops at the first failing step. `tests/Integration/Http/HttpBoundaryTest` sends every route the wrong method (405), checks the webhook's size limit, production error pages and the health check; `SecurityHeadersTest` the headers and the Content-Security-Policy profiles; `Smoke/SecurityBoundaryTest` extra form fields, the opt-out rate limit and the worker-configuration warning over HTTP. `tests/Integration/RouteConventionsTest` checks the whole route table: every POST route is CSRF-protected (Symfony form or `#[IsCsrfTokenValid]`; the webhook, the signed one-click unsubscribe link and logout are documented exemptions), every administration route declares its permission, no state-changing route accepts GET, and every GET route is requested by the route smoke test.
 
 Smoke tests never touch the development installation or its database. They drive a second installation in the same stack, `/var/www/ctnlist-smoke` (served internally at `http://web:8081`, generated `dev/podman/smoke.env`), whose database `ctnlist_smoke` is dropped, migrated and seeded before every `bin/dev test`. Integration tests use `ctnlist_test`, each test in a rolled-back transaction. `SmokeTestCase` refuses any other database, and `bin/dev check` compares row counts of the development database before and after the tests and fails if anything changed.
 
-`tests/Smoke/RouteSmokeTest` requests every GET route of the running stack over HTTP, anonymously and as the development administrator, and checks status codes, login redirects, access control and PHP error output. Every new GET route must be added to it. `tests/Smoke/AuthFlowTest` covers sign-in links, auth cookies, logout and CSRF, `tests/Smoke/LayoutTest` the site layout and error pages, `tests/Smoke/AdminListsRolesTest` list and role administration, `AdminMessagesTemplatesTest`, `AdminQueueTest`, `AdminSubscribersTest` and `ReportsTest` the rest of the administration and the Site Log, and `ProfileTest`, `ConsentTest`, `MessageActionTest` and `ArchiveContactTest` the subscriber-facing pages. `tests/Unit` holds unit tests; `tests/Integration` boots the application against the `ctnlist_test` database (each test rolled back) and covers the services: suppression (including the banlist database, `ctnlist_banlist_test`), the send and message logs, mail, rendering, messages, the delivery queue, consent, contact and subscriber administration.
+`tests/Smoke/RouteSmokeTest` requests every GET route of the running stack over HTTP, anonymously and as the development administrator, and checks status codes, login redirects, access control and PHP error output. Every new GET route must be added to it. `tests/Smoke/AuthFlowTest` covers sign-in links (including parallel and expired ones), auth cookies, session rotation, logout and CSRF, `tests/Smoke/LayoutTest` the site layout, assets, the Content-Security-Policy and error pages, `AdminScreensTest` the administration screens, `AdminListsRolesTest` and `RoleAdministrationTest` list and role administration, `AdminMessagesTemplatesTest`, `AdminQueueTest`, `AdminSubscribersTest`, `SettingsPageTest` and `ReportsTest` the rest of the administration and the Site Log, `CattoMailSmokeTest` the catto-mail pages and webhook endpoint, `SecurityBoundaryTest` extra form fields, rate limits, the worker-configuration warning and the health check, and `ProfileTest`, `ConsentTest`, `MessageActionTest` and `ArchiveContactTest` the subscriber-facing pages. `tests/Unit` holds unit tests; `tests/Integration` boots the application against the `ctnlist_test` database (each test rolled back) and covers the services: suppression (including the banlist database, `ctnlist_banlist_test`), the send and message logs, mail, rendering, messages, the delivery queue, consent, contact and subscriber administration, catto-mail against the fake, maintenance and diagnostics, sign-in, settings and the HTTP boundary.
 
-The banlist suppression database and real SMTP delivery are not part of the development stack and must be tested on a target installation.
+Real SMTP delivery and a production banlist database are not part of the development stack and must be tested on a target installation. The real catto-mail end-to-end check (`bin/dev test-cattomail`) is deferred until the new production environment exists.
 
 ## Migration status
 

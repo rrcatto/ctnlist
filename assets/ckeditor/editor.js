@@ -66,6 +66,11 @@ const {
 } = window.CKEDITOR;
 
 const LICENSE_KEY = 'GPL';
+
+// The emoji list is served by this site (public_html/vendor/ckeditor5/emoji), not
+// CKEditor's CDN: the Content-Security-Policy allows connections to the site only.
+// CKEditor needs an absolute URL.
+const EMOJI_DEFINITIONS = new URL(document.currentScript.dataset.emojiDefinitions, document.baseURI).href;
 /*
 	'eyJhbGciOiJFUzI1NiJ9.eyJleHAiOjE3ODUyODMxOTksImp0aSI6ImIxMWE0MGRlLWY5ZDAtNGI1Yi05NTZhLTIxNjg4MWMwMWZjYSIsInVzYWdlRW5kcG9pbnQiOiJodHRwczovL3Byb3h5LWV2ZW50LmNrZWRpdG9yLmNvbSIsImRpc3RyaWJ1dGlvbkNoYW5uZWwiOlsiY2xvdWQiLCJkcnVwYWwiLCJzaCJdLCJ3aGl0ZUxhYmVsIjp0cnVlLCJsaWNlbnNlVHlwZSI6InRyaWFsIiwiZmVhdHVyZXMiOlsiKiJdLCJ2YyI6IjFmMTM4MDdmIn0.6c3QpoRcN4ptzB7DyRFKvQoWPEg-vypXsCVvevaCp2n7HgEOKZQx-n_IUdRa6vV8nlKTSDNMlSrGFvYJpz24XA';
 */
@@ -185,6 +190,9 @@ const editorConfig = {
 		Underline
 	],
 	licenseKey: LICENSE_KEY,
+	emoji: {
+		definitionsUrl: EMOJI_DEFINITIONS
+	},
 	autosave: {
 		/* See: https://ckeditor.com/docs/ckeditor5/latest/features/autosave.html */
 	},

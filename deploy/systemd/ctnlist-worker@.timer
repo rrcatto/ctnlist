@@ -1,0 +1,9 @@
+[Unit]
+Description=Run the ctnlist catto-mail worker (%i) every minute
+
+[Timer]
+OnCalendar=minutely
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

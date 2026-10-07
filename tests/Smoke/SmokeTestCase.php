@@ -107,13 +107,14 @@ abstract class SmokeTestCase extends TestCase
 
     /**
      * @param array<string, string|\CURLFile> $fields form fields for POST; with a file it is sent as multipart/form-data
-     * @return array{status: int, body: string, location: string, cookies: list<string>}
+     * @return array{status: int, body: string, location: string, cookies: list<string>, headers: array<string, string>}
      */
     protected static function request(\CurlHandle $client, string $method, string $path, array $fields = []): array
     {
         $multipart = array_filter($fields, static fn($value): bool => $value instanceof \CURLFile) !== [];
         $location = '';
         $cookies = [];
+        $headers = [];
         curl_setopt_array($client, [
             CURLOPT_URL => self::$baseUrl . $path,
             CURLOPT_CUSTOMREQUEST => $method,
@@ -122,7 +123,11 @@ abstract class SmokeTestCase extends TestCase
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_FOLLOWLOCATION => false,
             CURLOPT_TIMEOUT => 60,
-            CURLOPT_HEADERFUNCTION => static function ($ch, string $header) use (&$location, &$cookies): int {
+            CURLOPT_HEADERFUNCTION => static function ($ch, string $header) use (&$location, &$cookies, &$headers): int {
+                if (str_contains($header, ':')) {
+                    [$name, $value] = explode(':', $header, 2);
+                    $headers[strtolower(trim($name))] = trim($value);
+                }
                 if (stripos($header, 'Location:') === 0) {
                     $location = trim(substr($header, 9));
                 } elseif (stripos($header, 'Set-Cookie:') === 0) {
@@ -140,6 +145,7 @@ abstract class SmokeTestCase extends TestCase
             'body' => (string) $body,
             'location' => $location,
             'cookies' => $cookies,
+            'headers' => $headers,
         ];
     }
 

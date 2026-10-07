@@ -22,6 +22,8 @@ final class CattoMailActivity
     public const WORKER_RUN = 'cattomail:worker_last_run_at';
     public const WORKER_SUMMARY = 'cattomail:worker_last_summary';
     public const WORKER_FAILED = 'cattomail:worker_last_failure_at';
+    /** ConfigFingerprint of the worker's last run, compared with the web server's (Delivery page, ctnlist:diagnose). */
+    public const WORKER_CONFIG = 'cattomail:worker_config';
 
     private ?int $lastOkWritten = null;
 
@@ -49,16 +51,17 @@ final class CattoMailActivity
     }
 
     /** @param array<string, int> $report */
-    public function workerRan(array $report): void
+    public function workerRan(array $report, string $fingerprint): void
     {
         $this->options->set(self::WORKER_RUN, $this->now());
+        $this->options->set(self::WORKER_CONFIG, $fingerprint);
         $this->options->set(self::WORKER_SUMMARY, implode(', ', array_map(static fn(string $task, int $n): string => $task . ': ' . $n, array_keys($report), $report)));
         if (($report['failures'] ?? 0) > 0) {
             $this->options->set(self::WORKER_FAILED, $this->now());
         }
     }
 
-    /** @return array{last_ok: ?string, last_error: ?string, last_error_at: ?string, worker_run: ?string, worker_summary: ?string, worker_failed: ?string} */
+    /** @return array{last_ok: ?string, last_error: ?string, last_error_at: ?string, worker_run: ?string, worker_summary: ?string, worker_failed: ?string, worker_config: ?string} */
     public function snapshot(): array
     {
         return [
@@ -68,6 +71,7 @@ final class CattoMailActivity
             'worker_run' => $this->options->get(self::WORKER_RUN),
             'worker_summary' => $this->options->get(self::WORKER_SUMMARY),
             'worker_failed' => $this->options->get(self::WORKER_FAILED),
+            'worker_config' => $this->options->get(self::WORKER_CONFIG),
         ];
     }
 
