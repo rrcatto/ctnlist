@@ -54,6 +54,28 @@ final class DiagnoseCommandTest extends IntegrationTestCase
         }
     }
 
+    /**
+     * A suppression source that cannot be built (wrong GDB_ENV_DIRECTORY, missing ban.env, or
+     * SUPPRESSION_PROVIDER=none in production) is an ERROR line in the report, not a crash that hides the rest.
+     */
+    public function testAnUnusableSuppressionSourceIsReportedNotFatal(): void
+    {
+        $saved = [$_ENV['SUPPRESSION_PROVIDER'] ?? null, $_ENV['GDB_ENV_DIRECTORY'] ?? null];
+        $_ENV['SUPPRESSION_PROVIDER'] = 'banlist';
+        $_ENV['GDB_ENV_DIRECTORY'] = '/nonexistent';
+        try {
+            $command = new CommandTester($this->service(DiagnoseCommand::class));
+            $status = $command->execute([]);
+        } finally {
+            [$_ENV['SUPPRESSION_PROVIDER'], $_ENV['GDB_ENV_DIRECTORY']] = $saved;
+            $_ENV = array_filter($_ENV, static fn($value): bool => $value !== null);
+        }
+        $display = $command->getDisplay();
+        self::assertSame(1, $status);
+        self::assertStringContainsString('ERROR suppression database (banlist) not reachable: Global suppression database configuration file not found: /nonexistent/', $display);
+        self::assertStringContainsString('OK    database schema up to date', $display, 'the other checks still ran');
+    }
+
     /** The worker's recorded configuration fingerprint is compared with this process's. */
     public function testReportsAWorkerRunningWithAnotherConfiguration(): void
     {

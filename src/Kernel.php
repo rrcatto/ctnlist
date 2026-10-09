@@ -36,11 +36,6 @@ final class Kernel extends BaseKernel
         return \dirname(__DIR__);
     }
 
-    public function getInstanceDir(): string
-    {
-        return $this->instanceDir;
-    }
-
     public function getCacheDir(): string
     {
         return $this->instanceDir . '/var/cache/' . $this->environment;

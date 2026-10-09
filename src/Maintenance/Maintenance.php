@@ -20,7 +20,11 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  * - sign-in links that are used or expired and older than the sign-in rate
  *   windows (the rate limits count recent links);
  * - sign-in sessions that expired or were revoked (signed out);
- * - PHP sessions (CSRF tokens, flash messages) past session.gc_maxlifetime;
+ * - PHP sessions (CSRF tokens, flash messages) idle for longer than a
+ *   sign-in (AUTH_SESSION_TTL) or a sign-in link (AUTH_MAGIC_LINK_TTL) lasts,
+ *   so a signed-in user's open form, or an opened sign-in link's page, never
+ *   loses its CSRF token first (PHP's own session garbage collection is off:
+ *   framework.yaml, so php.ini plays no part);
  * - raw bodies of webhook events processed more than
  *   CATTOMAIL_WEBHOOK_BODY_RETENTION_DAYS ago (the event rows, outcomes and
  *   references stay; unprocessed events are never touched);
@@ -111,7 +115,7 @@ final class Maintenance
         $now = $this->now();
         $rateWindow = max($this->settings->int('AUTH_MAGIC_LINK_EMAIL_WINDOW', 900), $this->settings->int('AUTH_MAGIC_LINK_IP_WINDOW', 3600));
         $linkKeep = $this->ago($rateWindow);
-        $sessionCutoff = time() - max(60, (int) ini_get('session.gc_maxlifetime') ?: 1440);
+        $sessionCutoff = time() - max($this->settings->int('AUTH_SESSION_TTL', 86400), $this->settings->int('AUTH_MAGIC_LINK_TTL', 1800));
         $bodyCutoff = $this->ago($this->config->webhookBodyRetentionDays * 86400);
         $detailCutoff = $this->ago($this->config->detailRetentionDays * 86400);
         $siteLogDays = is_numeric($this->siteLogRetention) ? max(0, (int) $this->siteLogRetention) : 0;

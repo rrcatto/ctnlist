@@ -135,7 +135,7 @@ final class AdminScreensTest extends SmokeTestCase
         self::$db->prepare('INSERT INTO subscriber_roles (sr_s_id, sr_r_id) SELECT ?, r_id FROM roles WHERE r_key = ?')->execute([self::$staffId, self::$roleKey]);
 
         $client = self::client();
-        $response = self::request($client, 'GET', '/auth/verify?token=' . self::issueLoginToken(self::$staffId));
+        $response = self::signInWithLink($client, self::issueLoginToken(self::$staffId));
         self::assertSame(302, $response['status']);
         return $client;
     }

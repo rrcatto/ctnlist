@@ -15,7 +15,6 @@
         <env name="DB_NAME" value="ctnlist_test" force="true"/>
         <env name="SUPPRESSION_PROVIDER" value="none" force="true"/>
         <env name="MAILER_DSN" value="null://null" force="true"/>
-        <env name="MAIL_RATE_PER_MINUTE" value="0" force="true"/>
         <!-- catto-mail: integration tests replace the HTTP client with a fake (tests/Support/FakeCattoMail). -->
         <env name="CATTOMAIL_API_BASE_URL" value="https://cattomail.test" force="true"/>
         <env name="CATTOMAIL_API_KEY" value="shk_test_key_0123456789" force="true"/>
@@ -30,9 +29,9 @@
         <env name="CONTACT_LOG_FILE" value="/tmp/ctnlist-test-contact.log" force="true"/>
         <env name="APP_LOG_DIR" value="/tmp/ctnlist-test-logs" force="true"/>
         <env name="BANLIST_TEST_ENV" value="dev/podman/banlist-test.env" force="false"/>
-        <!-- The smoke suite drives the running podman stack over HTTP from
-             inside the app container; override these for another instance. -->
-        <!-- The smoke installation and its disposable database (never the development one). -->
+        <!-- The smoke suite drives the smoke installation over HTTP from inside the
+             app container, with its disposable database: SmokeTestCase refuses any
+             database but ctnlist_smoke and a SMOKE_BASE_URL that does not use it. -->
         <env name="SMOKE_BASE_URL" value="http://web:8081" force="false"/>
         <env name="SMOKE_DB_DSN" value="pgsql:host=db;port=5432;dbname=ctnlist_smoke" force="false"/>
         <env name="SMOKE_DB_USER" value="ctnlist" force="false"/>

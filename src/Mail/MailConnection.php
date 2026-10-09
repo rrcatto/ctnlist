@@ -11,15 +11,13 @@ use Symfony\Component\Mailer\Transport\TransportInterface;
 use Symfony\Component\Mime\Email;
 
 /**
- * An open connection to one SmtpServer, throttled to its send rate. Opening
- * starts SMTP transports, so connection failures surface before any message
- * is built (the v5 OpenSMTP contract). Not shared: create one per use.
+ * An open connection to one SmtpServer. Opening starts SMTP transports, so
+ * connection failures surface before any message is built (the v5 OpenSMTP
+ * contract). Not shared: create one per use.
  */
 final class MailConnection
 {
     private ?TransportInterface $transport = null;
-    private ?SmtpServer $server = null;
-    private float $lastSendAt = 0.0;
 
     public function __construct(
         #[Autowire(service: 'mailer.transport_factory')] private readonly Transport $transports,
@@ -36,22 +34,11 @@ final class MailConnection
                 $transport->start();
             }
             $this->transport = $transport;
-            $this->server = $server;
             return true;
         } catch (\Throwable $e) {
             $this->logger->error('ctnlist mail error: {message}', ['message' => $e->getMessage()]);
             return false;
         }
-    }
-
-    public function isOpen(): bool
-    {
-        return $this->transport !== null;
-    }
-
-    public function server(): ?SmtpServer
-    {
-        return $this->server;
     }
 
     /** Hand the message to the transport; false (and logged) on failure. */
@@ -62,9 +49,7 @@ final class MailConnection
             return false;
         }
         try {
-            $this->throttle();
             $transport->send($email);
-            $this->lastSendAt = microtime(true);
             return true;
         } catch (\Throwable $e) {
             $this->logger->error('ctnlist mail error: {message}', ['message' => $e->getMessage()]);
@@ -82,19 +67,5 @@ final class MailConnection
             }
         }
         $this->transport = null;
-        $this->server = null;
-        $this->lastSendAt = 0.0;
-    }
-
-    private function throttle(): void
-    {
-        $perMinute = $this->server->sendRate ?? 0;
-        if ($perMinute <= 0 || $this->lastSendAt <= 0.0) {
-            return;
-        }
-        $wait = 60 / $perMinute - (microtime(true) - $this->lastSendAt);
-        if ($wait > 0) {
-            usleep((int) ($wait * 1_000_000));
-        }
     }
 }

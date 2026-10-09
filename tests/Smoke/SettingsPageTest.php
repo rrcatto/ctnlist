@@ -170,7 +170,7 @@ final class SettingsPageTest extends SmokeTestCase
     private static function signIn(): \CurlHandle
     {
         $client = self::client();
-        self::assertSame(302, self::request($client, 'GET', '/auth/verify?token=' . self::issueLoginToken(self::$staffId))['status']);
+        self::assertSame(302, self::signInWithLink($client, self::issueLoginToken(self::$staffId))['status']);
         return $client;
     }
 

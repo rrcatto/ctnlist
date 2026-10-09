@@ -15,14 +15,20 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Security\Core\Authentication\Token\TokenInterface;
 use Symfony\Component\Security\Core\Exception\AuthenticationException;
 use Symfony\Component\Security\Core\Exception\CustomUserMessageAuthenticationException;
+use Symfony\Component\Security\Core\Exception\InvalidCsrfTokenException;
+use Symfony\Component\Security\Csrf\CsrfToken;
+use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 use Symfony\Component\Security\Http\Authenticator\AbstractAuthenticator;
 use Symfony\Component\Security\Http\Authenticator\Passport\Badge\UserBadge;
 use Symfony\Component\Security\Http\Authenticator\Passport\Passport;
 use Symfony\Component\Security\Http\Authenticator\Passport\SelfValidatingPassport;
 
 /**
- * GET /auth/verify?token=…: redeems a one-time magic link, starts an
- * auth session (auth cookie) and redirects to the requested action.
+ * POST /auth/verify (the Sign in button of SignInLinkPage, which the emailed
+ * GET link shows): checks the session CSRF token, then redeems the one-time
+ * magic link, starts an auth session (auth cookie) and redirects to the
+ * requested action. Opening the link never gets here, so a mail scanner that
+ * follows it uses nothing up.
  */
 final class MagicLinkAuthenticator extends AbstractAuthenticator
 {
@@ -39,17 +45,23 @@ final class MagicLinkAuthenticator extends AbstractAuthenticator
         private readonly LoginReturnPath $returnPath,
         private readonly AuthCookie $cookie,
         private readonly ClockInterface $clock,
+        private readonly CsrfTokenManagerInterface $csrf,
+        private readonly SignInLinkPage $page,
     ) {
     }
 
     public function supports(Request $request): bool
     {
-        return $request->isMethod('GET') && $request->getPathInfo() === self::PATH;
+        return $request->isMethod('POST') && $request->getPathInfo() === self::PATH;
     }
 
     public function authenticate(Request $request): Passport
     {
-        $token = trim((string) $request->query->get('token', ''));
+        // Before the claim, so a forged or stale form leaves the link unused.
+        if (!$this->csrf->isTokenValid(new CsrfToken(Csrf::TOKEN_ID, $request->request->getString(Csrf::FIELD)))) {
+            throw new InvalidCsrfTokenException();
+        }
+        $token = trim($request->request->getString('token'));
         if (!AuthCookie::isWellFormed($token)) {
             throw new CustomUserMessageAuthenticationException('Malformed sign-in link.');
         }
@@ -115,8 +127,9 @@ final class MagicLinkAuthenticator extends AbstractAuthenticator
         return $response;
     }
 
+    /** The link's page again: why it cannot be used, or (CSRF refused, link unused) its Sign in button. */
     public function onAuthenticationFailure(Request $request, AuthenticationException $exception): Response
     {
-        return new RedirectResponse('/login');
+        return $this->page->show(trim($request->request->getString('token')), $exception instanceof InvalidCsrfTokenException);
     }
 }

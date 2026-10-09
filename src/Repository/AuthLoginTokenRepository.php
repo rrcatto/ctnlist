@@ -45,6 +45,29 @@ final class AuthLoginTokenRepository
     }
 
     /**
+     * A token's state without using it up (the sign-in confirmation page).
+     *
+     * @return array{used: bool, expired: bool, return_action: string, return_list_id: int}|null null for a token never issued (or since removed)
+     */
+    public function find(string $tokenHash, string $now): ?array
+    {
+        $row = $this->db->fetchAssociative(
+            'SELECT alt_used_at IS NOT NULL AS used, alt_expires_at <= :now AS expired, alt_return_action, alt_return_l_id
+             FROM auth_login_tokens WHERE alt_token_hash = :hash',
+            ['hash' => $tokenHash, 'now' => $now]
+        );
+        if ($row === false) {
+            return null;
+        }
+        return [
+            'used' => (bool) $row['used'],
+            'expired' => (bool) $row['expired'],
+            'return_action' => (string) $row['alt_return_action'],
+            'return_list_id' => (int) $row['alt_return_l_id'],
+        ];
+    }
+
+    /**
      * Atomically mark an unused, unexpired token as used, so a link cannot be
      * redeemed twice even by concurrent requests.
      *

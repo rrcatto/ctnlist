@@ -20,6 +20,6 @@ final class SmtpServerPoolFactory
 
     public function __invoke(): SmtpServerPool
     {
-        return new SmtpServerPool($this->settings->get('MAILER_DSN'), $this->settings->int('MAIL_RATE_PER_MINUTE', 13));
+        return new SmtpServerPool($this->settings->get('MAILER_DSN'));
     }
 }

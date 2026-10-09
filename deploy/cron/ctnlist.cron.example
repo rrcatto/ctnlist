@@ -17,5 +17,6 @@ MAILTO=root
 # catto-mail worker: webhooks not yet processed, unsent jobs, opt-outs, validation, reconciliation.
 * * * * *   www-data  CTNLIST_INSTANCE_DIR=/var/www/<installation> php /usr/local/lib/php/ctnlist/<version>/bin/console ctnlist:cattomail:work --no-interaction
 
-# Housekeeping (retention, expired sign-in records, stuck-work count).
+# Housekeeping (retention, expired sign-in records and idle PHP sessions, stuck-work count).
+# PHP's own session garbage collection is off: this run is what removes old sessions.
 17 * * * *  www-data  CTNLIST_INSTANCE_DIR=/var/www/<installation> php /usr/local/lib/php/ctnlist/<version>/bin/console ctnlist:maintenance --no-interaction

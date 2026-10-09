@@ -53,14 +53,6 @@ final class AuthSessionRepository
         $this->db->executeStatement('UPDATE auth_sessions SET as_last_seen_at = ? WHERE as_id = ?', [$now, $id]);
     }
 
-    public function revoke(int $id, string $now): void
-    {
-        $this->db->executeStatement(
-            'UPDATE auth_sessions SET as_revoked_at = ? WHERE as_id = ? AND as_revoked_at IS NULL',
-            [$now, $id]
-        );
-    }
-
     public function revokeByTokenHash(string $tokenHash, string $now): void
     {
         $this->db->executeStatement(

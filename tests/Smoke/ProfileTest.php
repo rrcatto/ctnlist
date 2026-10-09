@@ -28,7 +28,7 @@ final class ProfileTest extends SmokeTestCase
         $id = (int) self::value('SELECT s_id FROM subscribers WHERE s_email = ?', [self::PICTURE_EMAIL]);
         self::$db->prepare('DELETE FROM subscriber_images WHERE si_s_id = ?')->execute([$id]);
         $client = self::client();
-        self::assertSame(302, self::request($client, 'GET', '/auth/verify?token=' . self::issueLoginToken($id))['status']);
+        self::assertSame(302, self::signInWithLink($client, self::issueLoginToken($id))['status']);
         try {
             $page = self::request($client, 'GET', '/edit-profile')['body'];
             self::assertMatchesRegularExpression('#<img class="app-avatar" src="/assets/images/avatar-placeholder-[^"]+\.svg"#', $page, 'no picture yet: the placeholder in the menu');

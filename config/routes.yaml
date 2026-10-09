@@ -10,7 +10,9 @@ app_logout:
     path: /logout
     methods: [POST]
 
-auth_verify:
+# The sign-in itself; opening the emailed link (GET, AuthController::verify)
+# only shows the page with its Sign in button.
+auth_verify_submit:
     path: /auth/verify
-    methods: [GET]
+    methods: [POST]
 

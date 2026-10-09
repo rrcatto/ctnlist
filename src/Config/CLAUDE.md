@@ -1,0 +1,13 @@
+# Configuration and Settings
+
+`SiteConfig` holds the non-secret installation settings with the v5 defaults and fallbacks. `SiteConfigFactory` builds it from `RuntimeSettings::environment()`, which excludes secrets, and templates get it as the Twig global `site`.
+
+**Settings overrides.** `RuntimeSettings` resolves each env var listed in `SettingsCatalogue` as database override → `.env` → the catalogue's `default`. Overrides live in `options` under `setting:<ENV_NAME>` (`SettingRepository`). `.env` is never written, and saving the inherited value (or "Reset override"/"Reset section") deletes the override. Changes apply from the next request or email.
+- Read these settings through `SiteConfig` or `RuntimeSettings::get()`/`int()`, never `%env()%` or `#[Autowire(env:)]`. A service that needs a setting at use time is built lazily (e.g. `SmtpServerPool` by `SmtpServerPoolFactory`, which receives the decrypted `MAILER_DSN`).
+- To add a setting, add it to the catalogue with its type, validation bounds and default (`width`, `heading` and `tab` lay out the form), then read it as above. Validation rules per type are in `App\Form\Settings\SettingConstraints`: e.g. `link` accepts only `https://`, `http://` or `{BaseURL}`, and one-line types refuse CR/LF.
+- Infrastructure stays out of the catalogue: secret keys, `CATTOMAIL_*`, `DB_*`, `GDB_*`, the suppression provider, URLs, paths, cookie names, `APP_ADMIN_EMAIL`, `APP_TIMEZONE`, `TRUSTED_PROXIES`.
+- The Settings page (`Admin\SettingsController`, `settings.manage`) has one Symfony form per tab: `SettingsGroupType` built from the catalogue, the transactional SMTP server as the nested `SmtpServerType`, and `SettingsFormData` converting between settings and form data. Invalid input is shown at its field and nothing in that tab is saved.
+
+**Secrets.** The secret setting `MAILER_DSN` is encrypted by `SettingsCipher` (AES-256-GCM with `APP_SETTINGS_KEY`, 32 random bytes in Base64; stored as `enc:v1:<key id>:<base64(nonce|tag|ciphertext)>`). It is never loaded into the form, rendered (password fields stay empty, and an empty field keeps the current value) or logged. A secret that cannot be decrypted raises `SettingsCipherException` when mail needs it, and the Settings page shows the problem; there is no fallback.
+
+**Production readiness.** `ProductionReadiness` holds the rules of `ctnlist:diagnose --production` (automatic under `APP_ENV=prod`; ERROR lines exit 1; it sends no mail, calls no external service and prints no secrets). Settings ctnlist no longer reads are listed in `DiagnoseCommand::OBSOLETE`, kept in step with `OBSOLETE_ENV` in `bin/dev`.

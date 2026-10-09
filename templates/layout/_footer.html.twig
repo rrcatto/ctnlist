@@ -10,6 +10,7 @@
       <div class="col-md-5">
         <ul class="list-unstyled small text-body-secondary mb-0">
           {% if site.streetAddress %}<li class="mb-1"><i class="bi bi-geo-alt me-2" aria-hidden="true"></i>{{ site.streetAddress }}</li>{% endif %}
+          {% if site.telephone %}<li class="mb-1"><i class="bi bi-telephone me-2" aria-hidden="true"></i>{{ site.telephone }}</li>{% endif %}
           {% if site.whatsApp %}<li class="mb-1"><i class="bi bi-whatsapp me-2" aria-hidden="true"></i>{% if site.whatsAppUrl %}<a href="{{ site.whatsAppUrl }}" target="_blank" rel="noopener">{{ site.whatsApp }}</a>{% else %}{{ site.whatsApp }}{% endif %}</li>{% endif %}
           {% if site.adminEmail %}<li class="mb-1"><i class="bi bi-envelope me-2" aria-hidden="true"></i><a href="mailto:{{ site.adminEmail }}">{{ site.adminName ?: site.adminEmail }}</a></li>{% endif %}
           {% if site.facebookUrl %}<li class="mb-1"><i class="bi bi-facebook me-2" aria-hidden="true"></i><a href="{{ site.facebookUrl }}" target="_blank" rel="noopener">Facebook</a></li>{% endif %}

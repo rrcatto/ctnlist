@@ -10,7 +10,7 @@ namespace App\Config;
  */
 final class SiteConfig
 {
-    public const VERSION = '6.0.6';
+    public const VERSION = '6.0.7';
 
     /**
      * @param list<array<string, mixed>> $syncDatabases SYNC_DATABASES_JSON entries
@@ -37,7 +37,6 @@ final class SiteConfig
         public readonly string $fromName,
         public readonly string $bounceAddress,
         public readonly string $testEmail,
-        public readonly int $emailsPerMinute,
         public readonly array $syncDatabases,
         public readonly string $contactEmail,
         public readonly string $contactName,
@@ -91,7 +90,6 @@ final class SiteConfig
             fromName: $string('MAIL_FROM_NAME'),
             bounceAddress: $string('MAIL_BOUNCE_ADDRESS'),
             testEmail: $string('MAIL_TEST_ADDRESS', $string('APP_ADMIN_EMAIL')),
-            emailsPerMinute: $int('MAIL_RATE_PER_MINUTE', 13),
             syncDatabases: $list('SYNC_DATABASES_JSON'),
             contactEmail: $string('CONTACT_MAIL_ADDRESS', $adminEmail),
             contactName: $string('CONTACT_MAIL_NAME', $string('APP_ORGANISATION', 'ctnlist')),

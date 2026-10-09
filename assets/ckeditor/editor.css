@@ -16,18 +16,8 @@
 	margin-right: auto;
 }
 
-.editor-container_classic-editor .editor-container__editor {
-	min-width: 795px;
-	max-width: 795px;
-}
-
 .editor-container_include-block-toolbar {
 	margin-left: 42px;
-}
-
-.editor-container__sidebar_ckeditor-ai:has(.ck-tabs.ck-hidden) {
-	max-width: 0;
-	min-width: 0;
 }
 
 .ck-content h3.category {

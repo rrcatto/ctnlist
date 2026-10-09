@@ -36,8 +36,9 @@ final class AuthSessionAuthenticator extends AbstractAuthenticator
 
     public function supports(Request $request): bool
     {
+        // A sign-in (POST /auth/verify) is MagicLinkAuthenticator's alone.
         return $request->cookies->has($this->cookie->name)
-            && $request->getPathInfo() !== MagicLinkAuthenticator::PATH;
+            && !($request->isMethod('POST') && $request->getPathInfo() === MagicLinkAuthenticator::PATH);
     }
 
     public function authenticate(Request $request): Passport

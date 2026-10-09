@@ -9,7 +9,8 @@ use Symfony\Component\HttpFoundation\RequestStack;
 
 /**
  * Application-owned PHP sessions in the `sessions` table (managed by Phinx),
- * recording the client IP and user agent of the last write.
+ * recording the client IP and user agent of the last write. PHP never calls
+ * gc() (gc_probability 0): ctnlist:maintenance removes idle sessions.
  */
 final class DatabaseSessionHandler implements \SessionHandlerInterface
 {

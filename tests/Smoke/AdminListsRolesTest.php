@@ -136,7 +136,7 @@ final class AdminListsRolesTest extends SmokeTestCase
 
         // The editor holds lists.manage but not roles.manage.
         $editor = self::client();
-        self::request($editor, 'GET', '/auth/verify?token=' . self::issueLoginToken((int) $subscriberId));
+        self::signInWithLink($editor, self::issueLoginToken((int) $subscriberId));
         self::assertSame(200, self::request($editor, 'GET', '/lists')['status']);
         self::assertSame(403, self::request($editor, 'GET', '/roles')['status']);
         $nav = self::request($editor, 'GET', '/lists')['body'];

@@ -68,10 +68,9 @@ final class SettingsCatalogue
         'smtp' => [
             'tab' => 'SMTP',
             'label' => 'Transactional mail',
-            'description' => 'The SMTP server for transactional mail (sign-in links, invitations, notifications, contact acknowledgements) and its pace. Campaign content (queue sends, proofs, resends, forwards) is delivered by catto-mail, configured in .env.',
+            'description' => 'The SMTP server for transactional mail (sign-in links, invitations, notifications, contact acknowledgements). Campaign content (queue sends, proofs, resends, forwards) is delivered by catto-mail, configured in .env.',
             'settings' => [
                 'MAILER_DSN' => ['width' => 'full', 'label' => 'SMTP server', 'type' => 'dsn', 'secret' => true, 'optional' => true, 'help' => 'Used for transactional mail only.'],
-                'MAIL_RATE_PER_MINUTE' => ['heading' => 'Sending pace', 'width' => 'quarter', 'default' => '13', 'label' => 'Messages per minute', 'type' => 'int', 'min' => 0, 'help' => '0 sends as fast as the server accepts.'],
             ],
         ],
         'contact_form' => [

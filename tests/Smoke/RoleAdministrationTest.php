@@ -179,7 +179,7 @@ final class RoleAdministrationTest extends SmokeTestCase
         self::createRole($key, $permissions);
         self::$db->prepare('INSERT INTO subscriber_roles (sr_s_id, sr_r_id) SELECT ?, r_id FROM roles WHERE r_key = ?')->execute([self::$staffId, $key]);
         $client = self::client();
-        self::assertSame(302, self::request($client, 'GET', '/auth/verify?token=' . self::issueLoginToken(self::$staffId))['status']);
+        self::assertSame(302, self::signInWithLink($client, self::issueLoginToken(self::$staffId))['status']);
         return $client;
     }
 

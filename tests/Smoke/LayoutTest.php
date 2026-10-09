@@ -118,6 +118,10 @@ final class LayoutTest extends SmokeTestCase
         self::assertMatchesRegularExpression('#<link rel="icon" href="/assets/images/favicon-[^"]+\.svg"#', $body);
         self::assertStringContainsString('<footer class="app-footer', $body);
         self::assertStringContainsString('href="/privacy"', $body);
+        // The configured telephone number, as v5's footer showed it.
+        self::withSetting('APP_TELEPHONE', '+27 21 555 0100', static function (): void {
+            self::assertStringContainsString('<i class="bi bi-telephone me-2" aria-hidden="true"></i>+27 21 555 0100', self::request(self::client(), 'GET', '/privacy')['body']);
+        });
     }
 
     public function testSubscriberNavigation(): void
@@ -261,7 +265,7 @@ final class LayoutTest extends SmokeTestCase
     private static function signIn(int $subscriberId): \CurlHandle
     {
         $client = self::client();
-        $response = self::request($client, 'GET', '/auth/verify?token=' . self::issueLoginToken($subscriberId));
+        $response = self::signInWithLink($client, self::issueLoginToken($subscriberId));
         self::assertSame(302, $response['status']);
         return $client;
     }

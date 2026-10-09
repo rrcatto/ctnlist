@@ -13,8 +13,7 @@ final class SmtpServerPoolTest extends TestCase
 {
     public function testTransactionalServerIsMailerDsn(): void
     {
-        self::assertEquals(new SmtpServer('smtp://dsn', 13), (new SmtpServerPool(' smtp://dsn ', 13))->transactionalServer());
-        self::assertNull((new SmtpServerPool('', 13))->transactionalServer(), 'no transactional mail without MAILER_DSN');
-        self::assertSame(0, (new SmtpServerPool('smtp://dsn', -5))->transactionalServer()?->sendRate);
+        self::assertEquals(new SmtpServer('smtp://dsn'), (new SmtpServerPool(' smtp://dsn '))->transactionalServer());
+        self::assertNull((new SmtpServerPool(''))->transactionalServer(), 'no transactional mail without MAILER_DSN');
     }
 }

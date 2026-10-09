@@ -24,6 +24,7 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\DependencyInjection\Attribute\AutowireServiceClosure;
 
 /**
  * An installation's configuration and health from the command line (for
@@ -42,15 +43,20 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 final class DiagnoseCommand extends Command
 {
     /** Settings ctnlist no longer reads (kept in step with bin/dev OBSOLETE_ENV). */
-    public const OBSOLETE = ['MAIL_UNSUBSCRIBE_ADDRESS', 'MAIL_SMTP_SERVERS_JSON', 'MAIL_BATCH_SIZE', 'MAIL_BATCH_DELAY', 'MAIL_BOUNCE_LIMIT', 'APP_STORE_URL'];
+    public const OBSOLETE = ['MAIL_UNSUBSCRIBE_ADDRESS', 'MAIL_SMTP_SERVERS_JSON', 'MAIL_BATCH_SIZE', 'MAIL_BATCH_DELAY', 'MAIL_BOUNCE_LIMIT', 'APP_STORE_URL', 'MAIL_RATE_PER_MINUTE'];
 
-    /** PHP extensions ctnlist needs, and what for. */
+    /**
+     * PHP extensions ctnlist needs, and what for: exactly those `composer install --no-dev` requires, ctnlist's own
+     * (composer.json, first two rows) and its packages' (composer.lock, last row). PhpExtensionsTest keeps them in step.
+     * Composer accepts symfony/polyfill-mbstring in place of mbstring; diagnose does not.
+     */
     public const REQUIRED_EXTENSIONS = [
-        'pdo_pgsql' => 'PostgreSQL', 'openssl' => 'encrypted settings', 'gd' => 'profile pictures', 'mbstring' => 'text handling',
-        'fileinfo' => 'upload type checks', 'dom' => 'the archive HTML sanitiser', 'xml' => 'Symfony configuration', 'session' => 'CSRF tokens and messages',
+        'pdo' => 'database access', 'pdo_pgsql' => 'PostgreSQL', 'openssl' => 'encrypted settings', 'gd' => 'profile pictures', 'mbstring' => 'text handling',
+        'fileinfo' => 'upload type checks', 'filter' => 'address and setting validation', 'json' => 'catto-mail requests and webhooks', 'session' => 'CSRF tokens and messages',
+        'dom' => 'the archive HTML sanitiser, symfony/html-sanitizer', 'xml' => 'required by symfony/framework-bundle and symfony/security-bundle', 'iconv' => 'required by symfony/polyfill-mbstring',
     ];
-    /** Extensions that are not required but should be present. */
-    public const RECOMMENDED_EXTENSIONS = ['intl' => 'international addresses and text', 'curl' => 'faster HTTPS to catto-mail (HTTP/2, connection reuse)'];
+    /** Extensions that are not required but should be present (Composer does not require them). */
+    public const RECOMMENDED_EXTENSIONS = ['intl' => 'international addresses and text', 'curl' => 'faster HTTPS to catto-mail (HTTP/2, connection reuse)', 'exif' => 'turning phone photos upright'];
 
     private int $errors = 0;
 
@@ -65,7 +71,8 @@ final class DiagnoseCommand extends Command
         private readonly StuckWork $stuck,
         private readonly ClockInterface $clock,
         private readonly RuntimeSettings $runtime,
-        private readonly SuppressionChecker $suppressionChecker,
+        /** @var \Closure(): SuppressionChecker built only for the probe, so a bad SUPPRESSION_PROVIDER or ban.env is reported instead of stopping the command */
+        #[AutowireServiceClosure(SuppressionChecker::class)] private readonly \Closure $suppressionChecker,
         private readonly ConfigFingerprint $fingerprint,
         private readonly AssetMapperInterface $assets,
         #[Autowire('%kernel.environment%')] private readonly string $environment,
@@ -92,6 +99,26 @@ final class DiagnoseCommand extends Command
         $this->addOption('production', null, InputOption::VALUE_NONE, 'Apply the production rules even when APP_ENV is not prod (preflight before go-live)');
     }
 
+    /**
+     * The PHP extension lines of the report: a missing required extension is an ERROR, a missing recommended one a WARN.
+     *
+     * @param \Closure(string): bool $loaded extension_loaded(...), or a stand-in in tests
+     * @return list<array{0: 'OK'|'WARN'|'ERROR', 1: string}>
+     */
+    public static function extensionFindings(\Closure $loaded): array
+    {
+        $findings = [];
+        foreach (self::REQUIRED_EXTENSIONS as $extension => $purpose) {
+            $findings[] = $loaded($extension) ? ['OK', 'PHP extension ' . $extension] : ['ERROR', 'PHP extension ' . $extension . ' is missing (' . $purpose . ')'];
+        }
+        foreach (self::RECOMMENDED_EXTENSIONS as $extension => $purpose) {
+            if (!$loaded($extension)) {
+                $findings[] = ['WARN', 'PHP extension ' . $extension . ' is not loaded (recommended: ' . $purpose . ')'];
+            }
+        }
+        return $findings;
+    }
+
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $this->errors = 0;
@@ -105,8 +132,10 @@ final class DiagnoseCommand extends Command
         $output->writeln('ctnlist ' . SiteConfig::VERSION . ', installation ' . $this->instanceDir . ', APP_ENV=' . $this->environment
             . ($production ? ' (production rules)' : ''));
 
-        // Required settings.
-        trim($this->appSecret) === '' ? $say('ERROR', 'APP_SECRET is not set (generate: openssl rand -hex 32).') : $say('OK', 'APP_SECRET set');
+        // Required settings (under the production rules APP_SECRET's strength is judged below instead).
+        if (!$production) {
+            trim($this->appSecret) === '' ? $say('ERROR', 'APP_SECRET is not set (generate: openssl rand -hex 32).') : $say('OK', 'APP_SECRET set');
+        }
         trim($this->site->instanceId) === '' ? $say('ERROR', 'APP_INSTANCE_ID is not set (generate: openssl rand -hex 16).') : $say('OK', 'APP_INSTANCE_ID set');
         if (!$production) {
             $say(str_starts_with($this->site->baseUrl, 'https://') ? 'OK' : 'WARN', 'APP_BASE_URL ' . $this->site->baseUrl
@@ -114,13 +143,8 @@ final class DiagnoseCommand extends Command
         }
 
         // PHP extensions (of this PHP binary: run diagnose with the PHP version PHP-FPM uses).
-        foreach (self::REQUIRED_EXTENSIONS as $extension => $purpose) {
-            extension_loaded($extension) ? $say('OK', 'PHP extension ' . $extension) : $say('ERROR', 'PHP extension ' . $extension . ' is missing (' . $purpose . ')');
-        }
-        foreach (self::RECOMMENDED_EXTENSIONS as $extension => $purpose) {
-            if (!extension_loaded($extension)) {
-                $say('WARN', 'PHP extension ' . $extension . ' is not loaded (recommended: ' . $purpose . ')');
-            }
+        foreach (self::extensionFindings(extension_loaded(...)) as [$level, $message]) {
+            $say($level, $message);
         }
 
         // Database.
@@ -135,7 +159,7 @@ final class DiagnoseCommand extends Command
         // The suppression database (banlist): checked at confirmation, queue build and before every send.
         if (($this->suppression ?: 'banlist') === 'banlist') {
             try {
-                $this->suppressionChecker->isSuppressed('ctnlist-diagnose-probe@gmail.com'); // a read-only lookup
+                ($this->suppressionChecker)()->isSuppressed('ctnlist-diagnose-probe@gmail.com'); // a read-only lookup
                 $say('OK', 'suppression database (banlist) reachable');
             } catch (\Throwable $e) {
                 $say('ERROR', 'suppression database (banlist) not reachable: ' . $e->getMessage() . ' (GDB_ENV_DIRECTORY/GDB_ENV_FILE and ban.env)');

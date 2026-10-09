@@ -28,6 +28,7 @@ final class RouteConventionsTest extends IntegrationTestCase
         'cattomail_webhook' => 'authenticated by catto-mail\'s HMAC signature (WebhookSignature)',
         'consent_unsubscribe_link' => 'RFC 8058 one-click unsubscribe from mail clients: authenticated by the link\'s HMAC signature',
         'app_logout' => 'firewall logout with enable_csrf (field csrf, token id ctnlist)',
+        'auth_verify_submit' => 'MagicLinkAuthenticator checks the session CSRF token (field csrf, token id ctnlist) before it claims the link: AuthFlowTest',
     ];
 
     /** Administration routes that also serve the subscriber themselves; the controller checks owner or subscribers.manage. */
@@ -35,7 +36,6 @@ final class RouteConventionsTest extends IntegrationTestCase
 
     /** GET routes the route smoke test does not request, and why. */
     private const SMOKE_EXEMPT = [
-        'auth_verify' => 'consumes a one-time sign-in token: AuthFlowTest',
         'consent_unsubscribe_link' => 'needs a valid HMAC signature: OneClickUnsubscribeTest (forged links: CattoMailSmokeTest)',
     ];
 
@@ -81,7 +81,7 @@ final class RouteConventionsTest extends IntegrationTestCase
         foreach (['PUBLIC', 'LOGIN_REQUIRED', 'ADMIN'] as $constant) {
             /** @var list<string> $paths */
             $paths = (new \ReflectionClassConstant(RouteSmokeTest::class, $constant))->getValue();
-            array_push($smoke, ...array_map(static fn(string $p): string => (string) preg_replace('/\{\w+\}/', 'X', $p), $paths));
+            array_push($smoke, ...array_map(static fn(string $p): string => (string) preg_replace(['/\{\w+\}/', '/\?.*$/'], ['X', ''], $p), $paths));
         }
         foreach ($this->routes() as $name => [$methods, , , $path]) {
             if (!in_array('GET', $methods, true) || isset(self::SMOKE_EXEMPT[$name])) {

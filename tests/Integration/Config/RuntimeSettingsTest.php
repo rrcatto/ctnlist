@@ -18,7 +18,7 @@ use Psr\Log\NullLogger;
 final class RuntimeSettingsTest extends IntegrationTestCase
 {
     private const SMTP = ['smtp_scheme' => 'smtps', 'smtp_host' => 'mail.example.net', 'smtp_port' => '465', 'smtp_username' => 'list@example.net',
-        'smtp_password' => 'p@ss:w/rd', 'smtp_options' => '', 'MAIL_RATE_PER_MINUTE' => '30'];
+        'smtp_password' => 'p@ss:w/rd', 'smtp_options' => ''];
 
     public function testDatabaseOverridesEnvWhichOverridesTheDefault(): void
     {

@@ -37,6 +37,7 @@ final class MailerTest extends IntegrationTestCase
 
         self::assertTrue($mailer->sendMagicLink('jane@example.com', $uuid, 'https://x/auth/verify?token=t', 1800));
         self::assertStringContainsString('expires in 30 minutes', (string) $this->email()->getTextBody());
+        self::assertStringContainsString('open the link below and choose Sign in', (string) $this->email()->getTextBody(), 'the link opens a page; its button signs in');
         self::assertStringContainsString('sign-in link', (string) $this->email()->getSubject());
         self::assertSame(['MAGIC-LINK', ''], $this->lastSendLog());
 
@@ -44,6 +45,7 @@ final class MailerTest extends IntegrationTestCase
         self::assertSame('Confirm your subscription to News & views', $this->email(1)->getSubject(), 'says why it was sent');
         self::assertStringContainsString('confirm your subscription to News &amp; views', (string) $this->email(1)->getHtmlBody());
         self::assertStringNotContainsString('Sign in', (string) $this->email(1)->getTextBody());
+        self::assertStringContainsString('choose Continue and then confirm', (string) $this->email(1)->getTextBody());
         self::assertSame(['MAGIC-LINK', ''], $this->lastSendLog(), 'the same secure sign-in link');
 
         self::assertTrue($mailer->sendListConfirmationInvitation('jane@example.com', $uuid, 'news', 'News'));
@@ -89,7 +91,7 @@ final class MailerTest extends IntegrationTestCase
     {
         $site = $this->service(SiteConfig::class);
         $mailer = new TransactionalMailer(
-            new SmtpServerPool('smtp://127.0.0.1:1', 0),
+            new SmtpServerPool('smtp://127.0.0.1:1'),
             $this->service(MailConnectionFactory::class),
             $this->service(SendLog::class),
             $this->service(MessageLog::class),

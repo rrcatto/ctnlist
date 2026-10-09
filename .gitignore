@@ -6,14 +6,6 @@
 /var/
 # AssetMapper output (bin/console asset-map:compile), per installation
 /public_html/assets/
-/storage/*
-!/storage/.gitkeep
-/export.txt
-/export-*.txt
-/emails_added.txt
-/emails_rejected.txt
-/sync.txt
-/deleted.txt
 /*.log
 /repomix-output*.xml
 /*repomix-output*.xml

@@ -25,7 +25,6 @@ final class SiteConfigTest extends TestCase
         self::assertSame('owner@example.com', $site->testEmail);
         self::assertSame('ctnlist', $site->contactName, 'empty values count as unset');
         self::assertSame('/var/www/example/logs/contact.log', $site->contactLogFile);
-        self::assertSame(13, $site->emailsPerMinute);
         self::assertTrue($site->archiveEnabled);
     }
 
@@ -35,12 +34,10 @@ final class SiteConfigTest extends TestCase
             'APP_ADMIN_EMAIL' => 'owner@example.com',
             'MAIL_ADMIN_ADDRESS' => 'admin@example.com',
             'CONTACT_MAIL_ADDRESS' => 'contact@example.com',
-            'MAIL_RATE_PER_MINUTE' => '0',
         ], '/srv');
 
         self::assertSame('admin@example.com', $site->adminEmail);
         self::assertSame('contact@example.com', $site->contactEmail);
-        self::assertSame(0, $site->emailsPerMinute);
         self::assertFalse($site->archiveEnabled);
     }
 }

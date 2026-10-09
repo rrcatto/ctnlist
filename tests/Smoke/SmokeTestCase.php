@@ -42,9 +42,19 @@ abstract class SmokeTestCase extends TestCase
         $admin->execute([(string) getenv('SMOKE_ADMIN_EMAIL')]);
         $row = $admin->fetch(PDO::FETCH_ASSOC);
         if ($row === false) {
-            self::fail('Development administrator not found; run bin/dev seed-admin.');
+            self::fail('Administrator ' . getenv('SMOKE_ADMIN_EMAIL') . ' not found in the smoke database; run the smoke tests through bin/dev test, which reseeds it.');
         }
         self::$admin = ['s_id' => (int) $row['s_id'], 's_uuid' => (string) $row['s_uuid'], 's_email' => (string) $row['s_email']];
+
+        // SMOKE_BASE_URL must be the installation that uses that database: a sign-in link stored there
+        // opens (which changes nothing) only on that installation. Removed at once, so the sign-in
+        // rate limits never count it.
+        $probe = self::issueLoginToken(self::$admin['s_id']);
+        $status = self::request(self::client(), 'GET', '/auth/verify?token=' . $probe)['status'];
+        self::$db->prepare('DELETE FROM auth_login_tokens WHERE alt_token_hash = ?')->execute([hash('sha256', $probe)]);
+        if ($status !== 200) {
+            self::fail('SMOKE_BASE_URL (' . self::$baseUrl . ') is not the smoke installation: it does not use ' . getenv('SMOKE_DB_DSN') . '.');
+        }
     }
 
     public static function tearDownAfterClass(): void
@@ -57,8 +67,8 @@ abstract class SmokeTestCase extends TestCase
     }
 
     /**
-     * Smoke tests share the development database: after every class the
-     * system data the application relies on must be untouched, so a class
+     * All smoke test classes share the one smoke database: after every class
+     * the system data the application relies on must be untouched, so a class
      * that damages it fails where it happened.
      */
     private static function assertSystemDataIntact(string $class): void
@@ -86,20 +96,34 @@ abstract class SmokeTestCase extends TestCase
     }
 
     /** Store a magic-link token directly (as POST /login would) and return the raw token. */
-    protected static function issueLoginToken(int $subscriberId, string $returnAction = 'profile'): string
+    protected static function issueLoginToken(int $subscriberId, string $returnAction = 'profile', ?int $returnListId = null): string
     {
         $token = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
         self::$db->prepare(
-            'INSERT INTO auth_login_tokens (alt_s_id, alt_email, alt_token_hash, alt_created_at, alt_expires_at, alt_return_action)
-             SELECT s_id, s_email, ?, ?, ?, ? FROM subscribers WHERE s_id = ?'
-        )->execute([hash('sha256', $token), date('Y-m-d H:i:s'), date('Y-m-d H:i:s', time() + 600), $returnAction, $subscriberId]);
+            'INSERT INTO auth_login_tokens (alt_s_id, alt_email, alt_token_hash, alt_created_at, alt_expires_at, alt_return_action, alt_return_l_id)
+             SELECT s_id, s_email, ?, ?, ?, ?, ? FROM subscribers WHERE s_id = ?'
+        )->execute([hash('sha256', $token), date('Y-m-d H:i:s'), date('Y-m-d H:i:s', time() + 600), $returnAction, $returnListId, $subscriberId]);
         return $token;
+    }
+
+    /**
+     * Use a sign-in link as a browser does: open it (GET /auth/verify, a page
+     * that changes nothing) and press its Sign in button (the POST that signs
+     * in). Returns the POST's response.
+     *
+     * @return array{status: int, body: string, location: string, cookies: list<string>, headers: array<string, string>}
+     */
+    protected static function signInWithLink(\CurlHandle $client, string $token): array
+    {
+        $page = self::request($client, 'GET', '/auth/verify?token=' . $token);
+        self::assertSame(200, $page['status'], 'the page of a usable sign-in link');
+        return self::request($client, 'POST', '/auth/verify', self::formFields($page['body'], 'sign_in'));
     }
 
     /** Sign the client in as the development administrator. */
     protected static function loginAsAdmin(\CurlHandle $client): void
     {
-        $response = self::request($client, 'GET', '/auth/verify?token=' . self::issueLoginToken(self::$admin['s_id']));
+        $response = self::signInWithLink($client, self::issueLoginToken(self::$admin['s_id']));
         if ($response['status'] !== 302 || str_ends_with($response['location'], '/login')) {
             self::fail("Administrator magic-link login failed (HTTP {$response['status']}, Location {$response['location']}).");
         }

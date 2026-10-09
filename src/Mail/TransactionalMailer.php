@@ -64,7 +64,9 @@ final class TransactionalMailer
     }
 
     /**
-     * The one-time sign-in link. When it was requested to confirm a list
+     * The one-time sign-in link. It opens a page whose button signs in
+     * (SignInLinkPage), so the text asks for that choice rather than promising
+     * that opening the link signs in. When it was requested to confirm a list
      * subscription ($confirmListName), the email says so: the link is the same
      * secure sign-in link and leads to that list's confirmation.
      */
@@ -74,11 +76,11 @@ final class TransactionalMailer
         $list = $this->site->listName;
         if ($confirmListName !== null) {
             $subject = 'Confirm your subscription to ' . $confirmListName;
-            $intro = 'Use the link below to confirm your subscription to ' . $confirmListName . ' on ' . $list . '. You are subscribed once you confirm.';
+            $intro = 'To confirm your subscription to ' . $confirmListName . ' on ' . $list . ', open the link below, choose Continue and then confirm. You are subscribed only once you confirm.';
             $action = 'Confirm my subscription';
         } else {
             $subject = $list . ' sign-in link';
-            $intro = 'Use the link below to sign in to ' . $list . '.';
+            $intro = 'To sign in to ' . $list . ', open the link below and choose Sign in.';
             $action = 'Sign in to ' . $list;
         }
         $html = '<p>' . self::e($intro) . '</p>'

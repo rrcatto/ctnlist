@@ -58,7 +58,8 @@ final class MaintenanceTest extends IntegrationTestCase
         $active = $this->session($id, expiresIn: 3600);
         $ended = $this->session($id, expiresIn: -60);
         $signedOut = $this->session($id, expiresIn: 3600, revoked: true);
-        $this->db->executeStatement("INSERT INTO sessions (ses_id, ses_data, ses_stamp) VALUES ('old-session', '', ?), ('fresh-session', '', ?)", [time() - 100000, time()]);
+        // Idle an hour: past PHP's default 1440 s, well within a sign-in (AUTH_SESSION_TTL), so it stays.
+        $this->db->executeStatement("INSERT INTO sessions (ses_id, ses_data, ses_stamp) VALUES ('old-session', '', ?), ('idle-session', '', ?), ('fresh-session', '', ?)", [time() - 100000, time() - 3600, time()]);
 
         $report = $this->service(Maintenance::class)->run();
 
@@ -66,7 +67,8 @@ final class MaintenanceTest extends IntegrationTestCase
         self::assertSame([$rateWindow, $valid], array_map('intval', $this->db->fetchFirstColumn('SELECT alt_id FROM auth_login_tokens WHERE alt_id IN (?, ?, ?, ?) ORDER BY alt_id', [$expired, $used, $rateWindow, $valid])),
             'still valid, or still counted by the sign-in rate limits');
         self::assertSame([$active], array_map('intval', $this->db->fetchFirstColumn('SELECT as_id FROM auth_sessions WHERE as_id IN (?, ?, ?)', [$active, $ended, $signedOut])), 'the active session stays');
-        self::assertSame(['fresh-session'], $this->db->fetchFirstColumn("SELECT ses_id FROM sessions WHERE ses_id IN ('old-session', 'fresh-session')"));
+        self::assertSame(['fresh-session', 'idle-session'], $this->db->fetchFirstColumn("SELECT ses_id FROM sessions WHERE ses_id IN ('old-session', 'idle-session', 'fresh-session') ORDER BY ses_id"),
+            'PHP sessions go once idle longer than a sign-in lasts');
         self::assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM subscribers WHERE s_id = ?', [$id]), 'identity untouched');
     }
 

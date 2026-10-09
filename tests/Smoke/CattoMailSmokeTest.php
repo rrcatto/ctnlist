@@ -125,7 +125,7 @@ final class CattoMailSmokeTest extends SmokeTestCase
         }
         self::$db->prepare('INSERT INTO subscriber_roles (sr_s_id, sr_r_id) SELECT ?, r_id FROM roles WHERE r_key = ?')->execute([$id, $key]);
         $client = self::client();
-        self::assertSame(302, self::request($client, 'GET', '/auth/verify?token=' . self::issueLoginToken($id))['status']);
+        self::assertSame(302, self::signInWithLink($client, self::issueLoginToken($id))['status']);
         return $client;
     }
 }

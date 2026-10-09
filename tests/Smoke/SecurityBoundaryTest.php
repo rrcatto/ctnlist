@@ -84,7 +84,7 @@ final class SecurityBoundaryTest extends SmokeTestCase
     private static function signedIn(): \CurlHandle
     {
         $client = self::client();
-        $response = self::request($client, 'GET', '/auth/verify?token=' . self::issueLoginToken(self::$subscriber['s_id']));
+        $response = self::signInWithLink($client, self::issueLoginToken(self::$subscriber['s_id']));
         self::assertSame(302, $response['status'], 'signed in');
         return $client;
     }

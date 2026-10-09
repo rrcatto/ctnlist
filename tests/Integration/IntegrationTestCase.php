@@ -30,6 +30,10 @@ abstract class IntegrationTestCase extends KernelTestCase
     {
         self::bootKernel();
         $this->db = $this->service(Connection::class);
+        // phpunit.dist.xml forces DB_NAME; a local override must never reach the development database.
+        if ($this->db->getDatabase() !== 'ctnlist_test') {
+            self::fail('Integration tests run against ctnlist_test only, not ' . $this->db->getDatabase() . '.');
+        }
         $this->db->beginTransaction();
     }
 

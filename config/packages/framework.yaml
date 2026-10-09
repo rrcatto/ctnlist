@@ -16,6 +16,10 @@ framework:
         cookie_secure: auto
         cookie_httponly: true
         cookie_samesite: lax
+        # PHP's own garbage collection is off, so no php.ini (FPM or CLI)
+        # decides how long a session lives: ctnlist:maintenance removes PHP
+        # sessions idle longer than a sign-in or sign-in link lasts (Maintenance).
+        gc_probability: 0
 
     # Session-stored CSRF tokens (id App\Security\Csrf::TOKEN_ID, field csrf).
     csrf_protection: true

@@ -130,11 +130,6 @@ final class MessageLog
         );
     }
 
-    public function deleteForMessage(string $muid): void
-    {
-        $this->db->executeStatement('DELETE FROM smlog WHERE sml_muid = ?', [$muid]);
-    }
-
     private function update(string $subscriberUuid, string $muid, string $assignments): void
     {
         $this->db->executeStatement(

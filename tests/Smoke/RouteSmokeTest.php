@@ -12,7 +12,7 @@ use PHPUnit\Framework\Attributes\DataProvider;
  * than the framework; it was the route-parity check of the Fat-Free to
  * Symfony migration. Add new GET routes to it.
  *
- * Fixtures (a message, template and archive) are created in the development
+ * Fixtures (a message, template, archive, ...) are created in the smoke
  * database and removed afterwards. Run with: bin/dev test --testsuite smoke
  */
 final class RouteSmokeTest extends SmokeTestCase
@@ -64,6 +64,8 @@ final class RouteSmokeTest extends SmokeTestCase
             'muid' => $muid,
             'tid' => (string) $templateId,
             'aid' => (string) $archiveId,
+            // Opening a sign-in link uses nothing up, so every request may open the same one.
+            'signin' => self::issueLoginToken(self::$admin['s_id']),
         ];
     }
 
@@ -83,7 +85,7 @@ final class RouteSmokeTest extends SmokeTestCase
 
     /** Routes open to everyone. */
     private const PUBLIC = [
-        '/', '/index', '/home', '/privacy', '/proof-link', '/login', '/subscribe', '/health',
+        '/', '/index', '/home', '/privacy', '/proof-link', '/login', '/auth/verify?token={signin}', '/subscribe', '/health',
         '/archives', '/archives/1', '/archive/{aid}', '/archive/{aid}/{token}/{muid}',
         '/profile/subscriber/{token}',
         '/confirm/{token}/{shortcode}', '/confirm/{token}/{shortcode}/{muid}',

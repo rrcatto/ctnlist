@@ -9,6 +9,7 @@ use App\Form\Type\SignInType;
 use App\Repository\SubscriberRepository;
 use App\Security\Csrf;
 use App\Security\MagicLinkRequester;
+use App\Security\SignInLinkPage;
 use App\Util\Duration;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\FormInterface;
@@ -17,7 +18,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsCsrfTokenValid;
 
-/** Requesting sign-in links (redeeming them is MagicLinkAuthenticator's job). */
+/** Requesting sign-in links and opening them (redeeming them is MagicLinkAuthenticator's job). */
 final class AuthController extends AbstractController
 {
     public function __construct(private readonly MagicLinkRequester $requester)
@@ -42,6 +43,17 @@ final class AuthController extends AbstractController
         $data = $form->getData();
         $this->requester->request($data->email, 'profile');
         return $this->render('auth/link_sent.html.twig', ['message' => 'If the address is valid, a secure sign-in link has been sent.']);
+    }
+
+    /**
+     * The emailed sign-in link: a page with a Sign in button (POST, see
+     * MagicLinkAuthenticator). Opening it signs nobody in and uses nothing up,
+     * so a mail scanner or link preview that follows it is harmless.
+     */
+    #[Route('/auth/verify', name: 'auth_verify', methods: ['GET'])]
+    public function verify(Request $request, SignInLinkPage $page): Response
+    {
+        return $page->show(trim($request->query->getString('token')));
     }
 
     /** From the authentication prompt on a subscriber link. */

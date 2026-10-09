@@ -1,0 +1,37 @@
+{# The page a sign-in link opens (SignInLinkPage). Only the Sign in button (POST) uses the link up. #}
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ state == 'usable' ? (confirm_list ? 'Confirm your subscription' : 'Sign in') : 'Sign-in link' }}{% endblock %}
+
+{% block content %}
+<div class="card app-narrow">
+  <div class="card-body">
+    {% if state == 'usable' %}
+      {% if confirm_list %}
+        <h1 class="h4">Confirm your subscription</h1>
+        <p>Sign in to confirm your subscription to <strong>{{ confirm_list }}</strong>. You are subscribed only once you confirm on the next page.</p>
+      {% else %}
+        <h1 class="h4">Sign in</h1>
+        <p>Continue to sign in to {{ site.listName }}.</p>
+      {% endif %}
+      {% if retry %}
+        <div class="alert alert-warning" role="alert">This page had expired, so you are not signed in yet. Choose {{ confirm_list ? 'Continue' : 'Sign in' }} again.</div>
+      {% endif %}
+      <form name="sign_in" action="{{ path('auth_verify_submit') }}" method="post">
+        <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+        <input type="hidden" name="token" value="{{ token }}">
+        <button class="btn btn-primary" type="submit"><i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i>{{ confirm_list ? 'Continue' : 'Sign in' }}</button>
+      </form>
+    {% else %}
+      <h1 class="h4">This sign-in link cannot be used</h1>
+      <p>
+        {%- if state == 'used' %}It has already been used: each sign-in link works only once.
+        {%- elseif state == 'expired' %}It has expired.
+        {%- else %}It is not valid. Check that you opened the complete link from the email.
+        {%- endif -%}
+      </p>
+      <a class="btn btn-primary" href="{{ path('login') }}">Request a new sign-in link</a>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

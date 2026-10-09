@@ -8,15 +8,9 @@ parameters:
     env(APP_TIMEZONE): 'Africa/Johannesburg'
     env(APP_ADMIN_EMAIL): ''
     env(AUTH_SESSION_COOKIE): 'ctnlist_session'
-    env(AUTH_SESSION_TTL): '86400'
     env(SUPPRESSION_PROVIDER): 'banlist'
     env(GDB_ENV_DIRECTORY): ''
     env(GDB_ENV_FILE): ''
-    env(AUTH_MAGIC_LINK_TTL): '1800'
-    env(AUTH_MAGIC_LINK_MAX_PER_EMAIL): '5'
-    env(AUTH_MAGIC_LINK_EMAIL_WINDOW): '900'
-    env(AUTH_MAGIC_LINK_MAX_PER_IP): '20'
-    env(AUTH_MAGIC_LINK_IP_WINDOW): '3600'
     env(TRUSTED_PROXIES): '127.0.0.1'
     env(PHP_SESSION_COOKIE): 'ctnlist_php_session'
     env(MAILER_DSN): 'null://null'
@@ -44,6 +38,7 @@ services:
             - '../src/CattoMail/OutgoingRecipient.php'
             - '../src/CattoMail/SendOutcome.php'
             - '../src/CattoMail/CattoMail{Exception,Unavailable,Rejected}.php'
+            - '../src/Config/SettingsCipherException.php'
             - '../src/Subscriber/ProfileImage.php'
             - '../src/Queue/QueueRowClaimed.php'
             # Validation constraints and the data objects Symfony forms edit.
@@ -58,7 +53,7 @@ services:
         factory: '@App\Mail\SmtpServerPoolFactory'
         lazy: true
 
-    # One open transport per use (queue run, single send); never shared.
+    # One open transport per transactional message (TransactionalMailer); never shared.
     App\Mail\MailConnection:
         shared: false
 
