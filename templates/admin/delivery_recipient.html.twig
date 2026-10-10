@@ -6,20 +6,20 @@
 {% block content %}
 {% embed 'layout/_page_header.html.twig' with {title: recipient.crp_email, description: 'The message\'s event history, read from catto-mail now.'} %}
   {% block actions %}
-    {% if recipient.crp_s_uuid and is_granted('subscribers.manage') %}<a class="btn btn-outline-secondary" href="{{ path('admin_subscriber', {token: recipient.crp_s_uuid}) }}"><i class="bi bi-person me-1" aria-hidden="true"></i>Subscriber</a>{% endif %}
-    <a class="btn btn-outline-secondary" href="{{ path('report_sendlog', {e: recipient.crp_email}) }}"><i class="bi bi-journal-text me-1" aria-hidden="true"></i>Send Log</a>
-    <a class="btn btn-outline-secondary" href="{{ path('admin_delivery_job', {id: recipient.crp_csj_id}) }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>Send job</a>
+    {% if recipient.crp_s_uuid and is_granted('subscribers.manage') %}<a class="btn-outline theme-secondary" href="{{ path('admin_subscriber', {token: recipient.crp_s_uuid}) }}"><i class="bi bi-person me-1" aria-hidden="true"></i>Subscriber</a>{% endif %}
+    <a class="btn-outline theme-secondary" href="{{ path('report_sendlog', {e: recipient.crp_email}) }}"><i class="bi bi-journal-text me-1" aria-hidden="true"></i>Send Log</a>
+    <a class="btn-outline theme-secondary" href="{{ path('admin_delivery_job', {id: recipient.crp_csj_id}) }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>Send job</a>
   {% endblock %}
 {% endembed %}
-<p>{{ cm.message_status(recipient.crp_status) }} <span class="small text-body-secondary ms-2">catto-mail message {{ recipient.crp_remote_message_id }}</span></p>
-<div class="alert alert-secondary small" role="note">“remote accepted” means the receiving mail server accepted the message, not that it reached an inbox; “open recorded” means the tracking image was loaded, not that a person read the message.</div>
-{% if problem %}<div class="alert alert-warning small" role="alert">{{ problem }}</div>{% endif %}
+<p>{{ cm.message_status(recipient.crp_status) }} <span class="small fg-2 ms-3">catto-mail message {{ recipient.crp_remote_message_id }}</span></p>
+<div class="alert theme-secondary small" role="note"><div>“remote accepted” means the receiving mail server accepted the message, not that it reached an inbox; “open recorded” means the tracking image was loaded, not that a person read the message.</div></div>
+{% if problem %}<div class="alert theme-warning small" role="alert"><div>{{ problem }}</div></div>{% endif %}
 {% if events is empty %}
   {% include 'layout/_empty_state.html.twig' with {icon: 'clock-history', message: 'No events recorded.'} %}
 {% else %}
   <div class="table-responsive">
     <table class="table table-sm table-hover align-middle">
-      <thead class="table-light"><tr><th scope="col">When (UTC)</th><th scope="col">Event</th><th scope="col">SMTP</th><th scope="col">Remote host</th><th scope="col">Diagnostic</th></tr></thead>
+      <thead class=""><tr><th scope="col">When (UTC)</th><th scope="col">Event</th><th scope="col">SMTP</th><th scope="col">Remote host</th><th scope="col">Diagnostic</th></tr></thead>
       <tbody>
       {% for e in events %}
         <tr>

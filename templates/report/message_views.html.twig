@@ -6,16 +6,16 @@
 {% set base = path('report_message_views', {muid: muid}) %}
 {% embed 'layout/_page_header.html.twig' with {title: 'Message activity', description: 'Subscribers who have opened this message, with their reactions, most recent read first.'} %}
   {% block actions %}
-    {% if is_granted('messages.manage') %}<a class="btn btn-outline-secondary" href="{{ path('admin_message', {muid: muid}) }}"><i class="bi bi-envelope me-1" aria-hidden="true"></i>View the message</a>{% endif %}
+    {% if is_granted('messages.manage') %}<a class="btn-outline theme-secondary" href="{{ path('admin_message', {muid: muid}) }}"><i class="bi bi-envelope me-1" aria-hidden="true"></i>View the message</a>{% endif %}
   {% endblock %}
 {% endembed %}
 
-<form name="messageviewsform" action="{{ base }}" method="get" class="card card-body bg-body-tertiary mb-4" role="search" aria-label="Filter message activity">
-  <div class="row g-3 align-items-end">
-    <div class="col-md-6"><label class="form-label" for="f-e">Email address contains</label><input class="form-control" id="f-e" type="search" name="e" value="{{ email }}"></div>
-    <div class="col-md-6 d-flex gap-2">
-      <button class="btn btn-primary" type="submit"><i class="bi bi-search me-1" aria-hidden="true"></i>Search</button>
-      <a class="btn btn-outline-secondary" href="{{ base }}">Clear</a>
+<form name="messageviewsform" action="{{ base }}" method="get" class="card card-body bg-1 mb-7" role="search" aria-label="Filter message activity">
+  <div class="row g-5 align-items-end">
+    <div class="md:col-6"><label class="form-label" for="f-e">Email address contains</label><input class="form-control" id="f-e" type="search" name="e" value="{{ email }}"></div>
+    <div class="md:col-6 d-flex gap-3">
+      <button class="btn-solid theme-primary" type="submit"><i class="bi bi-search me-1" aria-hidden="true"></i>Search</button>
+      <a class="btn-outline theme-secondary" href="{{ base }}">Clear</a>
     </div>
   </div>
 </form>
@@ -25,7 +25,7 @@
 {% else %}
   <div class="table-responsive">
     <table class="table table-hover align-middle">
-      <thead class="table-light">
+      <thead class="">
         <tr>
           <th scope="col">Email</th><th scope="col">List</th>
           <th scope="col" class="text-end">Reads</th><th scope="col">Last read</th>
@@ -42,8 +42,8 @@
           <td class="text-end">{{ row.sml_likes }}</td><td class="text-nowrap">{{ row.sml_last_like ?: '–' }}</td>
           <td class="text-end">{{ row.sml_dislikes }}</td><td class="text-nowrap">{{ row.sml_last_dislike ?: '–' }}</td>
           <td class="text-end">{{ row.sml_forwards }}</td>
-          <td>{% if row.sml_subscribe > 0 %}<span class="badge text-bg-success">Yes</span>{% endif %}</td>
-          <td>{% if row.sml_unsubscribe > 0 %}<span class="badge text-bg-secondary">Yes</span>{% endif %}</td>
+          <td>{% if row.sml_subscribe > 0 %}<span class="badge theme-success">Yes</span>{% endif %}</td>
+          <td>{% if row.sml_unsubscribe > 0 %}<span class="badge theme-secondary">Yes</span>{% endif %}</td>
         </tr>
       {% endfor %}
       </tbody>

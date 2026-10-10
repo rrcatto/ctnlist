@@ -31,6 +31,10 @@ final class CattoMailConfig
     public const MAX_BATCH_RECIPIENTS = 500;
     public const MAX_JOB_RECIPIENTS = 10000;
     public const MAX_VALIDATION_ADDRESSES = 10000;
+    /** catto-mail refuses request bodies over 10 MiB (413). */
+    public const MAX_REQUEST_BYTES = 10 * 1024 * 1024;
+    /** A recipient batch is uploaded before its JSON would pass this (headroom below MAX_REQUEST_BYTES). */
+    public const MAX_BATCH_BYTES = 8 * 1024 * 1024;
 
     /** @var list<string> */
     private readonly array $webhookSecrets;

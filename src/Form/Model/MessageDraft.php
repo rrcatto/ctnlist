@@ -36,7 +36,7 @@ final class MessageDraft
     #[WholeNumber(min: -2147483648, max: 2147483647)]
     public int $priority = 0;
 
-    /** 0 means no limit. */
+    /** The hard maximum of queue sends, as in v5: 0 sends none. */
     #[WholeNumber(min: 0, max: 2147483647)]
     public int $maxSend = 0;
 

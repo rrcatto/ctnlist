@@ -7,11 +7,11 @@
 {% if archives is empty %}
   {% include 'layout/_empty_state.html.twig' with {icon: 'archive', message: 'There are no archives.'} %}
 {% else %}
-  <div class="list-group mb-3">
+  <div class="list-group mb-5">
     {% for archive in archives %}
-      <a class="list-group-item list-group-item-action d-flex flex-wrap justify-content-between align-items-center gap-2 py-3" href="{{ path('archive', {id: archive.a_id}) }}">
+      <a class="list-group-item list-group-item-action d-flex flex-wrap justify-content-between align-items-center gap-3 py-5" href="{{ path('archive', {id: archive.a_id}) }}">
         <span class="fw-semibold me-auto text-break">{{ archive.a_subject|length > 100 ? archive.a_subject|slice(0, 100) ~ '…' : archive.a_subject }}</span>
-        <span class="small text-body-secondary text-nowrap"><i class="bi bi-calendar3 me-1" aria-hidden="true"></i>{{ archive.a_datecreated|slice(0, 10) }}<span class="ms-3" title="Views"><i class="bi bi-eye me-1" aria-hidden="true"></i>{{ archive.a_viewed }}</span></span>
+        <span class="small fg-2 text-nowrap"><i class="bi bi-calendar3 me-1" aria-hidden="true"></i>{{ archive.a_datecreated|slice(0, 10) }}<span class="ms-5" title="Views"><i class="bi bi-eye me-1" aria-hidden="true"></i>{{ archive.a_viewed }}</span></span>
       </a>
     {% endfor %}
   </div>

@@ -85,18 +85,40 @@ final class QueueProcessorTest extends IntegrationTestCase
         self::assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM queue'), 'the rest stays queued');
 
         $this->db->executeStatement('UPDATE messages SET m_max_send = 0, m_sent = 0 WHERE m_uniqid = ?', [$muid]);
-        self::assertSame(0, $this->service(QueueProcessor::class)->process()->staged, 'zero means none');
+        $none = $this->service(QueueProcessor::class)->process();
+        self::assertSame(0, $none->staged, 'zero means none');
+        self::assertSame(SendOutcome::FAILED, $none->status, 'nothing for catto-mail to retry');
+        self::assertSame('Message ' . $muid . ' has reached its maximum of 0 sends (Maximum sends on the message); the rest stays queued.', $none->problem,
+            'the run says why it stopped');
         self::assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM queue'));
     }
 
+    /** Another live run holds the queue lock (in its own database session): this one is refused. */
     public function testDoesNothingWhileAnotherRunIsSending(): void
+    {
+        $this->queued(['A']);
+        $other = \Doctrine\DBAL\DriverManager::getConnection($this->db->getParams());
+        $other->fetchOne('SELECT pg_advisory_lock(hashtext(?))', [\App\Maintenance\DatabaseLock::QUEUE]);
+        try {
+            $outcome = $this->service(QueueProcessor::class)->process();
+        } finally {
+            $other->close();
+        }
+        self::assertSame([0, 'The queue is already being sent.'], [$outcome->staged, $outcome->problem]);
+        self::assertSame([], $this->fake->sendJobs);
+    }
+
+    /**
+     * A run killed mid-way (time limit, PHP-FPM reload, reboot) never resets CurrentlySending,
+     * but its lock went with its connection: the next run is not refused for ever.
+     */
+    public function testAFlagLeftByADeadRunDoesNotBlockTheQueue(): void
     {
         $this->queued(['A']);
         $this->service(OptionRepository::class)->set(QueueProcessor::CURRENTLY_SENDING, 'Y');
 
-        self::assertSame(0, $this->service(QueueProcessor::class)->process()->staged);
-        self::assertSame('Y', $this->service(OptionRepository::class)->get(QueueProcessor::CURRENTLY_SENDING), 'the other run keeps its flag');
-        self::assertSame([], $this->fake->sendJobs);
+        self::assertSame(1, $this->service(QueueProcessor::class)->process()->handedOff);
+        self::assertSame('N', $this->service(OptionRepository::class)->get(QueueProcessor::CURRENTLY_SENDING));
     }
 
     public function testRechecksEligibilitySuppressionAndDeliveryStateBeforeEachSend(): void
@@ -163,6 +185,85 @@ final class QueueProcessorTest extends IntegrationTestCase
         self::assertSame(10001, $outcome->handedOff);
         self::assertSame([10000, 1], array_map(static fn(array $recipients): int => count($recipients), array_values($this->fake->recipients)));
         self::assertCount(21, $this->fake->requestsTo('POST', '/send-jobs/[0-9a-f-]+/recipients'), '20 batches of 500 and one of 1');
+    }
+
+    /**
+     * Each recipient carries its own rendered copy, and catto-mail refuses a request over 10 MiB
+     * (413, FakeCattoMail too): a normal newsletter to 500 people is already more than that, so
+     * batches are cut by size as well as by count.
+     */
+    public function testLargeMessagesGoInBatchesUnderCattoMailsRequestLimit(): void
+    {
+        [$muid] = $this->queued(array_map(static fn(int $n): string => 'R' . $n, range(1, 400)));
+        // About 30 KB of HTML: catto-mail's JSON escapes every < > & ' " into six bytes.
+        $this->db->executeStatement('UPDATE messages SET m_html = ? WHERE m_uniqid = ?',
+            [str_repeat('<p class="body">Hello {firstname} &amp; "friends" <a href="https://example.com/">link</a></p>', 330), $muid]);
+
+        $outcome = $this->service(QueueProcessor::class)->process();
+        self::assertSame([SendOutcome::SUBMITTED, 400, 400, null], [$outcome->status, $outcome->staged, $outcome->handedOff, $outcome->problem]);
+        $batches = $this->fake->requestsTo('POST', '/send-jobs/[0-9a-f-]+/recipients');
+        self::assertGreaterThan(1, count($batches), 'cut by size, not only at 500');
+        foreach ($batches as $batch) {
+            self::assertLessThanOrEqual(\App\CattoMail\CattoMailConfig::MAX_BATCH_BYTES, \App\CattoMail\CattoMailClient::jsonSize(['recipients' => $batch['body']['recipients']]));
+        }
+        self::assertCount(400, $this->fake->recipients[$this->fake->lastSendJobId()]);
+        self::assertSame(0, (int) $this->db->fetchOne("SELECT COUNT(*) FROM cattomail_send_jobs WHERE csj_status = 'failed'"));
+    }
+
+    /** A copy that alone exceeds one upload is refused before anything is staged; its queue row stays. */
+    public function testAMessageTooLargeForOneUploadIsRefusedAndStaysQueued(): void
+    {
+        [$muid] = $this->queued(['Ann']);
+        $this->db->executeStatement('UPDATE messages SET m_html = ? WHERE m_uniqid = ?', [str_repeat('<p>"too big"</p>', 400000), $muid]);
+
+        $outcome = $this->service(QueueProcessor::class)->process();
+        self::assertSame(0, $outcome->staged);
+        self::assertStringContainsString('too large to send', (string) $outcome->problem);
+        self::assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM cattomail_recipients WHERE crp_muid = ?', [$muid]));
+        self::assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM queue WHERE q_muid = ?', [$muid]));
+    }
+
+    /**
+     * The worker seals the jobs of a run it takes for abandoned. Should the run still be staging,
+     * its next recipient must not join the sealed job (it would never be uploaded): it goes into a
+     * new job, and every recipient is handed off exactly once.
+     */
+    public function testARunWhoseJobWasSealedMeanwhileContinuesInANewJob(): void
+    {
+        $sender = $this->service(CattoMailSender::class);
+        $message = new OutgoingMessage(str_repeat('b', 32), '', '', OutgoingMessage::TRANSACTIONAL, 'sender@ctnlist.test', 'Sender');
+        $run = $sender->startRun('campaign', str_repeat('b', 32));
+        $sender->stage($run, $message, new OutgoingRecipient('first@example.com', null, 'MESSAGE', 'Subject', '<p>1</p>', '1'));
+        $sealed = (int) $this->db->fetchOne('SELECT csj_id FROM cattomail_send_jobs j JOIN cattomail_runs r ON r.cr_id = j.csj_cr_id WHERE r.cr_id = ?', [$run]);
+        // What the worker does with an abandoned run's job.
+        $outbox = $this->service(\App\Repository\CattoMailSendRepository::class);
+        $outbox->closeJob($sealed);
+        self::assertSame(1, $sender->flushJob($sealed));
+
+        $sender->stage($run, $message, new OutgoingRecipient('second@example.com', null, 'MESSAGE', 'Subject', '<p>2</p>', '2'));
+        self::assertSame(2, $sender->finishRun($run, 1)->handedOff, 'both jobs of the run');
+
+        self::assertSame(['first@example.com', 'second@example.com'],
+            $this->db->fetchFirstColumn("SELECT crp_email FROM cattomail_recipients WHERE crp_muid = ? AND crp_status = 'handed_off' ORDER BY crp_id", [str_repeat('b', 32)]));
+        self::assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM cattomail_recipients WHERE crp_csj_id = ?', [$sealed]), 'nothing joined the sealed job');
+        self::assertSame([1, 1], array_map(static fn(array $recipients): int => count($recipients), array_values($this->fake->recipients)));
+    }
+
+    /** A long run is not abandoned while it makes progress: the worker judges it by its last activity, not its age. */
+    public function testTheWorkerLeavesALongRunningRunAlone(): void
+    {
+        $sender = $this->service(CattoMailSender::class);
+        $message = new OutgoingMessage(str_repeat('c', 32), '', '', OutgoingMessage::TRANSACTIONAL, 'sender@ctnlist.test', 'Sender');
+        $run = $sender->startRun('campaign', str_repeat('c', 32));
+        $sender->stage($run, $message, new OutgoingRecipient('one@example.com', null, 'MESSAGE', 'Subject', '<p>1</p>', '1'));
+        $this->db->executeStatement("UPDATE cattomail_runs SET cr_created_at = cr_created_at - INTERVAL '2 hours' WHERE cr_id = ?", [$run]);
+
+        $this->service(CattoMailWorker::class)->run();
+        self::assertSame('open', $this->db->fetchOne('SELECT csj_status FROM cattomail_send_jobs WHERE csj_cr_id = ?', [$run]), 'its job was active minutes ago');
+
+        $this->db->executeStatement("UPDATE cattomail_send_jobs SET csj_created_at = csj_created_at - INTERVAL '2 hours' WHERE csj_cr_id = ?", [$run]);
+        $this->service(CattoMailWorker::class)->run();
+        self::assertNotSame('open', $this->db->fetchOne('SELECT csj_status FROM cattomail_send_jobs WHERE csj_cr_id = ?', [$run]), 'idle for two hours: abandoned and flushed');
     }
 
     public function testALostBatchResponseIsRetriedWithoutDuplicates(): void

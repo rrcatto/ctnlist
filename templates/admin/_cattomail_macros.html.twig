@@ -1,26 +1,26 @@
 {# Badges for catto-mail states (vocabulary from catto-mail; never reinterpreted). #}
 {% macro classification(value) %}
-  {%- set styles = {deliverable: 'text-bg-success', probably_deliverable: 'text-bg-success bg-opacity-75', risky: 'text-bg-warning', unknown: 'text-bg-secondary',
-      temporarily_unverifiable: 'text-bg-info', undeliverable: 'text-bg-danger'} -%}
-  {%- if value -%}<span class="badge {{ styles[value] ?? 'text-bg-light border' }}">{{ value|replace({'_': ' '}) }}</span>{%- else -%}<span class="badge text-bg-light border">pending</span>{%- endif -%}
+  {%- set styles = {deliverable: 'theme-success', probably_deliverable: 'badge-subtle theme-success', risky: 'theme-warning', unknown: 'theme-secondary',
+      temporarily_unverifiable: 'theme-info', undeliverable: 'theme-danger'} -%}
+  {%- if value -%}<span class="badge {{ styles[value] ?? 'badge-subtle theme-secondary' }}">{{ value|replace({'_': ' '}) }}</span>{%- else -%}<span class="badge badge-subtle theme-secondary">pending</span>{%- endif -%}
 {% endmacro %}
 
 {% macro job_status(value) %}
-  {%- set styles = {open: 'text-bg-light border', ready: 'text-bg-light border', pending: 'text-bg-light border', queued: 'text-bg-info', processing: 'text-bg-primary',
-      dispatched: 'text-bg-primary', completed: 'text-bg-success', failed: 'text-bg-danger', cancelled: 'text-bg-secondary'} -%}
-  <span class="badge {{ styles[value] ?? 'text-bg-light border' }}">{{ value }}</span>
+  {%- set styles = {open: 'badge-subtle theme-secondary', ready: 'badge-subtle theme-secondary', pending: 'badge-subtle theme-secondary', queued: 'theme-info', processing: 'theme-primary',
+      dispatched: 'theme-primary', completed: 'theme-success', failed: 'theme-danger', cancelled: 'theme-secondary'} -%}
+  <span class="badge {{ styles[value] ?? 'badge-subtle theme-secondary' }}">{{ value }}</span>
 {%- endmacro %}
 
 {% macro message_status(value) %}
-  {%- set styles = {staged: 'text-bg-light border', handed_off: 'text-bg-info', not_sent: 'text-bg-secondary', remote_accepted: 'text-bg-success',
-      deferred: 'text-bg-warning', soft_bounced: 'text-bg-warning', outcome_unknown: 'text-bg-secondary', hard_bounced: 'text-bg-danger',
-      complained: 'text-bg-danger', failed: 'text-bg-danger', suppressed: 'text-bg-dark'} -%}
-  <span class="badge {{ styles[value] ?? 'text-bg-light border' }}">{{ value|replace({'_': ' '}) }}</span>
+  {%- set styles = {staged: 'badge-subtle theme-secondary', handed_off: 'theme-info', not_sent: 'theme-secondary', remote_accepted: 'theme-success',
+      deferred: 'theme-warning', soft_bounced: 'theme-warning', outcome_unknown: 'theme-secondary', hard_bounced: 'theme-danger',
+      complained: 'theme-danger', failed: 'theme-danger', suppressed: 'theme-inverse'} -%}
+  <span class="badge {{ styles[value] ?? 'badge-subtle theme-secondary' }}">{{ value|replace({'_': ' '}) }}</span>
 {%- endmacro %}
 
 {# An administrator's view of a job (App\Maintenance\StuckWork::jobCategory()). #}
 {% macro category(value) %}
-  {%- set styles = {Pending: 'text-bg-info', Stuck: 'text-bg-warning', Failed: 'text-bg-danger', Cancelled: 'text-bg-secondary', Completed: 'text-bg-success',
-      'Awaiting reconciliation': 'text-bg-primary'} -%}
-  <span class="badge {{ styles[value] ?? 'text-bg-light border' }}">{{ value }}</span>
+  {%- set styles = {Pending: 'theme-info', Stuck: 'theme-warning', Failed: 'theme-danger', Cancelled: 'theme-secondary', Completed: 'theme-success',
+      'Awaiting reconciliation': 'theme-primary'} -%}
+  <span class="badge {{ styles[value] ?? 'badge-subtle theme-secondary' }}">{{ value }}</span>
 {%- endmacro %}

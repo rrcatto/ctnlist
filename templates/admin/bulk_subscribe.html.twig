@@ -8,15 +8,15 @@
 {{ form_start(form, {attr: {class: 'card'}}) }}
   <div class="card-body">
     {{ form_errors(form) }}
-    <div class="row g-3">
-      <div class="col-md-8">{{ form_row(form.listId, {row_attr: {class: 'mb-0'}}) }}</div>
-      <div class="col-md-4">{{ form_row(form.priority, {row_attr: {class: 'mb-0'}}) }}</div>
+    <div class="row g-5">
+      <div class="md:col-8">{{ form_row(form.listId, {row_attr: {class: 'mb-0'}}) }}</div>
+      <div class="md:col-4">{{ form_row(form.priority, {row_attr: {class: 'mb-0'}}) }}</div>
       <div class="col-12">{{ form_row(form.emails, {row_attr: {class: 'mb-0'}}) }}</div>
     </div>
   </div>
-  <div class="card-footer d-flex flex-wrap gap-2">
-    <button class="btn btn-primary" type="submit"><i class="bi bi-person-plus me-1" aria-hidden="true"></i>Subscribe addresses</button>
-    <a class="btn btn-outline-secondary" href="{{ path('admin_subscribers') }}">Cancel</a>
+  <div class="card-footer d-flex flex-wrap gap-3">
+    <button class="btn-solid theme-primary" type="submit"><i class="bi bi-person-plus me-1" aria-hidden="true"></i>Subscribe addresses</button>
+    <a class="btn-outline theme-secondary" href="{{ path('admin_subscribers') }}">Cancel</a>
   </div>
 {{ form_end(form) }}
 {% endblock %}

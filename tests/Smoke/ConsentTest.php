@@ -67,6 +67,15 @@ final class ConsentTest extends SmokeTestCase
         $csrf = self::csrf(self::request($anonymous, 'GET', '/login')['body']);
         $forged = self::request($anonymous, 'POST', '/confirm', ['csrf' => $csrf, 'subscriber_token' => $uuid, 'list_shortcode' => 'ALL']);
         self::assertSame(403, $forged['status'], 'only the subscriber may act on their link');
+
+        // An inactive list is never offered for confirmation, and a crafted POST cannot confirm it either.
+        self::$db->exec("INSERT INTO lists (l_shortcode, l_name, l_active) VALUES ('SMOKEX', 'Inactive smoke list', FALSE) ON CONFLICT DO NOTHING");
+        $client = self::client();
+        self::loginAsAdmin($client);
+        self::assertSame(404, self::request($client, 'GET', "/confirm/{$uuid}/SMOKEX")['status']);
+        $crafted = self::request($client, 'POST', '/confirm', ['csrf' => self::csrf(self::request($client, 'GET', '/login')['body']), 'subscriber_token' => $uuid, 'list_shortcode' => 'SMOKEX']);
+        self::assertStringContainsString('The subscription could not be confirmed.', $crafted['body']);
+        self::assertSame(0, (int) self::value("SELECT COUNT(*) FROM list_subscribers ls JOIN lists l ON l.l_id = ls.ls_l_id WHERE l.l_shortcode = 'SMOKEX' AND ls.ls_confirmed"));
     }
 
     public function testSubscribeEntryPoint(): void

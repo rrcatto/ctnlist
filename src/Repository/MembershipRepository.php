@@ -61,16 +61,20 @@ final class MembershipRepository
         );
     }
 
-    /** Withdraw consent for one list. */
-    public function unsubscribe(int $subscriberId, int $listId, string $reason, string $now): void
+    /**
+     * Withdraw consent for one list. An existing unsubscribe keeps its own time and reason.
+     *
+     * @return bool whether the membership was not unsubscribed before
+     */
+    public function unsubscribe(int $subscriberId, int $listId, string $reason, string $now): bool
     {
         $this->ensure($subscriberId, $listId);
-        $this->db->executeStatement(
+        return $this->db->executeStatement(
             'UPDATE list_subscribers
              SET ls_confirmed = FALSE, ls_unsubscribed = TRUE, ls_unsubscribed_at = ?, ls_unsubscribe_reason = ?
-             WHERE ls_s_id = ? AND ls_l_id = ?',
+             WHERE ls_s_id = ? AND ls_l_id = ? AND ls_unsubscribed = FALSE',
             [$now, mb_substr(trim($reason), 0, 255), $subscriberId, $listId]
-        );
+        ) === 1;
     }
 
     /** Create the membership (no consent) if it does not exist; true when created. */
@@ -82,13 +86,18 @@ final class MembershipRepository
         ) === 1;
     }
 
-    /** Make every membership ineligible (a global unsubscribe, the multi-list form of v5's s_unsubscribe). */
-    public function unsubscribeAll(int $subscriberId, string $reason, string $now): void
+    /**
+     * Make every membership ineligible (a global unsubscribe, the multi-list form of v5's
+     * s_unsubscribe). Memberships already unsubscribed keep their own time and reason.
+     *
+     * @return int memberships newly unsubscribed
+     */
+    public function unsubscribeAll(int $subscriberId, string $reason, string $now): int
     {
-        $this->db->executeStatement(
+        return (int) $this->db->executeStatement(
             'UPDATE list_subscribers
              SET ls_confirmed = FALSE, ls_unsubscribed = TRUE, ls_unsubscribed_at = ?, ls_unsubscribe_reason = ?
-             WHERE ls_s_id = ?',
+             WHERE ls_s_id = ? AND ls_unsubscribed = FALSE',
             [$now, mb_substr(trim($reason), 0, 255), $subscriberId]
         );
     }

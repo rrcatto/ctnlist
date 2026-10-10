@@ -8,64 +8,64 @@
   {% block actions %}
     <form method="post" action="{{ path('admin_delivery_check') }}">
       <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-      <button class="btn btn-primary" type="submit"{{ problem ? ' disabled' }}><i class="bi bi-plug me-1" aria-hidden="true"></i>Check connection</button>
+      <button class="btn-solid theme-primary" type="submit"{{ problem ? ' disabled' }}><i class="bi bi-plug me-1" aria-hidden="true"></i>Check connection</button>
     </form>
-    <a class="btn btn-outline-secondary" href="{{ path('admin_delivery_webhooks') }}"><i class="bi bi-broadcast me-1" aria-hidden="true"></i>Webhook events</a>
+    <a class="btn-outline theme-secondary" href="{{ path('admin_delivery_webhooks') }}"><i class="bi bi-broadcast me-1" aria-hidden="true"></i>Webhook events</a>
   {% endblock %}
 {% endembed %}
 
-<div class="row g-4">
-  <div class="col-lg-6">
+<div class="row g-7">
+  <div class="lg:col-6">
     <div class="card h-100">
       <div class="card-header fw-semibold">Connection</div>
       <div class="card-body small">
         {% if problem %}
-          <div class="alert alert-warning" role="note"><i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>{{ problem }}</div>
+          <div class="alert theme-warning" role="note"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div>{{ problem }}</div></div>
         {% endif %}
         {% if health %}
           {% set state = health_states[health.state] %}
-          <p class="mb-1"><span class="badge text-bg-{{ state[0] }}">{{ state[1] }}</span> <span class="text-body-secondary">checked {{ health.checked_at|slice(0, 16) }}</span></p>
+          <p class="mb-1"><span class="badge theme-{{ state[0] }}">{{ state[1] }}</span> <span class="fg-2">checked {{ health.checked_at|slice(0, 16) }}</span></p>
           {% if health.state != 'ok' %}<p class="mb-1">{{ state[2] }}</p>{% endif %}
-          <p class="text-body-secondary text-break">{{ health.detail }}</p>
+          <p class="fg-2 text-break">{{ health.detail }}</p>
         {% elseif not problem %}
-          <p class="text-body-secondary">Not checked yet: use <strong>Check connection</strong> (one read-only request; nothing is created at catto-mail).</p>
+          <p class="fg-2">Not checked yet: use <strong>Check connection</strong> (one read-only request; nothing is created at catto-mail).</p>
         {% endif %}
         <dl class="row mb-0">
-          <dt class="col-sm-5">API</dt><dd class="col-sm-7 text-break"><code>{{ api_root ?: '—' }}</code></dd>
-          {% if connect_host %}<dt class="col-sm-5">Connects through</dt><dd class="col-sm-7"><code>{{ connect_host }}</code> <span class="badge text-bg-light border">development</span></dd>{% endif %}
-          <dt class="col-sm-5">API key</dt><dd class="col-sm-7">{{ problem ? 'not set' : 'set in .env (never shown)' }}</dd>
-          <dt class="col-sm-5">Custom CA file</dt><dd class="col-sm-7">{{ ca_file ? 'yes' : 'no' }}</dd>
-          <dt class="col-sm-5">Last successful call</dt><dd class="col-sm-7">{{ activity.last_ok ? activity.last_ok|slice(0, 16) : '—' }}</dd>
-          <dt class="col-sm-5">Last API error</dt><dd class="col-sm-7 text-break">{% if activity.last_error %}<span class="text-body-secondary">{{ activity.last_error_at|slice(0, 16) }}</span> {{ activity.last_error|slice(0, 300) }}{% else %}—{% endif %}</dd>
-          <dt class="col-sm-5">Open and click tracking</dt><dd class="col-sm-7">{{ tracking.opens ? 'opens' : 'no opens' }}, {{ tracking.clicks ? 'clicks' : 'no clicks' }}</dd>
-          <dt class="col-sm-5">Global opt-out</dt><dd class="col-sm-7 mb-0">{{ global_optout ? 'offered to subscribers' : 'not offered' }}</dd>
+          <dt class="sm:col-5">API</dt><dd class="sm:col-7 text-break"><code>{{ api_root ?: '—' }}</code></dd>
+          {% if connect_host %}<dt class="sm:col-5">Connects through</dt><dd class="sm:col-7"><code>{{ connect_host }}</code> <span class="badge badge-subtle theme-secondary">development</span></dd>{% endif %}
+          <dt class="sm:col-5">API key</dt><dd class="sm:col-7">{{ problem ? 'not set' : 'set in .env (never shown)' }}</dd>
+          <dt class="sm:col-5">Custom CA file</dt><dd class="sm:col-7">{{ ca_file ? 'yes' : 'no' }}</dd>
+          <dt class="sm:col-5">Last successful call</dt><dd class="sm:col-7">{{ activity.last_ok ? activity.last_ok|slice(0, 16) : '—' }}</dd>
+          <dt class="sm:col-5">Last API error</dt><dd class="sm:col-7 text-break">{% if activity.last_error %}<span class="fg-2">{{ activity.last_error_at|slice(0, 16) }}</span> {{ activity.last_error|slice(0, 300) }}{% else %}—{% endif %}</dd>
+          <dt class="sm:col-5">Open and click tracking</dt><dd class="sm:col-7">{{ tracking.opens ? 'opens' : 'no opens' }}, {{ tracking.clicks ? 'clicks' : 'no clicks' }}</dd>
+          <dt class="sm:col-5">Global opt-out</dt><dd class="sm:col-7 mb-0">{{ global_optout ? 'offered to subscribers' : 'not offered' }}</dd>
         </dl>
       </div>
     </div>
   </div>
 
-  <div class="col-lg-6">
+  <div class="lg:col-6">
     <div class="card h-100">
       <div class="card-header fw-semibold">Webhooks and worker</div>
       <div class="card-body small">
         <dl class="row">
-          <dt class="col-sm-5">Endpoint to register</dt><dd class="col-sm-7"><code class="text-break">{{ url('cattomail_webhook') }}</code></dd>
-          <dt class="col-sm-5">Signing secret</dt><dd class="col-sm-7">{% if secrets.current %}set{% else %}<span class="text-danger">not set: webhooks are refused (CATTOMAIL_WEBHOOK_SECRET)</span>{% endif %}</dd>
-          <dt class="col-sm-5">Previous secret</dt><dd class="col-sm-7 mb-0">{{ secrets.previous ? 'set: the rotated-out secret is still accepted (remove it once catto-mail stops signing with it)' : 'not set' }}</dd>
+          <dt class="sm:col-5">Endpoint to register</dt><dd class="sm:col-7"><code class="text-break">{{ url('cattomail_webhook') }}</code></dd>
+          <dt class="sm:col-5">Signing secret</dt><dd class="sm:col-7">{% if secrets.current %}set{% else %}<span class="fg-danger">not set: webhooks are refused (CATTOMAIL_WEBHOOK_SECRET)</span>{% endif %}</dd>
+          <dt class="sm:col-5">Previous secret</dt><dd class="sm:col-7 mb-0">{{ secrets.previous ? 'set: the rotated-out secret is still accepted (remove it once catto-mail stops signing with it)' : 'not set' }}</dd>
         </dl>
         <hr>
         <p class="mb-1">Webhooks are the primary path; the worker (<code>ctnlist:cattomail:work</code>, from cron every minute) is the safety net: it processes stored events, retries unsent work and polls jobs not updated for {{ (reconcile_after / 60)|round }} minutes.</p>
         {% if worker_stale %}
-          <div class="alert alert-warning mt-2 mb-2" role="note"><i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>{{ activity.worker_run ? 'The worker last ran ' ~ activity.worker_run|slice(0, 16) ~ '.' : 'The worker has never run.' }} Check the cron entry.</div>
+          <div class="alert theme-warning mt-3 mb-3" role="note"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div>{{ activity.worker_run ? 'The worker last ran ' ~ activity.worker_run|slice(0, 16) ~ '.' : 'The worker has never run.' }} Check the cron entry.</div></div>
         {% endif %}
         {% if worker_config_differs %}
-          <div class="alert alert-danger mt-2 mb-2" role="alert"><i class="bi bi-exclamation-octagon me-1" aria-hidden="true"></i>The worker last ran with a different configuration from this web server (installation, environment, database, base URL, catto-mail credentials or keys). Make the cron entry use this installation's <code>CTNLIST_INSTANCE_DIR</code> and its <code>.env</code> only, then compare with <code>ctnlist:diagnose</code>.</div>
+          <div class="alert theme-danger mt-3 mb-3" role="alert"><i class="bi bi-exclamation-octagon" aria-hidden="true"></i><div>The worker last ran with a different configuration from this web server (installation, environment, database, base URL, catto-mail credentials or keys). Make the cron entry use this installation's <code>CTNLIST_INSTANCE_DIR</code> and its <code>.env</code> only, then compare with <code>ctnlist:diagnose</code>.</div></div>
         {% endif %}
-        <p class="mb-1">Last run: {{ activity.worker_run ? activity.worker_run|slice(0, 16) : '—' }}{% if activity.worker_summary %}<br><span class="text-body-secondary">{{ activity.worker_summary }}</span>{% endif %}</p>
-        {% if activity.worker_failed %}<p class="mb-1">Last run with failures: {{ activity.worker_failed|slice(0, 16) }} <span class="text-body-secondary">(failed items are retried on the next run)</span></p>{% endif %}
+        <p class="mb-1">Last run: {{ activity.worker_run ? activity.worker_run|slice(0, 16) : '—' }}{% if activity.worker_summary %}<br><span class="fg-2">{{ activity.worker_summary }}</span>{% endif %}</p>
+        {% if activity.worker_failed %}<p class="mb-1">Last run with failures: {{ activity.worker_failed|slice(0, 16) }} <span class="fg-2">(failed items are retried on the next run)</span></p>{% endif %}
         <hr>
         <p class="mb-1">Maintenance (<code>ctnlist:maintenance</code>, hourly): {{ maintenance.run ? 'last run ' ~ maintenance.run|slice(0, 16) : 'has never run' }}{% if maintenance.failed %}; last failure {{ maintenance.failed|slice(0, 16) }}{% endif %}</p>
-        {% if maintenance.summary %}<p class="mb-0 text-body-secondary">{{ maintenance.summary }}</p>{% endif %}
+        {% if maintenance.summary %}<p class="mb-0 fg-2">{{ maintenance.summary }}</p>{% endif %}
       </div>
     </div>
   </div>
@@ -73,14 +73,14 @@
   <div class="col-12">
     {% set stuck_total = stuck|reduce((sum, n) => sum + n, 0) %}
     <div class="card{{ stuck_total ? ' border-warning' }}">
-      <div class="card-header fw-semibold d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <div class="card-header fw-semibold d-flex flex-row flex-wrap justify-content-between align-items-center gap-3">
         <span>Stuck work {{ stuck_total ? cm.category('Stuck') : '' }}</span>
-        <span class="small fw-normal text-body-secondary">Not moved on for {{ stuck_minutes }} minutes (twice the reconciliation interval)</span>
+        <span class="small fw-normal fg-2">Not moved on for {{ stuck_minutes }} minutes (twice the reconciliation interval)</span>
       </div>
       {% if stuck_total == 0 %}
-        <div class="card-body small"><i class="bi bi-check-circle text-success me-1" aria-hidden="true"></i>Nothing is stuck.</div>
+        <div class="card-body small"><p class="mb-0"><i class="bi bi-check-circle fg-success me-1" aria-hidden="true"></i>Nothing is stuck.</p></div>
       {% else %}
-        <div class="card-body small pb-0">The worker retries all of these by itself. Persistent stuck work usually means the worker is not running, catto-mail cannot be reached, or the API key was refused (see Connection). Individual jobs can be retried from their pages.</div>
+        <div class="card-body small pb-0"><p class="mb-0">The worker retries all of these by itself. Persistent stuck work usually means the worker is not running, catto-mail cannot be reached, or the API key was refused (see Connection). Individual jobs can be retried from their pages.</p></div>
         <ul class="list-group list-group-flush small">
           {% for category, n in stuck %}{% if n > 0 %}<li class="list-group-item d-flex justify-content-between"><span>{{ category|capitalize }}</span><span class="fw-semibold">{{ n }}</span></li>{% endif %}{% endfor %}
         </ul>
@@ -94,7 +94,7 @@
       <div class="card-header fw-semibold">Global opt-outs needing attention</div>
       <div class="table-responsive">
         <table class="table table-sm align-middle mb-0">
-          <thead class="table-light"><tr><th scope="col">Request</th><th scope="col">State</th><th scope="col">Requested</th><th scope="col">Last error</th><th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th></tr></thead>
+          <thead class=""><tr><th scope="col">Request</th><th scope="col">State</th><th scope="col">Requested</th><th scope="col">Last error</th><th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th></tr></thead>
           <tbody>
           {% for o in optouts %}
             <tr>
@@ -106,7 +106,7 @@
                 {% if is_granted('subscribers.manage') %}
                   <form method="post" action="{{ path('admin_delivery_optout_retry', {uuid: o.cgo_uuid}) }}" data-confirm="Report this request to catto-mail again? (Its stored key prevents a duplicate.)">
                     <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-                    <button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Retry</button>
+                    <button class="btn-sm btn-outline theme-secondary" type="submit"><i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Retry</button>
                   </form>
                 {% endif %}
               </td>
@@ -140,8 +140,8 @@
             {% for row in rows %}
               <tr>
                 <th scope="row" class="fw-normal">{{ row[0] }}</th>
-                <td class="text-end fw-semibold{{ row[1] > 0 and loop.index in [4, 5, 8, 10] ? ' text-danger' }}">{{ row[1] }}</td>
-                <td class="small text-body-secondary d-none d-md-table-cell">{{ row[2] }}</td>
+                <td class="text-end fw-semibold{{ row[1] > 0 and loop.index in [4, 5, 8, 10] ? ' fg-danger' }}">{{ row[1] }}</td>
+                <td class="small fg-2 d-none md:d-table-cell">{{ row[2] }}</td>
               </tr>
             {% endfor %}
           </tbody>
@@ -152,11 +152,11 @@
 
   <div class="col-12">
     <div class="card">
-      <div class="card-header fw-semibold d-flex justify-content-between align-items-center">Recent send runs <a class="small fw-normal" href="{{ path('admin_delivery_runs') }}">All send runs</a></div>
+      <div class="card-header fw-semibold d-flex flex-row justify-content-between align-items-center">Recent send runs <a class="small fw-normal" href="{{ path('admin_delivery_runs') }}">All send runs</a></div>
       {% if runs is empty %}
         <div class="card-body">{% include 'layout/_empty_state.html.twig' with {icon: 'send', message: 'Nothing has been handed to catto-mail yet.'} %}</div>
       {% else %}
-        <div class="card-body small text-body-secondary pb-0">A run is what was started here (a queue run, a proof, a resend or a forward). catto-mail jobs hold at most 10,000 recipients and one list each, so one run can be several jobs (external reference <code>&lt;run&gt;/&lt;job number&gt;</code>).</div>
+        <div class="card-body small fg-2 pb-0"><p class="mb-0">A run is what was started here (a queue run, a proof, a resend or a forward). catto-mail jobs hold at most 10,000 recipients and one list each, so one run can be several jobs (external reference <code>&lt;run&gt;/&lt;job number&gt;</code>).</p></div>
         {% include 'admin/_delivery_runs_table.html.twig' %}
       {% endif %}
     </div>
@@ -164,19 +164,19 @@
 
   <div class="col-12">
     <div class="card">
-      <div class="card-header fw-semibold d-flex justify-content-between align-items-center">Recent webhook events <a class="small fw-normal" href="{{ path('admin_delivery_webhooks') }}">All events</a></div>
+      <div class="card-header fw-semibold d-flex flex-row justify-content-between align-items-center">Recent webhook events <a class="small fw-normal" href="{{ path('admin_delivery_webhooks') }}">All events</a></div>
       {% if webhooks is empty %}
         <div class="card-body">{% include 'layout/_empty_state.html.twig' with {icon: 'broadcast', message: 'No webhook events received yet.'} %}</div>
       {% else %}
         <div class="table-responsive">
           <table class="table table-sm table-hover align-middle mb-0">
-            <thead class="table-light"><tr><th scope="col">Type</th><th scope="col">Received</th><th scope="col">Outcome</th></tr></thead>
+            <thead class=""><tr><th scope="col">Type</th><th scope="col">Received</th><th scope="col">Outcome</th></tr></thead>
             <tbody>
             {% for event in webhooks %}
               <tr>
                 <td><code>{{ event.cwe_type }}</code></td>
                 <td class="text-nowrap small">{{ event.cwe_received_at|slice(0, 16) }}</td>
-                <td class="small text-break">{% if event.cwe_processed_at %}{{ event.cwe_outcome }}{% else %}<span class="text-warning">pending</span>{% if event.cwe_error %} — {{ event.cwe_error|slice(0, 100) }}{% endif %}{% endif %}</td>
+                <td class="small text-break">{% if event.cwe_processed_at %}{{ event.cwe_outcome }}{% else %}<span class="fg-warning">pending</span>{% if event.cwe_error %} — {{ event.cwe_error|slice(0, 100) }}{% endif %}{% endif %}</td>
               </tr>
             {% endfor %}
             </tbody>

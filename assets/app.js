@@ -1,17 +1,19 @@
 /*
  * ctnlist site script, loaded on every page through the import map
- * ({{ importmap('app') }} in base.html.twig). Bootstrap's bundle, loaded
- * before this module runs, provides dropdowns, the collapsing navbar and
- * dismissible alerts. styles/app.css is linked from base.html.twig rather
- * than imported here: AssetMapper maps CSS imports to data: script URLs,
- * which the Content-Security-Policy (script-src 'self' + nonce) refuses.
+ * ({{ importmap('app') }} in base.html.twig). Bootstrap 6's bundle is an ES
+ * module with no global: importing it here starts its data-attribute API
+ * (menus, the navigation drawers, tabs, dismissible alerts) and gives this
+ * script the classes it calls. styles/app.css is linked from base.html.twig
+ * rather than imported here: AssetMapper maps CSS imports to data: script
+ * URLs, which the Content-Security-Policy (script-src 'self' + nonce) refuses.
  */
+import { Alert, Tab } from './lib/bootstrap/bootstrap.bundle.min.js';
 // The profile picture editor; it does nothing on pages without [data-profile-image].
 import './profile_image.js';
 
 // Flash messages close themselves after a few seconds, as they did in v5.
 document.querySelectorAll('.alert[data-autoclose]').forEach((alert) => {
-    window.setTimeout(() => window.bootstrap?.Alert.getOrCreateInstance(alert).close(), 5000);
+    window.setTimeout(() => Alert.getOrCreateInstance(alert).close(), 5000);
 });
 
 // Forms (or individual submit buttons) whose action needs confirming carry
@@ -32,7 +34,7 @@ document.querySelectorAll('[data-remember-tab]').forEach((tabs) => {
     const hash = window.location.hash.slice(1);
     const button = hash ? tabs.querySelector(`[data-tab-hash="${CSS.escape(hash)}"]`) : null;
     if (button) {
-        window.bootstrap?.Tab.getOrCreateInstance(button).show();
+        Tab.getOrCreateInstance(button).show();
         const header = document.querySelector('.app-header');
         const top = tabs.getBoundingClientRect().top + window.scrollY - (header?.offsetHeight ?? 0) - 16;
         window.scrollTo(0, Math.max(0, top));

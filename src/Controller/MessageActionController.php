@@ -215,13 +215,15 @@ final class MessageActionController extends AbstractController
     }
 
     /** The forwarder: the signed-in subscriber, or anyone when an administrator forwards. */
+    /** Whose forward this is: the subscriber's own, or a messages.manage holder's as themselves (never as someone else). */
     private function forwarder(string $token, ?SubscriberUser $user): string
     {
         $token = strtolower(trim($token));
-        if (!$this->isOwner($token, $user)) {
-            $this->denyAccessUnlessGranted('messages.manage');
+        if ($this->isOwner($token, $user)) {
+            return $token;
         }
-        return $token;
+        $this->denyAccessUnlessGranted('messages.manage');
+        return ($user ?? throw $this->createAccessDeniedException())->uuid;
     }
 
     private static function forwardData(string $token, string $muid): ForwardRequest

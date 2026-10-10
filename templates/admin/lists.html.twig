@@ -6,31 +6,31 @@
 {% block content %}
 {% include 'layout/_page_header.html.twig' with {title: 'Lists', description: 'Mailing lists subscribers can join. Each membership needs its own confirmation. System lists such as ALL are protected.'} %}
 
-<div class="row g-4">
-  <div class="col-lg-7">
+<div class="row g-7">
+  <div class="lg:col-7">
     <div class="table-responsive">
       <table class="table table-hover align-middle">
-        <thead class="table-light"><tr><th scope="col">Shortcode</th><th scope="col">Name</th><th scope="col">Type</th><th scope="col">Status</th><th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th></tr></thead>
+        <thead class=""><tr><th scope="col">Shortcode</th><th scope="col">Name</th><th scope="col">Type</th><th scope="col">Status</th><th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th></tr></thead>
         <tbody>
         {% for list in lists %}
           <tr>
             <td><code>{{ list.l_shortcode }}</code></td>
             <td>
               <div class="fw-semibold">{{ list.l_name }}</div>
-              {% if list.l_description %}<div class="small text-body-secondary d-none d-md-block">{{ list.l_description }}</div>{% endif %}
+              {% if list.l_description %}<div class="small fg-2 d-none md:d-block">{{ list.l_description }}</div>{% endif %}
             </td>
             <td>{{ ui.system_badge(list.l_system) }}</td>
             <td>{{ ui.active_badge(list.l_active) }}</td>
             <td class="text-end">
               {% if list.l_system %}
-                <span class="small text-body-secondary" title="System lists cannot be deleted"><i class="bi bi-shield-lock" aria-hidden="true"></i> Protected</span>
+                <span class="small fg-2" title="System lists cannot be deleted"><i class="bi bi-shield-lock" aria-hidden="true"></i> Protected</span>
               {% else %}
                 <div class="d-inline-flex gap-1">
-                <a class="btn btn-sm btn-outline-secondary" href="{{ path('admin_lists_edit', {id: list.l_id}) }}" aria-label="Edit the list {{ list.l_name }}"><i class="bi bi-pencil" aria-hidden="true"></i><span class="d-none d-md-inline ms-1">Edit</span></a>
+                <a class="btn-sm btn-outline theme-secondary" href="{{ path('admin_lists_edit', {id: list.l_id}) }}" aria-label="Edit the list {{ list.l_name }}"><i class="bi bi-pencil" aria-hidden="true"></i><span class="d-none md:d-inline ms-1">Edit</span></a>
                 <form action="{{ path('admin_lists_delete') }}" method="post" data-confirm="Delete the list {{ list.l_name }}?">
                   <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
                   <input type="hidden" name="list_id" value="{{ list.l_id }}">
-                  <button class="btn btn-sm btn-outline-danger" type="submit" aria-label="Delete the list {{ list.l_name }}"><i class="bi bi-trash" aria-hidden="true"></i><span class="d-none d-md-inline ms-1">Delete</span></button>
+                  <button class="btn-sm btn-outline theme-danger" type="submit" aria-label="Delete the list {{ list.l_name }}"><i class="bi bi-trash" aria-hidden="true"></i><span class="d-none md:d-inline ms-1">Delete</span></button>
                 </form>
                 </div>
               {% endif %}
@@ -41,7 +41,7 @@
       </table>
     </div>
   </div>
-  <div class="col-lg-5">
+  <div class="lg:col-5">
     {{ form_start(form, {attr: {class: 'card', id: 'create-list'}}) }}
       <div class="card-header fw-semibold">Create a topic list</div>
       <div class="card-body">
@@ -50,7 +50,7 @@
         {{ form_row(form.name) }}
         {{ form_row(form.description, {row_attr: {class: 'mb-0'}}) }}
       </div>
-      <div class="card-footer"><button class="btn btn-primary" type="submit"><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Create list</button></div>
+      <div class="card-footer"><button class="btn-solid theme-primary" type="submit"><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Create list</button></div>
     {{ form_end(form) }}
   </div>
 </div>

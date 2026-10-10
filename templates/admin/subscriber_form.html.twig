@@ -12,59 +12,59 @@
 {% block content %}
 {% embed 'layout/_page_header.html.twig' with {title: 'Subscriber', description: email} %}
   {% block actions %}
-    {% if is_granted('subscribers.view') %}<a class="btn btn-outline-secondary" href="{{ path('admin_subscribers') }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>All subscribers</a>{% endif %}
+    {% if is_granted('subscribers.view') %}<a class="btn-outline theme-secondary" href="{{ path('admin_subscribers') }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>All subscribers</a>{% endif %}
   {% endblock %}
 {% endembed %}
 
 {{ form_start(form) }}
   {% if not form.vars.valid %}
-    <div class="alert alert-danger" role="alert">{% if form.vars.errors|length %}{{ form_errors(form) }}{% else %}Please correct the fields marked below; nothing was saved.{% endif %}</div>
+    <div class="alert theme-danger" role="alert"><div>{% if form.vars.errors|length %}{{ form_errors(form) }}{% else %}Please correct the fields marked below; nothing was saved.{% endif %}</div></div>
   {% endif %}
-  <div class="row g-4">
-    <div class="col-lg-7">
+  <div class="row g-7">
+    <div class="lg:col-7">
       <div class="card h-100">
         <div class="card-header fw-semibold">Profile</div>
         <div class="card-body">
-          <div class="row g-3">
+          <div class="row g-5">
             <div class="col-12">
               <span class="form-label d-block">Email</span>
               <span class="fw-semibold text-break">{{ email }}</span>
               <div class="form-text">The email address identifies the subscriber and cannot be changed here.</div>
             </div>
-            <div class="col-md-6">{{ form_row(form.firstName, {row_attr: {class: 'mb-0'}}) }}</div>
-            <div class="col-md-6">{{ form_row(form.lastName, {row_attr: {class: 'mb-0'}}) }}</div>
-            <div class="col-md-4">{{ form_row(form.gender, {row_attr: {class: 'mb-0'}}) }}</div>
-            <div class="col-md-4">{{ form_row(form.province, {row_attr: {class: 'mb-0'}}) }}</div>
-            <div class="col-md-4">{{ form_row(form.country, {row_attr: {class: 'mb-0'}}) }}</div>
+            <div class="md:col-6">{{ form_row(form.firstName, {row_attr: {class: 'mb-0'}}) }}</div>
+            <div class="md:col-6">{{ form_row(form.lastName, {row_attr: {class: 'mb-0'}}) }}</div>
+            <div class="md:col-4">{{ form_row(form.gender, {row_attr: {class: 'mb-0'}}) }}</div>
+            <div class="md:col-4">{{ form_row(form.province, {row_attr: {class: 'mb-0'}}) }}</div>
+            <div class="md:col-4">{{ form_row(form.country, {row_attr: {class: 'mb-0'}}) }}</div>
           </div>
         </div>
       </div>
     </div>
 
-    <div class="col-lg-5">
-      <div class="card mb-4">
+    <div class="lg:col-5">
+      <div class="card mb-7">
         <div class="card-header fw-semibold">List memberships</div>
         <ul class="list-group list-group-flush">
           {% for membership in memberships %}
-            <li class="list-group-item d-flex justify-content-between align-items-center gap-2">
+            <li class="list-group-item d-flex justify-content-between align-items-center gap-3">
               <span>{{ membership.l_name }} <code class="small">{{ membership.l_shortcode }}</code></span>
               {{ ui.membership_badge(ui.membership_state(membership)) }}
             </li>
           {% else %}
-            <li class="list-group-item text-body-secondary">There are no active lists.</li>
+            <li class="list-group-item fg-2">There are no active lists.</li>
           {% endfor %}
         </ul>
-        <div class="card-footer small text-body-secondary">Only the subscriber can confirm a membership; adding a list sends an invitation.</div>
+        <div class="card-footer small fg-2">Only the subscriber can confirm a membership; adding a list sends an invitation.</div>
       </div>
 
-      <div class="card mb-4">
+      <div class="card mb-7">
         <div class="card-header fw-semibold">Delivery (catto-mail)</div>
         <div class="card-body small">
           {% if delivery.state == 'ok' %}
-            <p class="mb-2"><i class="bi bi-check-circle text-success me-1" aria-hidden="true"></i>No hard bounce or complaint recorded.</p>
+            <p class="mb-3"><i class="bi bi-check-circle fg-success me-1" aria-hidden="true"></i>No hard bounce or complaint recorded.</p>
           {% else %}
-            <p class="mb-1"><span class="badge text-bg-danger">{{ delivery.state == 'complained' ? 'Spam complaint' : 'Hard bounce' }}</span>{% if delivery.at %} <span class="text-body-secondary">since {{ delivery.at|slice(0, 16) }}</span>{% endif %}</p>
-            <p class="mb-2">
+            <p class="mb-1"><span class="badge theme-danger">{{ delivery.state == 'complained' ? 'Spam complaint' : 'Hard bounce' }}</span>{% if delivery.at %} <span class="fg-2">since {{ delivery.at|slice(0, 16) }}</span>{% endif %}</p>
+            <p class="mb-3">
               {% if delivery.state == 'complained' %}
                 catto-mail reported that this subscriber marked a campaign as spam. They were unsubscribed from every list and are left out of campaigns.
               {% else %}
@@ -73,16 +73,16 @@
             </p>
             {% if is_granted('subscribers.manage') %}
               <form method="post" action="{{ path('admin_subscriber_delivery_ok', {token: app.request.attributes.get('token')}) }}"
-                    data-confirm="Clear the {{ delivery.state == 'complained' ? 'complaint' : 'hard bounce' }} block? This only lets the subscriber be selected for campaigns again; it does not restore list memberships or consent." class="mb-2">
+                    data-confirm="Clear the {{ delivery.state == 'complained' ? 'complaint' : 'hard bounce' }} block? This only lets the subscriber be selected for campaigns again; it does not restore list memberships or consent." class="mb-3">
                 <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-                <button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-unlock me-1" aria-hidden="true"></i>Clear the sending block</button>
+                <button class="btn-sm btn-outline theme-secondary" type="submit"><i class="bi bi-unlock me-1" aria-hidden="true"></i>Clear the sending block</button>
               </form>
-              <p class="form-text mb-2">Clearing affects the sending block only. It does not re-subscribe anyone{{ delivery.state == 'complained' ? ' (lists left because of the complaint stay left)' }}, and catto-mail may still suppress the address on its side.</p>
+              <p class="form-text mb-3">Clearing affects the sending block only. It does not re-subscribe anyone{{ delivery.state == 'complained' ? ' (lists left because of the complaint stay left)' }}, and catto-mail may still suppress the address on its side.</p>
             {% endif %}
           {% endif %}
           {% if validation %}
             {% import 'admin/_cattomail_macros.html.twig' as cm %}
-            <p class="mb-0">Last validation: {{ cm.classification(validation.cva_classification) }} <span class="text-body-secondary">{{ validation.cva_checked_at|slice(0, 10) }}</span>
+            <p class="mb-0">Last validation: {{ cm.classification(validation.cva_classification) }} <span class="fg-2">{{ validation.cva_checked_at|slice(0, 10) }}</span>
               {% if validation.cva_suggested_address %}<br>Suggested address (not applied): <span class="text-break">{{ validation.cva_suggested_address }}</span>{% endif %}</p>
           {% endif %}
         </div>
@@ -100,8 +100,8 @@
     </div>
   </div>
 
-  <div class="d-flex flex-wrap gap-2 border-top pt-3 mt-4">
-    <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>Save subscriber</button>
+  <div class="d-flex flex-wrap gap-3 border-top pt-5 mt-7">
+    <button class="btn-solid theme-primary" type="submit"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>Save subscriber</button>
   </div>
 {{ form_end(form) }}
 {% endblock %}

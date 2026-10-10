@@ -13,9 +13,9 @@
     <input class="form-control" id="q-limit" type="number" min="0" name="limit" value="{{ limit }}" aria-describedby="q-limit-help">
     <div class="form-text" id="q-limit-help">Subscribers already queued or sent this message are skipped.</div>
   </div>
-  <div class="card-footer d-flex flex-wrap gap-2">
-    <button class="btn btn-primary" type="submit"><i class="bi bi-list-check me-1" aria-hidden="true"></i>Queue this message</button>
-    <a class="btn btn-outline-secondary" href="{{ path('admin_messages') }}">Cancel</a>
+  <div class="card-footer d-flex flex-wrap gap-3">
+    <button class="btn-solid theme-primary" type="submit"><i class="bi bi-list-check me-1" aria-hidden="true"></i>Queue this message</button>
+    <a class="btn-outline theme-secondary" href="{{ path('admin_messages') }}">Cancel</a>
   </div>
 </form>
 {% endblock %}

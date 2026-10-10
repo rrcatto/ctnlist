@@ -73,6 +73,16 @@ final class SettingsPageTest extends SmokeTestCase
         self::assertStringContainsString('href="/settings"', $page['body'], 'navigation follows the permission');
         self::assertStringNotContainsString('href="/roles"', $page['body']);
 
+        // The SMTP server receives every sign-in link: pointing it elsewhere would let settings.manage
+        // sign in as an administrator, so only administrators see or change it.
+        self::assertStringNotContainsString('>Transactional mail</h2>', $page['body']);
+        self::assertStringNotContainsString('settings_smtp', $page['body']);
+        $csrf = self::csrfToken($page['body']);
+        self::assertSame(403, self::request($staff, 'POST', '/settings/smtp', ['csrf' => $csrf, 'settings_smtp[MAILER_DSN][host]' => 'mail.attacker.example'])['status']);
+        self::assertSame(403, self::request($staff, 'POST', '/settings/smtp/reset', ['csrf' => $csrf])['status']);
+        self::assertSame(403, self::request($staff, 'POST', '/settings/reset/MAILER_DSN', ['csrf' => $csrf])['status']);
+        self::assertSame(0, (int) self::value("SELECT COUNT(*) FROM options WHERE o_key = 'setting:MAILER_DSN'"), 'nothing stored');
+
         $admin = self::client();
         self::loginAsAdmin($admin);
         $body = self::request($admin, 'GET', '/settings')['body'];
@@ -91,9 +101,9 @@ final class SettingsPageTest extends SmokeTestCase
 
         $saved = self::save($admin, 'site', ['[APP_LIST_NAME]' => $name]);
         self::assertStringContainsString('Site identity settings saved.', $saved);
-        self::assertMatchesRegularExpression('#for="settings_site_APP_LIST_NAME">List name</label><span class="badge text-bg-primary"[^>]*>Database</span>#', $saved);
-        self::assertMatchesRegularExpression('#for="settings_site_APP_ORGANISATION">Organisation</label><span class="badge text-bg-light border">\.env</span>#', $saved);
-        self::assertMatchesRegularExpression('#<span class="badge text-bg-secondary">Default</span>#', $saved, 'settings .env leaves unset');
+        self::assertMatchesRegularExpression('#for="settings_site_APP_LIST_NAME">List name</label><span class="badge theme-primary"[^>]*>Database</span>#', $saved);
+        self::assertMatchesRegularExpression('#for="settings_site_APP_ORGANISATION">Organisation</label><span class="badge badge-subtle theme-secondary">\.env</span>#', $saved);
+        self::assertMatchesRegularExpression('#<span class="badge theme-secondary">Default</span>#', $saved, 'settings .env leaves unset');
         self::assertStringContainsString('</i>' . $name . '</a>', self::request(self::client(), 'GET', '/')['body'], 'applies immediately everywhere');
         self::assertStringContainsString('no changes to save', self::save($admin, 'site', []));
 
@@ -116,7 +126,7 @@ final class SettingsPageTest extends SmokeTestCase
         self::assertMatchesRegularExpression('#<input type="url"\s+id="settings_contact_APP_FACEBOOK_URL"[^>]*class="form-control is-invalid" aria-invalid="true" aria-describedby="[^"]*settings_contact_APP_FACEBOOK_URL_error1"[^>]*value="javascript:alert\(1\)"#', $page, 'the error is at the field, linked for screen readers, with the value kept');
         self::assertMatchesRegularExpression('#id="settings_contact_APP_FACEBOOK_URL_error1">Enter a full web address#', $page);
         self::assertStringContainsString('value="12 Kept Street"', $page, 'the other values are kept');
-        self::assertStringContainsString('class="nav-link active text-danger" id="tab-contact"', $page, 'the tab with errors is shown');
+        self::assertStringContainsString('class="nav-link active fg-danger" id="tab-contact"', $page, 'the tab with errors is shown');
         self::assertStringContainsString('nothing was saved', $page);
         self::assertSame('0', (string) self::value("SELECT COUNT(*) FROM options WHERE o_key LIKE 'setting:%'"), 'nothing stored');
 

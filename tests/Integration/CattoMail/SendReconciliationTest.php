@@ -32,4 +32,39 @@ final class SendReconciliationTest extends CattoMailTestCase
         $this->db->executeStatement("UPDATE cattomail_send_jobs SET csj_last_checked_at = csj_last_checked_at - INTERVAL '1 hour' WHERE csj_remote_id = ?", [$sent['job']]);
         self::assertSame(0, $worker->run()['send jobs reconciled'], 'final jobs are not polled again');
     }
+
+    /**
+     * catto-mail sealed the job, but its answer never reached ctnlist (here: lost responses; in
+     * production also a process that stopped before recording the handoff), and a webhook reports
+     * the job before the worker retries. Its recipients still reach the Send Log and smlog, once.
+     */
+    public function testAJobSealedWithoutALocalHandoffIsHandedOffWhenCattoMailReportsIt(): void
+    {
+        $news = $this->createList('NEWS', 'News');
+        $uuids = [];
+        foreach (['ann@example.com', 'ben@example.com'] as $email) {
+            $id = $this->createSubscriber($email);
+            $this->setMembership($id, $news, true);
+            $uuids[] = $this->subscriberUuid($id);
+        }
+        $muid = $this->createMessage('Campaign', [$news]);
+        $this->service(\App\Queue\QueueBuilder::class)->queueMessage($muid);
+        $this->fake->failNext('POST /send-jobs/[0-9a-f-]+/submit', 'timeout', afterEffect: true, times: 10);
+
+        $outcome = $this->service(\App\Queue\QueueProcessor::class)->process();
+        self::assertSame([2, 0], [$outcome->staged, $outcome->handedOff], 'sealed at catto-mail, not recorded here');
+        $job = $this->fake->lastSendJobId();
+        self::assertSame('ready', $this->db->fetchOne('SELECT csj_status FROM cattomail_send_jobs WHERE csj_remote_id = ?', [$job]));
+
+        $this->fake->deliver($job);
+        $this->webhook('send.completed', $this->fake->sendJobs[$job]);
+
+        self::assertSame(2, (int) $this->db->fetchOne("SELECT COUNT(*) FROM sendlog WHERE sl_type = 'MESSAGE' AND sl_muid = ?", [$muid]));
+        foreach ($uuids as $uuid) {
+            self::assertTrue($this->service(\App\Log\MessageLog::class)->wasSent($uuid, $muid));
+        }
+        $this->service(CattoMailWorker::class)->run();
+        self::assertSame(2, (int) $this->db->fetchOne("SELECT COUNT(*) FROM sendlog WHERE sl_type = 'MESSAGE' AND sl_muid = ?", [$muid]), 'and only once');
+        self::assertSame('completed', $this->db->fetchOne('SELECT csj_status FROM cattomail_send_jobs WHERE csj_remote_id = ?', [$job]));
+    }
 }

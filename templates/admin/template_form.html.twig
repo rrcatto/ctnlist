@@ -8,16 +8,16 @@
 
 {{ form_start(form) }}
   {% if not form.vars.valid %}
-    <div class="alert alert-danger" role="alert">
-      {% if form.vars.errors|length %}{{ form_errors(form) }}{% else %}Please correct the fields marked below. Nothing was saved, and everything you entered is still here.{% endif %}
+    <div class="alert theme-danger" role="alert">
+      <div>{% if form.vars.errors|length %}{{ form_errors(form) }}{% else %}Please correct the fields marked below. Nothing was saved, and everything you entered is still here.{% endif %}</div>
     </div>
   {% endif %}
-  <div class="col-lg-6">{{ form_row(form.name) }}</div>
+  <div class="lg:col-6">{{ form_row(form.name) }}</div>
   {{ form_row(form.html) }}
   {{ form_row(form.text) }}
-  <div class="d-flex flex-wrap gap-2 border-top pt-3 mt-4">
-    <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>Save template</button>
-    <a class="btn btn-outline-secondary" href="{{ path('admin_templates') }}">Cancel</a>
+  <div class="d-flex flex-wrap gap-3 border-top pt-5 mt-7">
+    <button class="btn-solid theme-primary" type="submit"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>Save template</button>
+    <a class="btn-outline theme-secondary" href="{{ path('admin_templates') }}">Cancel</a>
   </div>
 {{ form_end(form) }}
 {% endblock %}

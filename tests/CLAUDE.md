@@ -10,4 +10,4 @@ Suites (`phpunit.dist.xml`, which also sets the test environment variables): `te
 - Form tests assert the field error id (`<form>_<field>_error1`), that the entered values are kept and that nothing was stored.
 - `RouteSmokeTest` requests every GET route anonymously and as `admin@ctnlist.test` (logged in by inserting a magic-link token), creating and deleting its own fixtures; every new GET route must be added to it.
 - `SettingsPageTest` needs `APP_SETTINGS_KEY` in `dev/podman/ctnlist.env` (`bin/dev up` adds it) and restores any existing overrides afterwards.
-- The app writes timestamps in PHP's timezone (Africa/Johannesburg) while PostgreSQL runs in UTC: compute timestamps in PHP when inserting rows the app compares against `date()`.
+- The app writes timestamps in PHP's timezone (Africa/Johannesburg), and its database sessions run in it too; the smoke tests' own connection runs in PostgreSQL's UTC: compute timestamps in PHP when inserting rows the app compares against `date()`. `FakeCattoMail` refuses request bodies over 10 MiB (413), like catto-mail.

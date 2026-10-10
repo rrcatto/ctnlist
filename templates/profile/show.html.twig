@@ -6,50 +6,50 @@
 {% block content %}
 {% embed 'layout/_page_header.html.twig' with {title: 'My profile', description: profile.s_email} %}
   {% block actions %}
-    <a class="btn btn-primary" href="{{ path('profile_edit') }}"><i class="bi bi-pencil me-1" aria-hidden="true"></i>Edit profile</a>
-    <a class="btn btn-outline-secondary" href="{{ path('profile_messages') }}"><i class="bi bi-envelope me-1" aria-hidden="true"></i>Messages sent to me</a>
+    <a class="btn-solid theme-primary" href="{{ path('profile_edit') }}"><i class="bi bi-pencil me-1" aria-hidden="true"></i>Edit profile</a>
+    <a class="btn-outline theme-secondary" href="{{ path('profile_messages') }}"><i class="bi bi-envelope me-1" aria-hidden="true"></i>Messages sent to me</a>
   {% endblock %}
 {% endembed %}
 
-<div class="row g-4">
-  <div class="col-lg-5">
+<div class="row g-7">
+  <div class="lg:col-5">
     <div class="card h-100">
       <div class="card-header fw-semibold">Details</div>
       <div class="card-body">
-        <div class="d-flex align-items-center gap-3 mb-3">
+        <div class="d-flex align-items-center gap-5 mb-5">
           <img class="app-avatar app-avatar-lg border" src="{{ profile_image_url(app.user) }}" alt="{{ has_image ? 'Your profile picture' : 'No profile picture yet' }}" width="128" height="128">
-          <a class="btn btn-sm btn-outline-secondary" href="{{ path('profile_edit') }}#profile-picture"><i class="bi bi-image me-1" aria-hidden="true"></i>{{ has_image ? 'Change picture' : 'Add a picture' }}</a>
+          <a class="btn-sm btn-outline theme-secondary" href="{{ path('profile_edit') }}#profile-picture"><i class="bi bi-image me-1" aria-hidden="true"></i>{{ has_image ? 'Change picture' : 'Add a picture' }}</a>
         </div>
         <dl class="row mb-0 small">
-          <dt class="col-sm-4">Name</dt><dd class="col-sm-8">{{ (profile.s_fname ~ ' ' ~ profile.s_lname)|trim ?: '—' }}</dd>
-          <dt class="col-sm-4">Email</dt><dd class="col-sm-8 text-break">{{ profile.s_email }}</dd>
-          <dt class="col-sm-4">Company</dt><dd class="col-sm-8">{{ profile.s_business ?: '—' }}</dd>
-          <dt class="col-sm-4">Since</dt><dd class="col-sm-8">{{ profile.s_created_at|slice(0, 10) }}</dd>
-          <dt class="col-sm-4">Subscriber ID</dt><dd class="col-sm-8 mb-0"><code class="text-break">{{ profile.s_uuid }}</code></dd>
+          <dt class="sm:col-4">Name</dt><dd class="sm:col-8">{{ (profile.s_fname ~ ' ' ~ profile.s_lname)|trim ?: '—' }}</dd>
+          <dt class="sm:col-4">Email</dt><dd class="sm:col-8 text-break">{{ profile.s_email }}</dd>
+          <dt class="sm:col-4">Company</dt><dd class="sm:col-8">{{ profile.s_business ?: '—' }}</dd>
+          <dt class="sm:col-4">Since</dt><dd class="sm:col-8">{{ profile.s_created_at|slice(0, 10) }}</dd>
+          <dt class="sm:col-4">Subscriber ID</dt><dd class="sm:col-8 mb-0"><code class="text-break">{{ profile.s_uuid }}</code></dd>
         </dl>
       </div>
     </div>
   </div>
 
-  <div class="col-lg-7">
+  <div class="lg:col-7">
     <div class="card h-100">
       <div class="card-header fw-semibold">List memberships</div>
       <ul class="list-group list-group-flush">
         {% for membership in memberships %}
           {% set state = ui.membership_state(membership)|trim %}
-          <li class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2 py-3">
+          <li class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-3 py-5">
             <div class="me-auto">
               <div class="fw-semibold">{{ membership.l_name }} {{ ui.membership_badge(state) }}</div>
-              {% if membership.ls_uuid is not null %}<div class="small text-body-secondary">Joined {{ membership.ls_subscribed_at|slice(0, 16) }} · <span title="Membership record">{{ membership.ls_uuid }}</span></div>{% endif %}
+              {% if membership.ls_uuid is not null %}<div class="small fg-2">Joined {{ membership.ls_subscribed_at|slice(0, 16) }} · <span title="Membership record">{{ membership.ls_uuid }}</span></div>{% endif %}
             </div>
             {% if state == 'confirmed' %}
-              <a class="btn btn-sm btn-outline-secondary" href="{{ path('consent_unsubscribe', {token: profile.s_uuid, shortcode: membership.l_shortcode}) }}">Unsubscribe</a>
+              <a class="btn-sm btn-outline theme-secondary" href="{{ path('consent_unsubscribe', {token: profile.s_uuid, shortcode: membership.l_shortcode}) }}">Unsubscribe</a>
             {% else %}
-              <a class="btn btn-sm btn-primary" href="{{ path('consent_confirm', {token: profile.s_uuid, shortcode: membership.l_shortcode}) }}">{{ state == 'pending' ? 'Confirm' : 'Subscribe' }}</a>
+              <a class="btn-sm btn-solid theme-primary" href="{{ path('consent_confirm', {token: profile.s_uuid, shortcode: membership.l_shortcode}) }}">{{ state == 'pending' ? 'Confirm' : 'Subscribe' }}</a>
             {% endif %}
           </li>
         {% else %}
-          <li class="list-group-item text-body-secondary">There are no lists.</li>
+          <li class="list-group-item fg-2">There are no lists.</li>
         {% endfor %}
       </ul>
     </div>
@@ -57,12 +57,12 @@
 </div>
 
 {% if global_optout %}
-  <div class="alert alert-warning mt-4 d-flex flex-wrap align-items-center gap-3" role="status">
+  <div class="alert theme-warning mt-7 d-flex flex-wrap align-items-center gap-5" role="status">
     <div class="me-auto"><i class="bi bi-slash-circle me-1" aria-hidden="true"></i>You asked to receive <strong>no email from any sender</strong> using our mail service{{ {lift_pending: ' (withdrawal being passed on to the mail service)', pending: ' (being passed on to the mail service)'}[global_optout.cgo_status] ?? '' }}. Withdrawing it does not re-subscribe you to our lists.</div>
     {% if global_optout.cgo_status != 'lift_pending' %}
       <form method="post" action="{{ path('global_optout_withdraw') }}">
         <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-        <button class="btn btn-sm btn-outline-secondary" type="submit">Withdraw this request</button>
+        <button class="btn-sm btn-outline theme-secondary" type="submit">Withdraw this request</button>
       </form>
     {% endif %}
   </div>

@@ -32,6 +32,12 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('settings.manage')]
 final class SettingsController extends AbstractController
 {
+    /**
+     * Groups only administrators may see or change: the transactional SMTP server receives every
+     * sign-in link, so whoever can point it elsewhere can sign in as anyone, administrators included.
+     */
+    private const ADMINISTRATOR_ONLY = ['smtp'];
+
     public function __construct(
         private readonly RuntimeSettings $settings,
         private readonly FormFactoryInterface $forms,
@@ -39,15 +45,16 @@ final class SettingsController extends AbstractController
     }
 
     #[Route('/settings', name: 'admin_settings', methods: ['GET'])]
-    public function index(): Response
+    public function index(#[CurrentUser] SubscriberUser $user): Response
     {
-        return $this->page();
+        return $this->page($user);
     }
 
     #[Route('/settings/{group}', name: 'admin_settings_save', requirements: ['group' => '[a-z_]+'], methods: ['POST'])]
     public function save(string $group, Request $request, #[CurrentUser] SubscriberUser $user): Response
     {
         $label = $this->groupLabel($group);
+        $this->denyUnlessAllowed($group, $user);
         $form = $this->groupForm($group);
         $form->handleRequest($request);
         if (!$form->isSubmitted()) {
@@ -65,7 +72,7 @@ final class SettingsController extends AbstractController
                 $form->addError(new FormError($e->getMessage()));
             }
         }
-        return $this->page($group, $form);
+        return $this->page($user, $group, $form);
     }
 
     #[Route('/settings/{group}/reset', name: 'admin_settings_reset', requirements: ['group' => '[a-z_]+'], methods: ['POST'])]
@@ -73,6 +80,7 @@ final class SettingsController extends AbstractController
     public function reset(string $group, #[CurrentUser] SubscriberUser $user): Response
     {
         $label = $this->groupLabel($group);
+        $this->denyUnlessAllowed($group, $user);
         $this->settings->resetGroup($group, $user->id);
         $this->addFlash('info', $label . ': every setting now comes from .env or its default.');
         return $this->redirect($this->generateUrl('admin_settings') . '#' . $group);
@@ -84,27 +92,36 @@ final class SettingsController extends AbstractController
     public function resetSetting(string $name, #[CurrentUser] SubscriberUser $user): Response
     {
         $group = SettingsCatalogue::names()[$name] ?? throw $this->createNotFoundException('Unknown setting.');
+        $this->denyUnlessAllowed($group, $user);
         $this->settings->resetSetting($name, $user->id);
         $this->addFlash('info', SettingsCatalogue::GROUPS[$group]['settings'][$name]['label'] . ' now comes from ' . ($this->settings->source($name) === RuntimeSettings::SOURCE_ENV ? '.env.' : 'its default.'));
         return $this->redirect($this->generateUrl('admin_settings') . '#' . $group);
     }
 
-    /** The page, with $submitted (and its tab active) in place of a fresh form for $active. */
-    private function page(?string $active = null, ?FormInterface $submitted = null): Response
+    private function denyUnlessAllowed(string $group, SubscriberUser $user): void
     {
+        if (in_array($group, self::ADMINISTRATOR_ONLY, true) && !$user->isAdministrator()) {
+            throw $this->createAccessDeniedException('Only administrators can change these settings.');
+        }
+    }
+
+    /** The page, with $submitted (and its tab active) in place of a fresh form for $active. */
+    private function page(SubscriberUser $user, ?string $active = null, ?FormInterface $submitted = null): Response
+    {
+        $groups = $user->isAdministrator() ? SettingsCatalogue::GROUPS : array_diff_key(SettingsCatalogue::GROUPS, array_flip(self::ADMINISTRATOR_ONLY));
         $forms = [];
         $fields = [];
-        foreach (SettingsCatalogue::GROUPS as $group => $definition) {
+        foreach ($groups as $group => $definition) {
             $forms[$group] = ($group === $active && $submitted !== null ? $submitted : $this->groupForm($group))->createView();
             foreach ($definition['settings'] as $name => $setting) {
                 $fields[$name] = $this->field($name, $setting);
             }
         }
         return $this->render('admin/settings.html.twig', [
-            'groups' => SettingsCatalogue::GROUPS,
+            'groups' => $groups,
             'forms' => $forms,
             'fields' => $fields,
-            'active' => $active ?? array_key_first(SettingsCatalogue::GROUPS),
+            'active' => $active ?? array_key_first($groups),
             'cipher_problem' => $this->settings->cipherProblem(),
         ], new Response(status: $submitted !== null ? Response::HTTP_UNPROCESSABLE_ENTITY : Response::HTTP_OK));
     }

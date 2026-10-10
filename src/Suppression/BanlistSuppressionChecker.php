@@ -40,6 +40,11 @@ final class BanlistSuppressionChecker implements SuppressionChecker
 
     public function suppressEmail(string $email, string $type, string $reason): bool
     {
+        // Stored as isSuppressed() looks it up: after the v5 cleanup rules (bulk input arrives uncorrected).
+        $email = EmailNormaliser::correct($email);
+        if (!EmailNormaliser::isValid($email)) {
+            return false;
+        }
         try {
             $this->banlist->executeStatement(
                 'INSERT INTO globalunsubscribe (gu_api, gu_domain, gu_email, gu_type, gu_reason)
@@ -64,13 +69,18 @@ final class BanlistSuppressionChecker implements SuppressionChecker
 
     public function suppressDomain(string $domain, string $type): bool
     {
-        $this->banlist->executeStatement(
-            'INSERT INTO globaldomainunsubscribe (gdu_api, gdu_domain, gdu_domain_name, gdu_type)
-             VALUES (:api, :domain, :name, :type)
-             ON CONFLICT (gdu_domain_name) DO UPDATE
-             SET gdu_active = 1, gdu_api = EXCLUDED.gdu_api, gdu_domain = EXCLUDED.gdu_domain, gdu_type = EXCLUDED.gdu_type',
-            ['api' => $this->site->instanceId, 'domain' => $this->site->domain, 'name' => $domain, 'type' => $type]
-        );
-        return true;
+        try {
+            $this->banlist->executeStatement(
+                'INSERT INTO globaldomainunsubscribe (gdu_api, gdu_domain, gdu_domain_name, gdu_type)
+                 VALUES (:api, :domain, :name, :type)
+                 ON CONFLICT (gdu_domain_name) DO UPDATE
+                 SET gdu_active = 1, gdu_api = EXCLUDED.gdu_api, gdu_domain = EXCLUDED.gdu_domain, gdu_type = EXCLUDED.gdu_type',
+                ['api' => $this->site->instanceId, 'domain' => $this->site->domain, 'name' => $domain, 'type' => $type]
+            );
+            return true;
+        } catch (\Throwable $e) {
+            $this->logger->error('Global domain unsubscribe save failed: {message}', ['message' => $e->getMessage()]);
+            return false;
+        }
     }
 }

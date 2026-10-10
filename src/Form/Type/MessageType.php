@@ -45,7 +45,7 @@ final class MessageType extends AbstractType
             ->add('fromName', TextType::class, $text + ['label' => 'From name', 'attr' => ['maxlength' => 100]])
             ->add('fromAddress', TextType::class, $text + ['label' => 'From address', 'attr' => ['maxlength' => 254, 'inputmode' => 'email']])
             ->add('priority', IntegerType::class, $number + ['label' => 'Priority'])
-            ->add('maxSend', IntegerType::class, $number + ['label' => 'Maximum sends', 'help' => '0 for no limit.', 'attr' => ['min' => 0]]);
+            ->add('maxSend', IntegerType::class, $number + ['label' => 'Maximum sends', 'help' => 'The queue stops sending this message once this many have been sent (0 sends none).', 'attr' => ['min' => 0]]);
     }
 
     public function configureOptions(OptionsResolver $resolver): void

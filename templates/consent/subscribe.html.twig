@@ -13,24 +13,24 @@
 {% block content %}
 {% if memberships is defined %}
   {% embed 'layout/_page_header.html.twig' with {title: 'Subscribe', description: 'Choose the lists you want to receive. Each list needs its own confirmation, and you can unsubscribe at any time.'} %}
-    {% block actions %}<a class="btn btn-outline-secondary" href="{{ path('profile') }}"><i class="bi bi-person me-1" aria-hidden="true"></i>My profile</a>{% endblock %}
+    {% block actions %}<a class="btn-outline theme-secondary" href="{{ path('profile') }}"><i class="bi bi-person me-1" aria-hidden="true"></i>My profile</a>{% endblock %}
   {% endembed %}
   <div class="list-group app-narrow ms-0">
     {% for membership in memberships %}
       {% set state = ui.membership_state(membership)|trim %}
-      <div class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2 py-3">
+      <div class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-3 py-5">
         <div class="me-auto">
           <div class="fw-semibold">{{ membership.l_name }} {{ ui.membership_badge(state) }}</div>
-          {% if membership.l_description %}<div class="small text-body-secondary">{{ membership.l_description }}</div>{% endif %}
+          {% if membership.l_description %}<div class="small fg-2">{{ membership.l_description }}</div>{% endif %}
         </div>
         {% if state == 'confirmed' %}
-          <a class="btn btn-sm btn-outline-secondary" href="{{ path('consent_unsubscribe', {token: app.user.uuid, shortcode: membership.l_shortcode}) }}">Unsubscribe</a>
+          <a class="btn-sm btn-outline theme-secondary" href="{{ path('consent_unsubscribe', {token: app.user.uuid, shortcode: membership.l_shortcode}) }}">Unsubscribe</a>
         {% else %}
-          <a class="btn btn-sm btn-primary" href="{{ path('consent_confirm', {token: app.user.uuid, shortcode: membership.l_shortcode}) }}">{{ state == 'pending' ? 'Confirm' : 'Subscribe' }}</a>
+          <a class="btn-sm btn-solid theme-primary" href="{{ path('consent_confirm', {token: app.user.uuid, shortcode: membership.l_shortcode}) }}">{{ state == 'pending' ? 'Confirm' : 'Subscribe' }}</a>
         {% endif %}
       </div>
     {% else %}
-      <div class="list-group-item text-body-secondary">There are no lists to subscribe to.</div>
+      <div class="list-group-item fg-2">There are no lists to subscribe to.</div>
     {% endfor %}
   </div>
 {% else %}
@@ -55,14 +55,16 @@
           {% set descriptions = {} %}
           {% for list in lists %}{% set descriptions = descriptions|merge({('l' ~ list.l_id): list.l_description}) %}{% endfor %}
           <fieldset class="mb-0"{% if not form.listId.vars.valid %} aria-describedby="{{ form.listId.vars.id }}_error1"{% endif %}>
-            <legend class="form-label fs-6 required">{{ form.listId.vars.label }}</legend>
+            <legend class="form-label fs-md required">{{ form.listId.vars.label }}</legend>
             {{ form_errors(form.listId) }}
             {% for choice in form.listId %}
               {% set description = descriptions['l' ~ choice.vars.value] ?? '' %}
-              <div class="form-check mb-2">
-                <input class="form-check-input" type="radio" id="{{ choice.vars.id }}" name="{{ choice.vars.full_name }}" value="{{ choice.vars.value }}"{{ choice.vars.checked ? ' checked' }}{% if description %} aria-describedby="{{ choice.vars.id }}_help"{% endif %}>
-                <label class="form-check-label fw-semibold" for="{{ choice.vars.id }}">{{ choice.vars.label }}</label>
-                {% if description %}<div class="form-text mt-0" id="{{ choice.vars.id }}_help">{{ description }}</div>{% endif %}
+              <div class="form-field mb-3">
+                <input class="radio" type="radio" id="{{ choice.vars.id }}" name="{{ choice.vars.full_name }}" value="{{ choice.vars.value }}"{{ choice.vars.checked ? ' checked' }}{% if description %} aria-describedby="{{ choice.vars.id }}_help"{% endif %}>
+                <div class="form-field-content">
+                  <label class="fw-semibold" for="{{ choice.vars.id }}">{{ choice.vars.label }}</label>
+                  {% if description %}<small class="form-text" id="{{ choice.vars.id }}_help">{{ description }}</small>{% endif %}
+                </div>
               </div>
               {% do choice.setRendered %}
             {% endfor %}
@@ -70,8 +72,8 @@
           </fieldset>
         {% endif %}
       </div>
-      <div class="card-footer d-flex flex-wrap align-items-center gap-3">
-        <button class="btn btn-primary" type="submit"><i class="bi bi-envelope-check me-1" aria-hidden="true"></i>Subscribe</button>
+      <div class="card-footer d-flex flex-wrap align-items-center gap-5">
+        <button class="btn-solid theme-primary" type="submit"><i class="bi bi-envelope-check me-1" aria-hidden="true"></i>Subscribe</button>
         <a class="small" href="{{ path('login') }}">Already subscribed? Sign in to manage your lists</a>
       </div>
     {{ form_end(form) }}

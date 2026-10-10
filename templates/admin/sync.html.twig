@@ -8,14 +8,14 @@
   <div class="card-body">
     <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
     {% if targets == 0 %}
-      <p class="mb-0 text-body-secondary">No active synchronisation targets are configured; synchronising does nothing.</p>
+      <p class="mb-0 fg-2">No active synchronisation targets are configured; synchronising does nothing.</p>
     {% else %}
       <p class="mb-0">{{ targets }} active target{{ targets == 1 ? '' : 's' }} configured. This can take a long time.</p>
     {% endif %}
   </div>
-  <div class="card-footer d-flex flex-wrap gap-2">
-    <button class="btn btn-primary" type="submit"{{ targets == 0 ? ' disabled' }}><i class="bi bi-arrow-left-right me-1" aria-hidden="true"></i>Synchronise now</button>
-    <a class="btn btn-outline-secondary" href="{{ path('admin_subscribers') }}">Cancel</a>
+  <div class="card-footer d-flex flex-wrap gap-3">
+    <button class="btn-solid theme-primary" type="submit"{{ targets == 0 ? ' disabled' }}><i class="bi bi-arrow-left-right me-1" aria-hidden="true"></i>Synchronise now</button>
+    <a class="btn-outline theme-secondary" href="{{ path('admin_subscribers') }}">Cancel</a>
   </div>
 </form>
 {% endblock %}

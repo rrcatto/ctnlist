@@ -11,6 +11,7 @@ use App\CattoMail\CattoMailUnavailable;
 use App\CattoMail\OutgoingMessageFactory;
 use App\CattoMail\OutgoingRecipient;
 use App\CattoMail\SendOutcome;
+use App\Maintenance\DatabaseLock;
 use App\Repository\MembershipRepository;
 use App\Repository\MessageRepository;
 use App\Repository\OptionRepository;
@@ -28,7 +29,8 @@ use Psr\Clock\ClockInterface;
  * here for its recipient (catto-mail performs no mail merge) and staged in
  * the catto-mail outbox in the same transaction that removes its queue row;
  * the run's send jobs are then submitted (CattoMailSender). Recipients whose
- * address hard-bounced or complained are no longer sent to.
+ * address hard-bounced or complained are no longer sent to. One run at a
+ * time (DatabaseLock::QUEUE).
  */
 final class QueueProcessor
 {
@@ -47,6 +49,7 @@ final class QueueProcessor
         private readonly OutgoingMessageFactory $outgoing,
         private readonly OptionRepository $options,
         private readonly ClockInterface $clock,
+        private readonly DatabaseLock $lock,
     ) {
     }
 
@@ -56,27 +59,35 @@ final class QueueProcessor
         if ($problem !== null) {
             return SendOutcome::of(0, 0, $problem, false);
         }
-        if ($this->options->get(self::CURRENTLY_SENDING) === 'Y') {
+        // The lock, not the CurrentlySending flag, decides: a run killed by a time limit, a PHP-FPM
+        // reload or a reboot never resets the flag, but the database frees its lock.
+        if (!$this->lock->acquire(DatabaseLock::QUEUE)) {
             return SendOutcome::of(0, 0, 'The queue is already being sent.', true);
         }
-        $this->options->set(self::SEND_QUEUE, 'Y');
-        $this->options->set(self::CURRENTLY_SENDING, 'Y');
-
-        $run = $this->sender->startRun('campaign', $muid);
-        $staged = 0;
-        $problem = null;
-        $retryable = true;
         try {
-            $staged = $this->stage($run, $muid, max(0, $limit), $problem);
-        } catch (CattoMailException $e) {
-            $problem = $e->getMessage();
-            $retryable = $e instanceof CattoMailUnavailable;
-        } finally {
+            $this->options->set(self::SEND_QUEUE, 'Y');
+            $this->options->set(self::CURRENTLY_SENDING, 'Y');
+
+            $run = $this->sender->startRun('campaign', $muid);
+            $staged = 0;
+            $problem = null;
+            $retryable = true;
             try {
-                $finished = $this->sender->finishRun($run, 0);
+                $staged = $this->stage($run, $muid, max(0, $limit), $problem);
+                // The message itself stopped the run (no content, maximum reached): nothing to retry.
+                $retryable = $problem === null;
+            } catch (CattoMailException $e) {
+                $problem = $e->getMessage();
+                $retryable = $e instanceof CattoMailUnavailable;
             } finally {
-                $this->options->set(self::CURRENTLY_SENDING, 'N');
+                try {
+                    $finished = $this->sender->finishRun($run, 0);
+                } finally {
+                    $this->options->set(self::CURRENTLY_SENDING, 'N');
+                }
             }
+        } finally {
+            $this->lock->release(DatabaseLock::QUEUE);
         }
         $problem ??= $finished->problem;
         $retryable = $retryable && ($finished->problem === null || $finished->status !== SendOutcome::FAILED);
@@ -120,6 +131,8 @@ final class QueueProcessor
                     continue;
                 }
                 if ($message['m_sent'] >= $message['m_max_send']) {
+                    $problem = 'Message ' . $message['m_uniqid'] . ' has reached its maximum of ' . $message['m_max_send']
+                        . ' sends (Maximum sends on the message); the rest stays queued.';
                     return $staged;
                 }
 

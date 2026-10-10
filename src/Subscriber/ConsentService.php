@@ -93,15 +93,18 @@ final class ConsentService
     {
         $reason = trim($reason);
         $global = in_array($scope, ['global', 'bounce', 'spam'], true);
+        $suppressed = false;
         if ($global) {
             $this->memberships->unsubscribeAll($id, $reason, $this->now());
             $type = ['global' => 'USER', 'bounce' => 'BOUNCE', 'spam' => 'SPAM'][$scope];
             if ($byAdministrator) {
                 $type = $scope === 'global' ? 'ADMIN' : $type . '-ADMIN';
             }
-            $this->suppression->suppressEmail($email, $type, $reason);
-        } else {
-            $this->memberships->unsubscribe($id, $list['l_id'], $reason, $this->now());
+            $suppressed = $this->suppression->suppressEmail($email, $type, $reason);
+        } elseif (!$this->memberships->unsubscribe($id, $list['l_id'], $reason, $this->now())) {
+            // Already unsubscribed (a second click, a replayed one-click link): nothing changed,
+            // so nothing is recorded and nobody is notified again.
+            return 'You have been unsubscribed from ' . $list['l_name'] . '.';
         }
 
         $this->engagement->reset($uuid);
@@ -118,9 +121,12 @@ final class ConsentService
                 . '<p>Reason: ' . self::e($why) . '</p><p><a href="' . self::e($resubscribe) . '">Re-subscribe</a></p>',
             "{$email} has been unsubscribed from {$list['l_name']}.\nReason: {$why}\nRe-subscribe: {$resubscribe}\n");
 
-        return $global
+        if (!$global) {
+            return 'You have been unsubscribed from ' . $list['l_name'] . '.';
+        }
+        return $suppressed
             ? 'You have been unsubscribed from all local lists and added to the global suppression database.'
-            : 'You have been unsubscribed from ' . $list['l_name'] . '.';
+            : 'You have been unsubscribed from all local lists, but the global suppression database could not be updated. Please try again later.';
     }
 
     /** @param MailingList $list */

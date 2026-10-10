@@ -1,6 +1,33 @@
 # Changelog
 
-The release history of ctnlist. Versions 5.0.x and 6.0.x are an incremental modernisation of the working v5.0 application; the v5 behaviour they keep, and the deliberate changes from it, are listed in [RESTORED-FUNCTIONALITY.md](RESTORED-FUNCTIONALITY.md).
+The release history of ctnlist. Versions 5.0.x and 6.0.x are an incremental modernisation of the working v5.0 application; the v5 behaviour they keep, and the deliberate changes from it, are listed in [RESTORED-FUNCTIONALITY.md](docs/RESTORED-FUNCTIONALITY.md).
+
+## 6.0.8 (2026-10-10)
+
+The fixes from a defect audit of the whole codebase before deployment, PHP 8.5 as the minimum, and the interface moved to Bootstrap 6:
+- **Security:**
+  - a sign-in link goes only to the subscriber's own stored address: the v5 address cleanup could turn a typed address (`alice@gmail.example.net`, `mailtoalice@gmail.com`) into someone else's, whose account the link then signed in;
+  - only administrators can see or change the transactional SMTP server in Settings, since it receives every sign-in link;
+  - sign-in requests over the rate limits create no subscriber; sign-in drops the CSRF token of the session it replaces;
+  - an administrator's forward is always their own, and a list that is not active cannot be confirmed by a crafted request.
+- **Sending:**
+  - batches to catto-mail are cut by size as well as by count, so newsletters to more than a few hundred people no longer fail on catto-mail's 10 MiB request limit, and a message too large for one upload is refused before anything is staged;
+  - a queue run that dies (time limit, PHP-FPM reload, reboot) no longer blocks every later run: runs are guarded by a database lock instead of the `CurrentlySending` flag, and the PHP-FPM template lets queue runs and imports raise their time limit;
+  - the worker no longer takes a long queue run that is still staging for abandoned, and a recipient never joins a job the worker has already sealed;
+  - a job catto-mail sealed whose handoff ctnlist never recorded is recorded when catto-mail reports it, so its recipients reach the Send Log;
+  - "Maximum sends" says what it does (0 sends none, as in v5), and a run stopped by it says so.
+- **Consent and data:**
+  - unsubscribing again (a second click, a replayed one-click link) changes nothing, sends no further notifications and keeps the reason given first; a global unsubscribe says when the suppression database could not be updated;
+  - bulk bounce and spam suppressions are stored as the suppression lookup searches for them, and a suppression database outage no longer interrupts a bulk domain suppression;
+  - times that PostgreSQL fills in (consent events, memberships, the queue, smlog, roles) are now local time like everything else, not UTC;
+  - a subscriber's priority stops at the column's maximum instead of overflowing.
+- **Operations:** the application log keeps notices and warnings (recovery actions, settings changes, catto-mail failures), which were silently dropped; `ctnlist:diagnose` requires PostgreSQL 16; the nginx template's plain-HTTP block logs without query strings like the HTTPS one, so a sign-in link opened over `http://` leaves no token in the access log; README spells out the banlist migration's `GDB_ENV_DIRECTORY` and the `logs/` permissions, and describes the production catto-mail check correctly.
+- **Tests:** the route smoke test no longer accepts a redirect on administration pages that should render, and the consent tables' append-only and delete protections are tested.
+- **Requirements:** PHP 8.5 is now the minimum (it was 8.4.1): the development stack and the new server both run 8.5.
+- **Bootstrap 6:** the interface moves from Bootstrap 5.3.8 to 6.0.0-alpha.1. Pages look much the same; on phones the site and administration menus open as side drawers. Bootstrap 6 supports only recent browsers (Chrome and Edge 130, Firefox 132, Safari 18, or later) and is a pre-release, so its class names can still change. The site keeps the light colour mode whatever the visitor's system setting.
+- **Documentation:** project documentation now lives in `docs/`: instructions for a Claude project about ctnlist, a status page, and `RESTORED-FUNCTIONALITY.md`, moved there from the top of the repository.
+
+Still to be run once the new production server exists: transactional SMTP, the banlist database and catto-mail end to end (README "Release checklist").
 
 ## 6.0.7 (2026-10-09)
 
@@ -91,7 +118,7 @@ Starts the move from the Fat-Free Framework to Symfony 8.1, keeping the behaviou
 
 ## 5.0.1-restored (2026-10-03)
 
-The working v5.0 application's behaviour restored on top of the approved v5.0.1 technical and data-model upgrades; see [RESTORED-FUNCTIONALITY.md](RESTORED-FUNCTIONALITY.md).
+The working v5.0 application's behaviour restored on top of the approved v5.0.1 technical and data-model upgrades; see [RESTORED-FUNCTIONALITY.md](docs/RESTORED-FUNCTIONALITY.md).
 
 ## Symfony migration
 

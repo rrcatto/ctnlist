@@ -28,14 +28,19 @@ use Psr\Log\LoggerInterface;
  */
 final class CattoMailSender
 {
+    /** The JSON envelope of a batch upload, {"recipients":[]}. */
+    private const BATCH_ENVELOPE_BYTES = 17;
+    /** Stands in for a recipient's external reference (a UUID, assigned on insert) when sizing it. */
+    private const UUID_PLACEHOLDER = '00000000-0000-0000-0000-000000000000';
+
     private int $batchMax = CattoMailConfig::MAX_BATCH_RECIPIENTS;
     private int $jobMax = CattoMailConfig::MAX_JOB_RECIPIENTS;
 
     /**
      * The run's open jobs: run id => (OutgoingMessage key => job id, its open
-     * batch and the counts staged so far in this process).
+     * batch and the counts and JSON size staged so far in this process).
      *
-     * @var array<int, array<string, array{job: int, batch: int, batch_count: int, total: int}>>
+     * @var array<int, array<string, array{job: int, batch: int, batch_count: int, batch_bytes: int, total: int}>>
      */
     private array $openJobs = [];
 
@@ -80,29 +85,53 @@ final class CattoMailSender
      */
     public function stage(int $runId, OutgoingMessage $message, OutgoingRecipient $recipient, ?\Closure $alsoInTransaction = null): void
     {
-        $open = $this->openJob($runId, $message);
         $key = $message->key();
         $unsubscribe = $message->messageClass === OutgoingMessage::SUBSCRIPTION && $recipient->subscriberUuid !== null
             ? $this->links->url($recipient->subscriberUuid, $message->listShortcode, $message->muid)
             : null;
-        $this->outbox->transactional(function () use ($open, $message, $recipient, $unsubscribe, $alsoInTransaction): void {
-            $this->outbox->addRecipient($open['job'], $open['batch'], [
-                'email' => trim($recipient->email),
-                'subscriber_uuid' => $recipient->subscriberUuid,
-                'muid' => $message->muid,
-                'list' => $message->listShortcode,
-                'type' => $recipient->type,
-                // catto-mail requires a subject; the content is otherwise sent exactly as rendered.
-                'subject' => trim($recipient->subject) !== '' ? $recipient->subject : '(no subject)',
-                'html' => $recipient->html,
-                'text' => $recipient->text,
-                'unsubscribe_url' => $unsubscribe,
-            ]);
-            if ($alsoInTransaction !== null) {
-                $alsoInTransaction();
+        $fields = [
+            'email' => trim($recipient->email),
+            'subscriber_uuid' => $recipient->subscriberUuid,
+            'muid' => $message->muid,
+            'list' => $message->listShortcode,
+            'type' => $recipient->type,
+            // catto-mail requires a subject; the content is otherwise sent exactly as rendered.
+            'subject' => trim($recipient->subject) !== '' ? $recipient->subject : '(no subject)',
+            'html' => $recipient->html,
+            'text' => $recipient->text,
+            'unsubscribe_url' => $unsubscribe,
+        ];
+        // Batches are cut by size as well as by count: each recipient carries its own rendered copy,
+        // and catto-mail refuses a request over 10 MiB.
+        $bytes = CattoMailClient::jsonSize(self::payload(self::UUID_PLACEHOLDER, $fields['email'], $fields['subject'], $fields['html'], $fields['text'], $unsubscribe)) + 1;
+        if (self::BATCH_ENVELOPE_BYTES + $bytes > CattoMailConfig::MAX_BATCH_BYTES) {
+            throw new CattoMailRejected(sprintf('Message %s is too large to send: one copy is %.1f MB as uploaded to catto-mail, over the %d MB limit per upload. '
+                . 'Make it smaller, for example by linking images instead of embedding them.', $message->muid, $bytes / 1048576, intdiv(CattoMailConfig::MAX_BATCH_BYTES, 1048576)), 0, 'content-too-large');
+        }
+
+        // A run the worker took for abandoned has its jobs sealed: a recipient never joins a sealed
+        // job (it would never be uploaded); the run goes on in a new job.
+        do {
+            $open = $this->openJob($runId, $message);
+            if ($open['batch_count'] > 0 && self::BATCH_ENVELOPE_BYTES + $open['batch_bytes'] + $bytes > CattoMailConfig::MAX_BATCH_BYTES) {
+                $open = $this->nextBatch($runId, $key, $open);
             }
-        });
+            $added = $this->outbox->transactional(function () use ($open, $fields, $alsoInTransaction): bool {
+                if (!$this->outbox->lockOpenJob($open['job'])) {
+                    return false;
+                }
+                $this->outbox->addRecipient($open['job'], $open['batch'], $fields);
+                if ($alsoInTransaction !== null) {
+                    $alsoInTransaction();
+                }
+                return true;
+            });
+            if (!$added) {
+                unset($this->openJobs[$runId][$key]);
+            }
+        } while (!$added);
         $open['batch_count']++;
+        $open['batch_bytes'] += $bytes;
         $open['total']++;
         $this->openJobs[$runId][$key] = $open;
 
@@ -112,15 +141,47 @@ final class CattoMailSender
             $this->outbox->closeJob($open['job']);
             $this->flushJob($open['job']);
         } elseif ($open['batch_count'] >= $this->batchMax) {
-            $this->outbox->closeBatch($open['batch']);
-            $this->openJobs[$runId][$key]['batch'] = $this->outbox->newBatch($open['job']);
-            $this->openJobs[$runId][$key]['batch_count'] = 0;
-            $job = $this->outbox->job($open['job']);
-            $batch = $this->outbox->batch($open['batch']);
-            if ($job !== null && $batch !== null) {
-                $this->upload($job, $batch);
-            }
+            $this->nextBatch($runId, $key, $open);
         }
+    }
+
+    /**
+     * Close the open batch, upload it and open the job's next one.
+     *
+     * @param array{job: int, batch: int, batch_count: int, batch_bytes: int, total: int} $open
+     * @return array{job: int, batch: int, batch_count: int, batch_bytes: int, total: int}
+     */
+    private function nextBatch(int $runId, string $key, array $open): array
+    {
+        $this->outbox->closeBatch($open['batch']);
+        $next = ['batch' => $this->outbox->newBatch($open['job']), 'batch_count' => 0, 'batch_bytes' => 0] + $open;
+        $this->openJobs[$runId][$key] = $next;
+        $job = $this->outbox->job($open['job']);
+        $batch = $this->outbox->batch($open['batch']);
+        if ($job !== null && $batch !== null) {
+            $this->upload($job, $batch);
+        }
+        return $next;
+    }
+
+    /**
+     * One recipient as catto-mail receives it in a batch.
+     *
+     * @return array<string, string>
+     */
+    private static function payload(string $reference, string $email, string $subject, ?string $html, ?string $text, ?string $unsubscribeUrl): array
+    {
+        $recipient = ['external_recipient_reference' => $reference, 'email_address' => $email, 'subject' => $subject];
+        if (trim((string) $html) !== '') {
+            $recipient['html_body'] = (string) $html;
+        }
+        if (trim((string) $text) !== '') {
+            $recipient['text_body'] = (string) $text;
+        }
+        if ($unsubscribeUrl !== null) {
+            $recipient['unsubscribe_url'] = $unsubscribeUrl;
+        }
+        return $recipient;
     }
 
     /**
@@ -211,7 +272,7 @@ final class CattoMailSender
      * The run's open job for this message/list/sender, creating it (locally
      * and at catto-mail) with its first batch when needed.
      *
-     * @return array{job: int, batch: int, batch_count: int, total: int}
+     * @return array{job: int, batch: int, batch_count: int, batch_bytes: int, total: int}
      */
     private function openJob(int $runId, OutgoingMessage $message): array
     {
@@ -235,7 +296,7 @@ final class CattoMailSender
             $request['list_id'] = $message->listId;
         }
         $job = $this->outbox->createJob($runId, $message->muid, $message->listShortcode, $message->messageClass, $request);
-        $open = ['job' => $job['csj_id'], 'batch' => $this->outbox->newBatch($job['csj_id']), 'batch_count' => 0, 'total' => 0];
+        $open = ['job' => $job['csj_id'], 'batch' => $this->outbox->newBatch($job['csj_id']), 'batch_count' => 0, 'batch_bytes' => 0, 'total' => 0];
         $this->openJobs[$runId][$key] = $open;
         $this->ensureRemote($job);
         return $open;
@@ -276,21 +337,7 @@ final class CattoMailSender
         $job = $this->ensureRemote($job);
         $recipients = [];
         foreach ($this->outbox->batchRecipients($batch['cb_id']) as $row) {
-            $recipient = [
-                'external_recipient_reference' => $row['crp_uuid'],
-                'email_address' => $row['crp_email'],
-                'subject' => $row['crp_subject'],
-            ];
-            if (trim((string) $row['crp_html']) !== '') {
-                $recipient['html_body'] = (string) $row['crp_html'];
-            }
-            if (trim((string) $row['crp_text']) !== '') {
-                $recipient['text_body'] = (string) $row['crp_text'];
-            }
-            if ($row['crp_unsubscribe_url'] !== null) {
-                $recipient['unsubscribe_url'] = $row['crp_unsubscribe_url'];
-            }
-            $recipients[] = $recipient;
+            $recipients[] = self::payload($row['crp_uuid'], $row['crp_email'], $row['crp_subject'], $row['crp_html'], $row['crp_text'], $row['crp_unsubscribe_url']);
         }
         if ($recipients === []) {
             return;
@@ -316,8 +363,21 @@ final class CattoMailSender
             $this->jobFailure($job, $e);
             throw $e;
         }
-        return $this->outbox->transactional(function () use ($job, $remote): int {
-            $this->outbox->markJobSubmitted($job['csj_id'], (string) ($remote['status'] ?? 'queued'));
+        return $this->recordSubmission($job, (string) ($remote['status'] ?? 'queued'));
+    }
+
+    /**
+     * catto-mail has sealed the job: its recipients are handed off (Send Log, and smlog for
+     * subscribers). Also used by SendJobSync when catto-mail reports a job sealed whose submission
+     * ctnlist never recorded (the process stopped between catto-mail's answer and this transaction).
+     *
+     * @param SendJob $job
+     * @return int recipients handed off
+     */
+    public function recordSubmission(array $job, string $remoteStatus): int
+    {
+        return $this->outbox->transactional(function () use ($job, $remoteStatus): int {
+            $this->outbox->markJobSubmitted($job['csj_id'], $remoteStatus);
             $recipients = $this->outbox->handOff($job['csj_id']);
             foreach ($recipients as $recipient) {
                 // The handoff to catto-mail is this delivery's successful handoff (invariant: Send Log).

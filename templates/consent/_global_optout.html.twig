@@ -2,17 +2,17 @@
   The explicit "no email from any sender" request (catto-mail global opt-out).
   Shown only when the capability is enabled; never part of an ordinary unsubscribe.
 #}
-<div class="card border-danger-subtle mt-4 app-narrow ms-0" id="no-contact">
+<div class="card border-subtle-danger mt-7 app-narrow ms-0" id="no-contact">
   <div class="card-body">
     <h2 class="h6"><i class="bi bi-slash-circle me-1" aria-hidden="true"></i>Stop email from every sender using our mail service</h2>
-    <p class="small mb-2">Unsubscribing only affects {{ site.listName }}. This is different: it asks the mail delivery service we use (catto-mail) to send you <strong>no email at all, from any sender</strong> that uses it, not just from us. It also unsubscribes you from all our lists. You can withdraw it later on your profile page; withdrawing does not re-subscribe you to anything.</p>
+    <p class="small mb-3">Unsubscribing only affects {{ site.listName }}. This is different: it asks the mail delivery service we use (catto-mail) to send you <strong>no email at all, from any sender</strong> that uses it, not just from us. It also unsubscribes you from all our lists. You can withdraw it later on your profile page; withdrawing does not re-subscribe you to anything.</p>
     <form method="post" action="{{ path('global_optout') }}" data-confirm="Stop all email to you from every sender using this mail service?">
       <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-      <div class="form-check mb-2">
-        <input class="form-check-input" type="checkbox" name="confirm" value="yes" id="no-contact-confirm" required>
-        <label class="form-check-label small" for="no-contact-confirm">I understand: no email from any sender using this mail service, and unsubscribed from all {{ site.listName }} lists.</label>
+      <div class="form-field mb-3">
+        <input class="check" type="checkbox" name="confirm" value="yes" id="no-contact-confirm" required>
+        <label class="small" for="no-contact-confirm">I understand: no email from any sender using this mail service, and unsubscribed from all {{ site.listName }} lists.</label>
       </div>
-      <button class="btn btn-sm btn-outline-danger" type="submit">Send me no email from any sender</button>
+      <button class="btn-sm btn-outline theme-danger" type="submit">Send me no email from any sender</button>
     </form>
   </div>
 </div>

@@ -83,6 +83,12 @@ final class RouteSmokeTest extends SmokeTestCase
         parent::tearDownAfterClass();
     }
 
+    /**
+     * Routes that hand the administrator on with a redirect instead of rendering: /profile to
+     * their own profile page, /profile/image to the placeholder while they have no picture.
+     */
+    private const REDIRECTS = ['/profile', '/profile/image'];
+
     /** Routes open to everyone. */
     private const PUBLIC = [
         '/', '/index', '/home', '/privacy', '/proof-link', '/login', '/auth/verify?token={signin}', '/subscribe', '/health',
@@ -185,10 +191,11 @@ final class RouteSmokeTest extends SmokeTestCase
             self::assertSame(404, $response['status'], $route . ' (archives disabled)');
             return;
         }
-        // /profile hands the administrator on to their own profile page.
-        self::assertContains($response['status'], [200, 302], $route);
-        if ($response['status'] === 302) {
+        if (in_array($route, self::REDIRECTS, true)) {
+            self::assertSame(302, $response['status'], $route);
             self::assertStringNotContainsString('/login', $response['location'], $route);
+        } else {
+            self::assertSame(200, $response['status'], $route . ' renders (a redirect here would hide an error page or a flash)');
         }
         self::assertCleanPage($route, $response['body']);
     }

@@ -70,7 +70,7 @@ final class RoleAdministrationTest extends SmokeTestCase
 
         $search = self::request($admin, 'GET', '/roles?q=smoke-member')['body'];
         self::assertStringContainsString(self::MEMBER_EMAIL, $search, 'search finds the subscriber');
-        self::assertMatchesRegularExpression('#<span class="badge text-bg-dark me-1">Subscriber</span>#', $search, 'current roles shown');
+        self::assertMatchesRegularExpression('#<span class="badge theme-inverse me-1">Subscriber</span>#', $search, 'current roles shown');
         self::assertStringContainsString('Role assigned.', self::post($admin, '/roles/assign', ['subscriber_id' => (string) self::$memberId, 'role_key' => $key, 'back' => '/roles?q=smoke-member'], '/roles'));
         self::assertStringContainsString('already holds', self::post($admin, '/roles/assign', ['subscriber_id' => (string) self::$memberId, 'role_key' => $key], '/roles'));
         foreach (['https://evil.example/roles', '//evil.example/roles', '/roles/../logout', "/roles\r\nX: y", '/rolesevil'] as $back) {

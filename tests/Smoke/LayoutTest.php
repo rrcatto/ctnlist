@@ -120,7 +120,7 @@ final class LayoutTest extends SmokeTestCase
         self::assertStringContainsString('href="/privacy"', $body);
         // The configured telephone number, as v5's footer showed it.
         self::withSetting('APP_TELEPHONE', '+27 21 555 0100', static function (): void {
-            self::assertStringContainsString('<i class="bi bi-telephone me-2" aria-hidden="true"></i>+27 21 555 0100', self::request(self::client(), 'GET', '/privacy')['body']);
+            self::assertStringContainsString('<i class="bi bi-telephone me-3" aria-hidden="true"></i>+27 21 555 0100', self::request(self::client(), 'GET', '/privacy')['body']);
         });
     }
 
@@ -133,7 +133,7 @@ final class LayoutTest extends SmokeTestCase
         foreach (['/profile', '/my/messages', '/edit-profile'] as $href) {
             self::assertStringContainsString('href="' . $href . '"', $body, "account link {$href}");
         }
-        self::assertMatchesRegularExpression('#<form method="post" action="/logout">\s*<input type="hidden" name="csrf"#', $body, 'log out is a POST with the CSRF token');
+        self::assertMatchesRegularExpression('#<form class="d-contents" method="post" action="/logout">\s*<input type="hidden" name="csrf"#', $body, 'log out is a POST with the CSRF token');
         self::assertStringNotContainsString('href="/login"', $body);
         self::assertStringNotContainsString('aria-label="Administration"', $body, 'no permissions, no admin bar');
     }

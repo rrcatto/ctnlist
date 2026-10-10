@@ -11,7 +11,7 @@ use Symfony\Component\HttpClient\Response\MockResponse;
  * 1.0.0-draft.7) at the HTTP boundary, for Symfony's MockHttpClient. It
  * enforces what ctnlist relies on: Bearer authentication, Idempotency-Key
  * semantics (same key + same body replays with Idempotent-Replayed, same key
- * + different body is 422), batch and job limits, duplicate addresses,
+ * + different body is 422), batch, job and request-size (413) limits, duplicate addresses,
  * subscription/transactional unsubscribe rules, submit sealing and the
  * global-opt-out capability. Faults can be injected, including "processed
  * but the response was lost", to prove that retries never duplicate work.
@@ -63,6 +63,10 @@ final class FakeCattoMail
         $fault = $this->takeFault($method . ' ' . $path);
         if ($fault !== null && !$fault['after']) {
             return $this->faultResponse($fault['kind']);
+        }
+        // catto-mail checks the body size before routing or authentication.
+        if (isset($options['body']) && is_string($options['body']) && strlen($options['body']) > \App\CattoMail\CattoMailConfig::MAX_REQUEST_BYTES) {
+            return self::problem(413, 'payload-too-large', sprintf('Request bodies are limited to %d bytes.', \App\CattoMail\CattoMailConfig::MAX_REQUEST_BYTES));
         }
         if (($headers['authorization'] ?? '') !== 'Bearer ' . self::KEY) {
             return self::problem(401, 'unauthorized', 'Missing or invalid API key.');

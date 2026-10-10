@@ -11,18 +11,18 @@
 #}
 {% macro source(field) %}
   {%- if field.source == 'database' -%}
-    <span class="badge text-bg-primary" title="{{ field.override.by ? 'Changed by ' ~ field.override.by : '' }}{{ field.override.at ? ' on ' ~ field.override.at|slice(0, 16) : '' }}">Database</span>
+    <span class="badge theme-primary" title="{{ field.override.by ? 'Changed by ' ~ field.override.by : '' }}{{ field.override.at ? ' on ' ~ field.override.at|slice(0, 16) : '' }}">Database</span>
   {%- elseif field.source == 'env' -%}
-    <span class="badge text-bg-light border">.env</span>
+    <span class="badge badge-subtle theme-secondary">.env</span>
   {%- else -%}
-    <span class="badge text-bg-secondary">Default</span>
+    <span class="badge theme-secondary">Default</span>
   {%- endif -%}
 {% endmacro %}
 
 {# Under a field: the variable name and, for overrides, the inherited value with a reset button. #}
 {% macro origin(name, setting, field) %}
-  <div class="form-text d-flex flex-wrap align-items-center column-gap-2">
-    <code class="text-body-secondary">{{ name }}</code>
+  <div class="form-text d-flex flex-wrap align-items-center column-gap-3">
+    <code class="fg-2">{{ name }}</code>
     {% if field.source == 'database' %}
       <span aria-hidden="true">·</span>
       <span>Without the override:
@@ -30,18 +30,18 @@
         {% elseif field.env is not same as('') %}<code>{{ field.env|length > 60 ? field.env|slice(0, 60) ~ '…' : field.env }}</code> (.env)
         {% elseif field.default %}<code>{{ field.default|length > 60 ? field.default|slice(0, 60) ~ '…' : field.default }}</code> (default)
         {% else %}<em>empty</em>{% endif %}</span>
-      <button class="btn btn-link btn-sm p-0 align-baseline" type="submit" formaction="{{ path('admin_setting_reset', {name: name}) }}" formnovalidate><i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>Reset override</button>
+      <button class="btn-link btn-sm p-0 align-baseline" type="submit" formaction="{{ path('admin_setting_reset', {name: name}) }}" formnovalidate><i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>Reset override</button>
     {% endif %}
   </div>
 {% endmacro %}
 
 {% macro problem(field) %}
-  {% if field.secret_problem %}<div class="alert alert-danger small py-2 mt-2" role="alert"><i class="bi bi-exclamation-octagon me-1" aria-hidden="true"></i>The stored value cannot be used: {{ field.secret_problem }} Mail that needs it fails until it is entered again or the override is reset.</div>{% endif %}
+  {% if field.secret_problem %}<div class="alert theme-danger small py-3 mt-3" role="alert"><i class="bi bi-exclamation-octagon" aria-hidden="true"></i><div>The stored value cannot be used: {{ field.secret_problem }} Mail that needs it fails until it is entered again or the override is reset.</div></div>{% endif %}
 {% endmacro %}
 
 {% block content %}
 {% import _self as s %}
-{% set widths = {full: 'col-12', half: 'col-md-6', third: 'col-md-6 col-xl-4', quarter: 'col-sm-6 col-xl-3'} %}
+{% set widths = {full: 'col-12', half: 'md:col-6', third: 'md:col-6 xl:col-4', quarter: 'sm:col-6 xl:col-3'} %}
 {% include 'layout/_page_header.html.twig' with {title: 'Settings', description: 'Each setting comes from the database (a value changed here), else the installation’s .env file, else a built-in default. Changes apply from the next page or email; .env is never changed. Setting a value back to .env, or resetting it, makes .env apply again. Secret keys, database settings, URLs and paths stay in .env.'} %}
 
 <ul class="nav nav-tabs flex-nowrap text-nowrap overflow-x-auto app-tabs" role="tablist" data-remember-tab>
@@ -49,14 +49,14 @@
     {% set overridden = group.settings|keys|filter(n => fields[n].source == 'database')|length %}
     {% set invalid = not forms[key].vars.valid %}
     <li class="nav-item" role="presentation">
-      <button class="nav-link{{ key == active ? ' active' }}{{ invalid ? ' text-danger' }}" id="tab-{{ key }}" data-bs-toggle="tab" data-bs-target="#pane-{{ key }}" data-tab-hash="{{ key }}" type="button" role="tab" aria-controls="pane-{{ key }}" aria-selected="{{ key == active ? 'true' : 'false' }}">
-        {% if invalid %}<i class="bi bi-exclamation-circle me-1" aria-label="Has errors"></i>{% endif %}{{ group.tab }}{% if overridden %} <span class="badge rounded-pill text-bg-primary ms-1" title="{{ overridden }} set here">{{ overridden }}</span>{% endif %}
+      <button class="nav-link{{ key == active ? ' active' }}{{ invalid ? ' fg-danger' }}" id="tab-{{ key }}" data-bs-toggle="tab" data-bs-target="#pane-{{ key }}" data-tab-hash="{{ key }}" type="button" role="tab" aria-controls="pane-{{ key }}" aria-selected="{{ key == active ? 'true' : 'false' }}">
+        {% if invalid %}<i class="bi bi-exclamation-circle me-1" aria-label="Has errors"></i>{% endif %}{{ group.tab }}{% if overridden %} <span class="badge rounded-pill theme-primary ms-1" title="{{ overridden }} set here">{{ overridden }}</span>{% endif %}
       </button>
     </li>
   {% endfor %}
 </ul>
 
-<div class="tab-content border border-top-0 rounded-bottom p-3 p-md-4 mb-4">
+<div class="tab-content border border-top-0 rounded-bottom p-5 md:p-7 mb-7">
   {% for key, group in groups %}
     {% set form = forms[key] %}
     {% set overridden = group.settings|keys|filter(n => fields[n].source == 'database') %}
@@ -64,44 +64,44 @@
       {{ form_start(form, {attr: {novalidate: 'novalidate'}}) }}
         <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
         <h2 class="h5 mb-1">{{ group.label }}</h2>
-        <p class="small text-body-secondary mb-4">{{ group.description }}</p>
+        <p class="small fg-2 mb-7">{{ group.description }}</p>
 
         {% if key == 'smtp' and cipher_problem %}
-          <div class="alert alert-warning small" role="note"><i class="bi bi-key me-1" aria-hidden="true"></i>SMTP settings can only be changed here once an encryption key is configured: {{ cipher_problem }}</div>
+          <div class="alert theme-warning small" role="note"><i class="bi bi-key" aria-hidden="true"></i><div>SMTP settings can only be changed here once an encryption key is configured: {{ cipher_problem }}</div></div>
         {% endif %}
         {% if not form.vars.valid %}
-          <div class="alert alert-danger" role="alert">
-            {% if form.vars.errors|length %}{{ form_errors(form) }}{% else %}Please correct the fields marked below; nothing was saved.{% endif %}
+          <div class="alert theme-danger" role="alert">
+            <div>{% if form.vars.errors|length %}{{ form_errors(form) }}{% else %}Please correct the fields marked below; nothing was saved.{% endif %}</div>
           </div>
         {% endif %}
 
-        <div class="row g-4">
+        <div class="row g-7">
           {% for name, setting in group.settings %}
             {% set field = fields[name] %}
             {% set child = form[name] %}
             {% if setting.heading is defined %}
-              <div class="col-12 mb-n2"><h3 class="h6 mb-0">{{ setting.heading }}</h3></div>
+              <div class="col-12"><h3 class="h6 mb-0">{{ setting.heading }}</h3></div>
             {% endif %}
 
             {% if setting.type == 'dsn' %}
               <div class="col-12">
-                <fieldset class="border rounded p-3">
-                  <legend class="fs-6 fw-semibold float-none w-auto px-1 mb-0 d-flex align-items-center gap-2">{{ setting.label }} {{ s.source(field) }}</legend>
+                <fieldset class="border rounded p-5">
+                  <legend class="fs-md fw-semibold float-none w-auto px-1 mb-0 d-flex align-items-center gap-3">{{ setting.label }} {{ s.source(field) }}</legend>
                   {{ s.problem(field) }}
-                  {% if field.dsn.other %}<div class="alert alert-secondary small py-2 mt-2">Currently <code>{{ field.dsn.other }}</code>, which is not an SMTP server; enter a server to replace it.</div>{% endif %}
-                  <div class="row g-3 mt-0">
-                    <div class="col-md-6 col-xl-5">{{ form_row(child.host) }}</div>
-                    <div class="col-6 col-md-2">{{ form_row(child.port) }}</div>
-                    <div class="col-6 col-md-4 col-xl-5">{{ form_row(child.security) }}</div>
-                    <div class="col-md-6 col-xl-5">{{ form_row(child.username) }}</div>
-                    <div class="col-md-6 col-xl-4">
-                      <div class="d-flex align-items-center gap-2">{{ form_label(child.password) }}<span class="badge mb-2 {{ field.dsn.has_password ? 'text-bg-success' : 'text-bg-light border' }}">{{ field.dsn.has_password ? 'set' : 'not set' }}</span></div>
+                  {% if field.dsn.other %}<div class="alert theme-secondary small py-3 mt-3"><div>Currently <code>{{ field.dsn.other }}</code>, which is not an SMTP server; enter a server to replace it.</div></div>{% endif %}
+                  <div class="row g-5 mt-0">
+                    <div class="md:col-6 xl:col-5">{{ form_row(child.host) }}</div>
+                    <div class="col-6 md:col-2">{{ form_row(child.port) }}</div>
+                    <div class="col-6 md:col-4 xl:col-5">{{ form_row(child.security) }}</div>
+                    <div class="md:col-6 xl:col-5">{{ form_row(child.username) }}</div>
+                    <div class="md:col-6 xl:col-4">
+                      <div class="d-flex align-items-center gap-3">{{ form_label(child.password) }}<span class="badge mb-3 {{ field.dsn.has_password ? 'theme-success' : 'badge-subtle theme-secondary' }}">{{ field.dsn.has_password ? 'set' : 'not set' }}</span></div>
                       {{ form_widget(child.password, {attr: {placeholder: field.dsn.has_password ? 'Leave empty to keep the current password' : 'Not set'}}) }}
                       {{ form_errors(child.password) }}
                     </div>
-                    <div class="col-md-12 col-xl-3">{{ form_row(child.options) }}</div>
+                    <div class="md:col-12 xl:col-3">{{ form_row(child.options) }}</div>
                   </div>
-                  <div class="form-text mt-2">{{ setting.help ?? '' }}</div>
+                  <div class="form-text mt-3">{{ setting.help ?? '' }}</div>
                   {{ s.origin(name, setting, field) }}
                 </fieldset>
               </div>
@@ -109,11 +109,11 @@
             {% else %}
               <div class="{{ widths[setting.width ?? 'half'] }}">
                 {% if setting.type == 'bool' %}
-                  <div class="d-flex align-items-center gap-2 mb-1"><span class="form-label fw-semibold mb-0">{{ setting.label }}</span>{{ s.source(field) }}</div>
+                  <div class="d-flex align-items-center gap-3 mb-1"><span class="form-label fw-semibold mb-0">{{ setting.label }}</span>{{ s.source(field) }}</div>
                   {{ form_widget(child) }}
                   {{ form_errors(child) }}
                 {% else %}
-                  <div class="d-flex align-items-center gap-2 mb-1">
+                  <div class="d-flex align-items-center gap-3 mb-1">
                     {{ form_label(child, null, {label_attr: {class: 'fw-semibold mb-0 text-truncate'}}) }}
                     {{- s.source(field) -}}
                   </div>
@@ -127,11 +127,11 @@
           {% endfor %}
         </div>
 
-        <div class="d-flex flex-wrap align-items-center gap-2 border-top pt-3 mt-4">
-          <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>Save changes</button>
+        <div class="d-flex flex-wrap align-items-center gap-3 border-top pt-5 mt-7">
+          <button class="btn-solid theme-primary" type="submit"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>Save changes</button>
           {% if overridden is not empty %}
-            <button class="btn btn-outline-secondary" type="submit" formaction="{{ path('admin_settings_reset', {group: key}) }}" formnovalidate data-confirm="Reset every {{ group.label|lower }} override to .env or its default?"><i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>Reset section</button>
-            <span class="small text-body-secondary ms-sm-auto">{{ overridden|length }} {{ overridden|length == 1 ? 'setting' : 'settings' }} set here</span>
+            <button class="btn-outline theme-secondary" type="submit" formaction="{{ path('admin_settings_reset', {group: key}) }}" formnovalidate data-confirm="Reset every {{ group.label|lower }} override to .env or its default?"><i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>Reset section</button>
+            <span class="small fg-2 sm:ms-auto">{{ overridden|length }} {{ overridden|length == 1 ? 'setting' : 'settings' }} set here</span>
           {% endif %}
         </div>
       {{ form_end(form) }}

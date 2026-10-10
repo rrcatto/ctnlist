@@ -6,50 +6,55 @@
   </li>
 {% endmacro %}
 {% import _self as nav %}
-<nav class="navbar navbar-expand-lg bg-body app-navbar" aria-label="Main navigation">
+<nav class="navbar lg:navbar-expand bg-body app-navbar" aria-label="Main navigation">
   <div class="container">
-    <a class="navbar-brand" href="{{ path('home') }}"><i class="bi bi-envelope-paper me-2" aria-hidden="true"></i>{{ site.listName }}</a>
-    {# Small screens: the picture stays visible beside the menu button (the account menu is inside the collapsed menu). #}
-    <a class="d-lg-none ms-auto me-2" href="{{ app.user ? path('profile') : path('login') }}" aria-label="{{ app.user ? 'My profile' : 'Log in' }}"><img class="app-avatar" src="{{ profile_image_url(app.user) }}" alt="" width="32" height="32"></a>
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#site-nav" aria-controls="site-nav" aria-expanded="false" aria-label="Toggle navigation">
-      <span class="navbar-toggler-icon"></span>
+    <a class="navbar-brand" href="{{ path('home') }}"><i class="bi bi-envelope-paper me-3" aria-hidden="true"></i>{{ site.listName }}</a>
+    {# Small screens: the picture stays visible beside the menu button (the account menu is inside the drawer). #}
+    <a class="lg:d-none ms-auto me-3" href="{{ app.user ? path('profile') : path('login') }}" aria-label="{{ app.user ? 'My profile' : 'Log in' }}"><img class="app-avatar" src="{{ profile_image_url(app.user) }}" alt="" width="32" height="32"></a>
+    <button class="btn-icon navbar-toggler" type="button" data-bs-toggle="drawer" data-bs-target="#site-nav" aria-controls="site-nav" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon" aria-hidden="true"></span>
     </button>
-    <div class="collapse navbar-collapse" id="site-nav">
-      <ul class="navbar-nav me-auto">
-        {{ nav.link('Home', 'house', path('home'), route in ['home', 'home_index', 'home_home']) }}
-        {{ nav.link('Subscribe', 'person-plus', path('subscribe'), route == 'subscribe') }}
-        {% if site.archiveEnabled %}
-          {{ nav.link('Archives', 'archive', path('archives'), route in ['archives', 'archive']) }}
-        {% endif %}
-        {{ nav.link('Contact', 'chat-left-text', path('contact'), route in ['contact', 'contact_subscriber']) }}
-      </ul>
-      <ul class="navbar-nav">
-        {% if app.user %}
-          {% set account_routes = ['profile', 'profile_messages', 'profile_edit'] %}
-          <li class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle d-flex align-items-center gap-2{{ route in account_routes ? ' active' }}" href="#" id="account-menu" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-              <img class="app-avatar" src="{{ profile_image_url(app.user) }}" alt="" width="32" height="32">{{ (app.user.firstName ~ ' ' ~ app.user.lastName)|trim ?: app.user.email }}
-            </a>
-            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="account-menu">
-              <li><a class="dropdown-item{{ route == 'profile' ? ' active' }}" href="{{ path('profile') }}"><i class="bi bi-person me-2" aria-hidden="true"></i>My profile</a></li>
-              <li><a class="dropdown-item{{ route == 'profile_messages' ? ' active' }}" href="{{ path('profile_messages') }}"><i class="bi bi-envelope me-2" aria-hidden="true"></i>My messages</a></li>
-              <li><a class="dropdown-item{{ route == 'profile_edit' ? ' active' }}" href="{{ path('profile_edit') }}"><i class="bi bi-pencil me-2" aria-hidden="true"></i>Edit profile</a></li>
-              <li><hr class="dropdown-divider"></li>
-              <li>
-                <form method="post" action="{{ path('app_logout') }}">
+    {# Below the lg breakpoint the navigation is a drawer; from lg up Bootstrap lays it out inline. #}
+    <dialog class="drawer drawer-end" tabindex="-1" id="site-nav" aria-labelledby="site-nav-label">
+      <div class="drawer-header">
+        <h2 class="drawer-title h5" id="site-nav-label">Menu</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="drawer" aria-label="Close"></button>
+      </div>
+      <div class="drawer-body">
+        <ul class="nav navbar-nav me-auto">
+          {{ nav.link('Home', 'house', path('home'), route in ['home', 'home_index', 'home_home']) }}
+          {{ nav.link('Subscribe', 'person-plus', path('subscribe'), route == 'subscribe') }}
+          {% if site.archiveEnabled %}
+            {{ nav.link('Archives', 'archive', path('archives'), route in ['archives', 'archive']) }}
+          {% endif %}
+          {{ nav.link('Contact', 'chat-left-text', path('contact'), route in ['contact', 'contact_subscriber']) }}
+        </ul>
+        <ul class="nav navbar-nav">
+          {% if app.user %}
+            {% set account_routes = ['profile', 'profile_messages', 'profile_edit'] %}
+            <li class="nav-item">
+              <button class="nav-link d-flex align-items-center gap-3{{ route in account_routes ? ' active' }}" type="button" id="account-menu" data-bs-toggle="menu" data-bs-placement="bottom-end" aria-expanded="false">
+                <img class="app-avatar" src="{{ profile_image_url(app.user) }}" alt="" width="32" height="32">{{ (app.user.firstName ~ ' ' ~ app.user.lastName)|trim ?: app.user.email }}<i class="bi bi-chevron-down small" aria-hidden="true"></i>
+              </button>
+              <div class="menu" aria-labelledby="account-menu">
+                <a class="menu-item{{ route == 'profile' ? ' active' }}" href="{{ path('profile') }}"{% if route == 'profile' %} aria-current="page"{% endif %}><i class="bi bi-person" aria-hidden="true"></i>My profile</a>
+                <a class="menu-item{{ route == 'profile_messages' ? ' active' }}" href="{{ path('profile_messages') }}"{% if route == 'profile_messages' %} aria-current="page"{% endif %}><i class="bi bi-envelope" aria-hidden="true"></i>My messages</a>
+                <a class="menu-item{{ route == 'profile_edit' ? ' active' }}" href="{{ path('profile_edit') }}"{% if route == 'profile_edit' %} aria-current="page"{% endif %}><i class="bi bi-pencil" aria-hidden="true"></i>Edit profile</a>
+                <hr class="menu-divider">
+                <form class="d-contents" method="post" action="{{ path('app_logout') }}">
                   <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-                  <button class="dropdown-item" type="submit"><i class="bi bi-box-arrow-right me-2" aria-hidden="true"></i>Log out</button>
+                  <button class="menu-item" type="submit"><i class="bi bi-box-arrow-right" aria-hidden="true"></i>Log out</button>
                 </form>
-              </li>
-            </ul>
-          </li>
-        {% else %}
-          <li class="nav-item d-flex align-items-center gap-2">
-            <img class="app-avatar" src="{{ profile_image_url(null) }}" alt="" width="32" height="32">
-            <a class="btn btn-primary btn-sm my-2 my-lg-0{{ route == 'login' ? ' active' }}" href="{{ path('login') }}"><i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i>Log in</a>
-          </li>
-        {% endif %}
-      </ul>
-    </div>
+              </div>
+            </li>
+          {% else %}
+            <li class="nav-item d-flex align-items-center gap-3">
+              <img class="app-avatar" src="{{ profile_image_url(null) }}" alt="" width="32" height="32">
+              <a class="btn-solid theme-primary btn-sm{{ route == 'login' ? ' active' }}" href="{{ path('login') }}"><i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i>Log in</a>
+            </li>
+          {% endif %}
+        </ul>
+      </div>
+    </dialog>
   </div>
 </nav>

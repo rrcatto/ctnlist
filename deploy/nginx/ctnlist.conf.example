@@ -18,6 +18,9 @@ server {
     listen 80;
     listen [::]:80;
     server_name lists.example.org;
+    # The same format here: without it this block would use nginx's default log,
+    # which records the query string of a link opened over plain HTTP.
+    access_log /var/log/nginx/ctnlist-<installation>.access.log ctnlist;
 
     # ACME (certificate renewal) over plain HTTP; everything else moves to HTTPS.
     location ^~ /.well-known/acme-challenge/ {

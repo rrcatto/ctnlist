@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-ctnlist is a web-based mailing-list application: Symfony 8.1 on PHP 8.4+, PostgreSQL 16, Doctrine DBAL 4 (no ORM), Twig, Symfony Forms/Validator/Security and Phinx migrations. Campaign mail is delivered by catto-mail, a separate service reached through its HTTPS API and signed webhooks; transactional mail goes through ctnlist's own SMTP. v5.0 is the behavioural baseline: preserve established v5 workflows rather than redesign them (`RESTORED-FUNCTIONALITY.md`). `README.md` covers features, deployment and operations; `CHANGELOG.md` is the release history.
+ctnlist is a web-based mailing-list application: Symfony 8.1 on PHP 8.5+, PostgreSQL 16, Doctrine DBAL 4 (no ORM), Twig, Symfony Forms/Validator/Security and Phinx migrations. Campaign mail is delivered by catto-mail, a separate service reached through its HTTPS API and signed webhooks; transactional mail goes through ctnlist's own SMTP. v5.0 is the behavioural baseline: preserve established v5 workflows rather than redesign them (`docs/RESTORED-FUNCTIONALITY.md`). `README.md` covers features, deployment and operations; `CHANGELOG.md` is the release history; other documentation is in `docs/`.
 
 More detail is in nested CLAUDE.md files: `src/CattoMail/` (catto-mail integration), `src/Config/` (Settings), `templates/` (screens, forms, assets) and `tests/`.
 
@@ -10,13 +10,13 @@ More detail is in nested CLAUDE.md files: `src/CattoMail/` (catto-mail integrati
 
 - **No backward compatibility** until the user announces go-live: ctnlist is not in production and has no data to preserve. Add no aliases, legacy routes or link forms, or upgrade migrations; change the source of truth directly. Schema changes go into `database/migrations/domain/20260716120000_create_phase3a_schema.php`, then `bin/dev reset-db`.
 - `bin/dev check` must pass before work is handed back.
-- Code must run on PHP 8.4: Composer's platform is pinned to 8.4.1 (the Symfony 8.1 minimum) although the dev stack runs 8.5.
+- The minimum PHP is 8.5 (`composer.json`: the `php` requirement and the platform pin, 8.5.0); the dev stack and the server both run 8.5.
 - A PHP extension ctnlist's own code uses is declared in `composer.json`. `DiagnoseCommand::REQUIRED_EXTENSIONS` lists exactly what `composer install --no-dev` requires (composer.json and the locked packages), and README "Requirements" names each one (`tests/Unit/PhpExtensionsTest`).
 - Every new GET route must be requested by `tests/Smoke/RouteSmokeTest`; `tests/Integration/RouteConventionsTest` fails otherwise (exemptions, with the reason, go in its `SMOKE_EXEMPT`).
 - A new admin page gets an entry in `templates/layout/_admin_menu.html.twig` naming the same permission as its controller's `#[IsGranted]`.
-- Behaviour that deliberately differs from v5 is listed in `RESTORED-FUNCTIONALITY.md` ("Deliberate changes from v5"); keep it current.
+- Behaviour that deliberately differs from v5 is listed in `docs/RESTORED-FUNCTIONALITY.md` ("Deliberate changes from v5"); keep it current.
 - Value objects and exceptions under `src/` must be excluded from service registration in `config/services.yaml`, or controller arguments typed with them break autowiring.
-- Releases: the version appears in `public_html/index.php` (`$sharedDirectory`), `src/Config/SiteConfig.php` (`VERSION`), `compose.yaml`, `dev/podman/Containerfile` and `README.md` (title and install paths). Release notes go in `CHANGELOG.md`.
+- Releases: the version appears in `public_html/index.php` (`$sharedDirectory`), `src/Config/SiteConfig.php` (`VERSION`), `compose.yaml`, `dev/podman/Containerfile` and `README.md` (title and install paths). Release notes go in `CHANGELOG.md`; `docs/project-status.md` (where the project stands, also read by the owner's Claude web project) is brought up to date with each release.
 
 ## Development environment
 
@@ -67,30 +67,30 @@ The repository is a shared code tree installed per version at `/usr/local/lib/ph
 - Output is autoescaped. Message HTML is written by holders of `messages.manage`, which custom roles can have, so it is never printed `|raw`; the public archive is the one `sanitize_html` use (sanitizer `app.message_html`). Mail is not sanitised; `TemplateRenderer` escapes subscriber names and configured URLs in the HTML part.
 - The CSP (`App\Http\ContentSecurityPolicy`) allows scripts by nonce only, so templates have no inline `<script>`, `style=` or event handlers. Routes showing authored HTML set the `_csp` route default `ContentSecurityPolicy::EDITOR` or `::ARCHIVE`.
 - SQL uses DBAL parameters only; `LIMIT`/`OFFSET` are clamped integers; user search terms go through `App\Repository\Like`.
-- Never log secrets, setting values (names only), tokens or message bodies. The Site Log stores paths without the query string and masks the one-click signature (`SiteLog::loggablePath()`).
+- The application log is Symfony's minimal `logger` on standard error from `notice` up (`config/services.yaml`; `error` in tests). Never log secrets, setting values (names only), tokens or message bodies. The Site Log stores paths without the query string and masks the one-click signature (`SiteLog::loggablePath()`).
 - Sign-in links have their own database rate limits (`AUTH_MAGIC_LINK_*`); contact messages, forwards/resends and global opt-out changes go through `App\Http\RequestThrottle` (429 over the limit).
 - Development aids (`SUPPRESSION_PROVIDER=none`, `CATTOMAIL_API_CONNECT_HOST`) are refused outside `APP_ENV` dev/test.
 
 **Identity and authentication.**
 - `subscribers` is the identity table. Its public key is a permanent UUIDv7 (`s_uuid`, SQL function `ctn_uuid_v7()`), which URLs carry as `{token}`.
-- Sign-in is by passwordless magic link on Symfony Security (`src/Security/`). The `main` firewall is stateless: authentication is the auth cookie, whose hash identifies an `auth_sessions` row, never the PHP session. `MagicLinkRequester` issues links (creating the identity, without consent, for a new address; rate-limited; hashed token in `auth_login_tokens`; whitelisted return action); the emailed link (`GET /auth/verify`) only shows `SignInLinkPage`, whose Sign in button POSTs it to `MagicLinkAuthenticator`, which checks the CSRF token, claims the link atomically and bootstraps the `APP_ADMIN_EMAIL` administrator; `AuthSessionAuthenticator` handles every other request.
+- Sign-in is by passwordless magic link on Symfony Security (`src/Security/`). The `main` firewall is stateless: authentication is the auth cookie, whose hash identifies an `auth_sessions` row, never the PHP session. `MagicLinkRequester` issues links (rate-limited before anything is created; creating the identity, without consent, for a new address; sent only to the identity's own stored address, since the v5 cleanup can rewrite a typed address into another subscriber's; hashed token in `auth_login_tokens`; whitelisted return action); the emailed link (`GET /auth/verify`) only shows `SignInLinkPage`, whose Sign in button POSTs it to `MagicLinkAuthenticator`, which checks the CSRF token, claims the link atomically and bootstraps the `APP_ADMIN_EMAIL` administrator; `AuthSessionAuthenticator` handles every other request.
 - `SubscriberUser` (identifier `s_uuid`) carries roles `ROLE_<KEY>` and ACL permission keys; check permissions with `#[IsGranted('lists.manage')]` or `is_granted()`. `AclVoter` grants administrators everything.
 - Subscriber links (profile, consent, forward, reactions, resend) act only for the signed-in subscriber they belong to; anyone else gets the sign-in prompt (`AuthenticationPrompt`). Anonymous visitors are sent to `/login` from subscriber pages and get the 403 page on admin pages.
-- Roles (`RoleManager`): the system roles `administrator` and `subscriber` cannot be renamed, deleted, re-permissioned or removed, and every subscriber holds `subscriber` (insert trigger). No escalation: a role or permission can be granted only by someone who holds all of it, and changing a role's permissions also needs `acl.manage`. Role keys are fixed after creation.
+- Roles (`RoleManager`): the system roles `administrator` and `subscriber` cannot be renamed, deleted, re-permissioned or removed, and every subscriber holds `subscriber` (insert trigger). No escalation: a role or permission can be granted only by someone who holds all of it, and changing a role's permissions also needs `acl.manage`. Role keys are fixed after creation. Only administrators may change the Settings SMTP group (`SettingsController::ADMINISTRATOR_ONLY`): it receives every sign-in link.
 
 **Data.**
 - Two PostgreSQL databases, each with its own migrations: the main database (`DB_*`) and the shared global suppression database, the banlist (`GDB_*`), read only through `App\Suppression\SuppressionChecker` (`SUPPRESSION_PROVIDER` `banlist` or `none`). `isSuppressed()` first applies the v5 address rules of `App\Subscriber\EmailNormaliser`, which deliberately reject .org, .gov(.za), .ac.za and similar addresses; an unusable address counts as suppressed. The banlist is not catto-mail's suppression list, which ctnlist never queries.
 - A subscriber is eligible for a list only when `ls_confirmed = TRUE AND ls_unsubscribed = FALSE`. Adding subscribers never grants consent.
 - The `ALL` system list is immutable and optional, and is **never** attached to a message automatically. List shortcodes are 3–6 uppercase letters or digits.
 - `list_subscription_events` is append-only (trigger): subscribers with consent events cannot be deleted, and consent or audit rows are never deleted.
-- Timestamps come from the injected clock in PHP's timezone (`APP_TIMEZONE`, Africa/Johannesburg) while PostgreSQL runs in UTC: compute them in PHP, not in SQL.
+- Timestamps come from the injected clock in PHP's timezone (`APP_TIMEZONE`, Africa/Johannesburg): compute them in PHP, not in SQL. PostgreSQL runs in UTC, but `App\Repository\SessionTimeZone` puts each ctnlist session in PHP's timezone, so column defaults and the consent-event trigger write local time too.
 - DBAL's `fetchOne()` returns `false` both for no row and for a boolean `FALSE`: read boolean columns with `fetchAssociative()`.
 - Settings that administrators can override (site identity, mail sender, transactional SMTP, limits, …) are read through `SiteConfig` or `RuntimeSettings`, never `%env()%` (see `src/Config/CLAUDE.md`).
 
 **Mail.**
 - Campaign content (queue sends, proofs, resends, forwards) is rendered per recipient by `App\Campaign\TemplateRenderer` (a replacement-for-replacement port of v5's MergeTemplate; replacement order matters) and delivered only through `App\CattoMail\CattoMailSender`. There is no campaign SMTP path.
 - Transactional mail (sign-in links, notifications with an admin BCC, invitations, contact acknowledgements) is sent by `App\Mail\TransactionalMailer` through `MAILER_DSN`; `MailConnection` opens one transport per use via `mailer.transport_factory`, so tests capture it.
-- `App\Queue\QueueBuilder` builds the queue: the union of the selected lists, once-only, banlist hits unsubscribed from all lists, rotation, and only subscribers whose `s_delivery_state` is `ok`. `QueueProcessor` keeps v5's ProcessQueue contract (queue order, stop flag, `m_max_send`, eligibility and suppression re-checked per message) and stages each recipient with `CattoMailSender`, removing its queue row in the same transaction.
+- `App\Queue\QueueBuilder` builds the queue: the union of the selected lists, once-only, banlist hits unsubscribed from all lists, rotation, and only subscribers whose `s_delivery_state` is `ok`. `QueueProcessor` runs one at a time (`DatabaseLock::QUEUE`, freed by the database if the process dies; `CurrentlySending` is informational) and keeps v5's ProcessQueue contract (queue order, stop flag, `m_max_send`, eligibility and suppression re-checked per message) and stages each recipient with `CattoMailSender`, removing its queue row in the same transaction.
 - Proofs (`MessageService::sendProof()`) go to any valid address with no subscriber lookup, rendered for `TemplateRenderer::PROOF_RECIPIENT` without the tracking pixel.
 
 ## Invariants

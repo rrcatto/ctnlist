@@ -51,6 +51,16 @@ final class SuppressionTest extends IntegrationTestCase
         self::assertSame(['gu_api' => 'test-instance', 'gu_domain' => 'ctnlist.test', 'gu_type' => 'USER', 'gu_reason' => 'asked'], $row);
     }
 
+    /** Bulk bounce/spam input arrives uncorrected: it is stored as the lookup will look for it. */
+    public function testBanlistStoresAddressesAsTheyAreLookedUp(): void
+    {
+        $checker = $this->banlistChecker();
+        self::assertTrue($checker->suppressEmail('mailtojohn@gmail.com', 'BOUNCE-ADMIN', 'bulk'));
+        self::assertTrue($checker->isSuppressed('john@gmail.com'));
+        self::assertSame(1, (int) $this->banlist()->fetchOne("SELECT COUNT(*) FROM globalunsubscribe WHERE gu_email = 'john@gmail.com'"));
+        self::assertFalse($checker->suppressEmail('postmaster@example.com', 'BOUNCE-ADMIN', 'bulk'), 'an unusable address is not stored');
+    }
+
     public function testBanlistReactivatesAndRejectsUnknownTypes(): void
     {
         $checker = $this->banlistChecker();

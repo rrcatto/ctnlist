@@ -1,7 +1,8 @@
 twig:
     default_path: '%kernel.project_dir%/templates'
     strict_variables: '%kernel.debug%'
-    # Symfony forms render with Bootstrap 5 markup (labels, help text,
-    # field-level errors, is-invalid states); templates/form/theme.html.twig
-    # adds aria-describedby/aria-invalid on every widget and novalidate.
+    # Symfony forms render with Bootstrap 6 markup (form fields, labels, help
+    # text, field-level errors, is-invalid states) from the application's own
+    # theme, templates/form/theme.html.twig, which also adds
+    # aria-describedby/aria-invalid on every widget and novalidate.
     form_themes: ['form/theme.html.twig']

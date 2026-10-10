@@ -25,7 +25,7 @@ final class AdminSubscribersTest extends SmokeTestCase
 
         $list = self::request($client, 'GET', '/subscribers?e=admin%40ctnlist&r=5')['body'];
         self::assertStringContainsString(self::$admin['s_email'], $list);
-        self::assertMatchesRegularExpression('#ALL <span class="badge text-bg-success">confirmed</span>#', $list, 'membership badge');
+        self::assertMatchesRegularExpression('#ALL <span class="badge theme-success">confirmed</span>#', $list, 'membership badge');
         self::assertStringContainsString('There are no matching subscribers.', self::request($client, 'GET', '/subscribers?e=no-such-person')['body']);
 
         $edit = '/subscribers/' . self::$admin['s_uuid'];

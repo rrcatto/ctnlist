@@ -11,12 +11,15 @@ use Doctrine\DBAL\Connection;
  * installation: PostgreSQL session advisory locks, released at the end of
  * the run (or by the server when the process dies). Overlapping cron runs
  * of the catto-mail worker or the maintenance command skip instead of
- * competing; their individual effects are idempotent anyway.
+ * competing (their individual effects are idempotent anyway), and a second
+ * queue run is refused.
  */
 final class DatabaseLock
 {
     public const CATTOMAIL_WORKER = 'ctnlist:cattomail:worker';
     public const MAINTENANCE = 'ctnlist:maintenance';
+    /** One queue run at a time (QueueProcessor); a run that dies frees it with its connection. */
+    public const QUEUE = 'ctnlist:queue';
 
     public function __construct(private readonly Connection $db)
     {

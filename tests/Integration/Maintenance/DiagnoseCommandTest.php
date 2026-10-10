@@ -46,6 +46,7 @@ final class DiagnoseCommandTest extends IntegrationTestCase
         self::assertStringContainsString('ERROR SUPPRESSION_PROVIDER=none', $display);
         self::assertStringContainsString('OK    database schema up to date', $display);
         self::assertMatchesRegularExpression('/^OK    PHP extension pdo_pgsql$/m', $display);
+        self::assertMatchesRegularExpression('/^OK    PostgreSQL 1[6-9]\./m', $display);
         foreach (['APP_SECRET', 'APP_SETTINGS_KEY', 'CATTOMAIL_API_KEY', 'CATTOMAIL_WEBHOOK_SECRET', 'CATTOMAIL_WEBHOOK_SECRET_PREVIOUS'] as $name) {
             $value = (string) ($_SERVER[$name] ?? getenv($name) ?: '');
             if (strlen($value) >= 6) {

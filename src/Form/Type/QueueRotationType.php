@@ -30,13 +30,13 @@ final class QueueRotationType extends AbstractType
                 'choices' => array_keys($subjects),
                 'choice_label' => static fn(string $muid): string => $subjects[$muid] !== '' ? $subjects[$muid] : '(no subject) ' . $muid,
                 'invalid_message' => 'Choose one of the listed messages.',
-                'row_attr' => ['class' => 'col-md-6'],
+                'row_attr' => ['class' => 'md:col-6'],
             ]);
         }
         $builder->add('volume', IntegerType::class, [
             'label' => 'Total number of emails to queue',
             'attr' => ['min' => 1],
-            'row_attr' => ['class' => 'col-md-6'],
+            'row_attr' => ['class' => 'md:col-6'],
         ]);
     }
 

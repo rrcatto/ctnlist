@@ -52,15 +52,19 @@ final class MagicLinkRequester
             return false;
         }
         $now = $this->clock->now();
+        $request = $this->requestStack->getCurrentRequest();
+        $ip = mb_substr((string) $request?->getClientIp(), 0, 45);
+        // Limited before an identity is created, so a flood of new addresses creates nothing.
+        if ($this->rateLimited(EmailNormaliser::correct($email), $ip, $now->getTimestamp())) {
+            return false;
+        }
         $found = $this->subscribers->findOrCreateIdentity($email, $now->format('Y-m-d H:i:s'));
         if ($found === null) {
             return false;
         }
-        $request = $this->requestStack->getCurrentRequest();
-        $ip = mb_substr((string) $request?->getClientIp(), 0, 45);
-        if ($this->rateLimited($email, $ip, $now->getTimestamp())) {
-            return false;
-        }
+        // The v5 cleanup rules can turn the typed address into another one (alice@gmail.example.net
+        // becomes alice@gmail.com): the link signs in that identity, so it goes only to its own address.
+        $email = $found['identity']['s_email'];
 
         if ($found['created'] && $returnAction === 'profile') {
             $returnAction = 'confirm';

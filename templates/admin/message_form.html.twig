@@ -11,38 +11,38 @@
 {% embed 'layout/_page_header.html.twig' with {title: muid ? 'Edit message' : 'Create message', description: 'A message can be saved as a draft with no list selected and assigned to lists later.'} %}
   {% block actions %}
     {% if muid %}
-      <a class="btn btn-outline-secondary" href="{{ path('admin_proof', {muid: muid}) }}"><i class="bi bi-envelope-check me-1" aria-hidden="true"></i>Send proof</a>
-      {% if is_granted('messages.queue') %}<a class="btn btn-outline-primary" href="{{ path('admin_queue_message', {muid: muid}) }}"><i class="bi bi-list-check me-1" aria-hidden="true"></i>Queue</a>{% endif %}
-      {% if is_granted('logs.view') %}<a class="btn btn-outline-secondary" href="{{ path('report_message_views', {muid: muid}) }}"><i class="bi bi-bar-chart me-1" aria-hidden="true"></i>Activity</a>{% endif %}
+      <a class="btn-outline theme-secondary" href="{{ path('admin_proof', {muid: muid}) }}"><i class="bi bi-envelope-check me-1" aria-hidden="true"></i>Send proof</a>
+      {% if is_granted('messages.queue') %}<a class="btn-outline theme-primary" href="{{ path('admin_queue_message', {muid: muid}) }}"><i class="bi bi-list-check me-1" aria-hidden="true"></i>Queue</a>{% endif %}
+      {% if is_granted('logs.view') %}<a class="btn-outline theme-secondary" href="{{ path('report_message_views', {muid: muid}) }}"><i class="bi bi-bar-chart me-1" aria-hidden="true"></i>Activity</a>{% endif %}
     {% endif %}
   {% endblock %}
 {% endembed %}
 
 {{ form_start(form) }}
   {% if not form.vars.valid %}
-    <div class="alert alert-danger" role="alert">
-      {% if form.vars.errors|length %}{{ form_errors(form) }}{% else %}Please correct the fields marked below. Nothing was saved, and everything you entered is still here.{% endif %}
+    <div class="alert theme-danger" role="alert">
+      <div>{% if form.vars.errors|length %}{{ form_errors(form) }}{% else %}Please correct the fields marked below. Nothing was saved, and everything you entered is still here.{% endif %}</div>
     </div>
   {% endif %}
   {{ form_widget(form.muid) }}
-  <div class="row g-4">
-    <div class="col-lg-8">
+  <div class="row g-7">
+    <div class="lg:col-8">
       {{ form_row(form.subject) }}
       {{ form_row(form.html) }}
       {{ form_row(form.text) }}
     </div>
 
-    <div class="col-lg-4">
-      <div class="card mb-4">
+    <div class="lg:col-4">
+      <div class="card mb-7">
         <div class="card-header fw-semibold">Audience</div>
         <div class="card-body">
-          <p class="small text-body-secondary">Confirmed members of the selected lists are queued once each. <code>ALL</code> is never selected automatically.</p>
+          <p class="small fg-2">Confirmed members of the selected lists are queued once each. <code>ALL</code> is never selected automatically.</p>
           {{ form_errors(form.listIds) }}
           {% for choice in form.listIds %}
             {% set list = lists[choice.vars.value] ?? null %}
-            {{ form_widget(choice, {label: '<strong>' ~ choice.vars.label|e ~ '</strong>' ~ (list and list.l_description ? ' <span class="text-body-secondary small">– ' ~ list.l_description|e ~ '</span>' : ''), label_html: true}) }}
+            {{ form_widget(choice, {label: '<strong>' ~ choice.vars.label|e ~ '</strong>' ~ (list and list.l_description ? ' <span class="fg-2 small">– ' ~ list.l_description|e ~ '</span>' : ''), label_html: true}) }}
           {% else %}
-            <p class="mb-0 text-body-secondary">There are no active lists.</p>
+            <p class="mb-0 fg-2">There are no active lists.</p>
           {% endfor %}
           {% do form.listIds.setRendered %}
         </div>
@@ -54,7 +54,7 @@
           {{ form_row(form.templateId) }}
           {{ form_row(form.fromName) }}
           {{ form_row(form.fromAddress) }}
-          <div class="row g-3">
+          <div class="row g-5">
             <div class="col-6">{{ form_row(form.priority, {row_attr: {class: 'mb-0'}}) }}</div>
             <div class="col-6">{{ form_row(form.maxSend, {row_attr: {class: 'mb-0'}}) }}</div>
           </div>
@@ -63,9 +63,9 @@
     </div>
   </div>
 
-  <div class="d-flex flex-wrap gap-2 border-top pt-3 mt-4">
-    <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>Save message</button>
-    <a class="btn btn-outline-secondary" href="{{ path('admin_messages') }}">Cancel</a>
+  <div class="d-flex flex-wrap gap-3 border-top pt-5 mt-7">
+    <button class="btn-solid theme-primary" type="submit"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>Save message</button>
+    <a class="btn-outline theme-secondary" href="{{ path('admin_messages') }}">Cancel</a>
   </div>
 {{ form_end(form) }}
 {% endblock %}

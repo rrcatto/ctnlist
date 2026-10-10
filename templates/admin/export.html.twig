@@ -8,14 +8,14 @@
   <div class="card-body">
     {{ form_errors(form) }}
     {{ form_row(form.listId) }}
-    <div class="row g-3">
-      <div class="col-sm-6">{{ form_row(form.offset, {row_attr: {class: 'mb-0'}}) }}</div>
-      <div class="col-sm-6">{{ form_row(form.limit, {row_attr: {class: 'mb-0'}}) }}</div>
+    <div class="row g-5">
+      <div class="sm:col-6">{{ form_row(form.offset, {row_attr: {class: 'mb-0'}}) }}</div>
+      <div class="sm:col-6">{{ form_row(form.limit, {row_attr: {class: 'mb-0'}}) }}</div>
     </div>
   </div>
-  <div class="card-footer d-flex flex-wrap gap-2">
-    <button class="btn btn-primary" type="submit"><i class="bi bi-download me-1" aria-hidden="true"></i>Write export files</button>
-    <a class="btn btn-outline-secondary" href="{{ path('admin_subscribers') }}">Cancel</a>
+  <div class="card-footer d-flex flex-wrap gap-3">
+    <button class="btn-solid theme-primary" type="submit"><i class="bi bi-download me-1" aria-hidden="true"></i>Write export files</button>
+    <a class="btn-outline theme-secondary" href="{{ path('admin_subscribers') }}">Cancel</a>
   </div>
 {{ form_end(form) }}
 {% endblock %}

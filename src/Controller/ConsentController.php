@@ -64,7 +64,8 @@ final class ConsentController extends AbstractController
     {
         $user = $this->actingSubscriber($request, $user, 'lists.confirm');
         $list = $this->lists->findByShortcode($request->request->getString('list_shortcode'));
-        $message = $list === null
+        // Only active lists are offered for confirmation (confirmForm), and only they can be confirmed.
+        $message = $list === null || !$list['l_active']
             ? 'The subscription could not be confirmed.'
             : $this->consent->confirm($user, $list, trim($request->request->getString('muid')));
         return $this->render('page/result.html.twig', ['title' => 'Subscription confirmed', 'message' => $message]);

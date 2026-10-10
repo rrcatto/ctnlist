@@ -40,7 +40,9 @@ decorate_workers_output = no
 php_admin_value[upload_max_filesize] = 24M
 php_admin_value[post_max_size] = 32M
 php_admin_value[memory_limit] = 512M
-php_admin_value[max_execution_time] = 300
+; php_value, not php_admin_value: queue runs and subscriber imports raise it
+; with set_time_limit(), which an admin value would silently refuse.
+php_value[max_execution_time] = 300
 
 ; Session options are set by Symfony (config/packages/framework.yaml) and must
 ; not be fixed here (php_admin_value blocks them). PHP's session garbage

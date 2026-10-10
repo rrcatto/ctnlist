@@ -6,10 +6,10 @@
 {% embed 'layout/_page_header.html.twig' with {title: 'Delivery queue', description: 'Messages waiting to be sent, in sending order. Nothing is sent until sending is started.'} %}
   {% block actions %}
     {% if rows is not empty %}
-      <a class="btn btn-success" href="{{ path('admin_queue_process') }}"><i class="bi bi-send me-1" aria-hidden="true"></i>Start sending</a>
+      <a class="btn-solid theme-success" href="{{ path('admin_queue_process') }}"><i class="bi bi-send me-1" aria-hidden="true"></i>Start sending</a>
     {% endif %}
-    <a class="btn btn-outline-secondary" href="{{ path('admin_queue_stop') }}"><i class="bi bi-pause-circle me-1" aria-hidden="true"></i>Stop sending</a>
-    {% if is_granted('messages.queue') %}<a class="btn btn-outline-secondary" href="{{ path('admin_queue_rotation') }}">Queue multiple messages</a>{% endif %}
+    <a class="btn-outline theme-secondary" href="{{ path('admin_queue_stop') }}"><i class="bi bi-pause-circle me-1" aria-hidden="true"></i>Stop sending</a>
+    {% if is_granted('messages.queue') %}<a class="btn-outline theme-secondary" href="{{ path('admin_queue_rotation') }}">Queue multiple messages</a>{% endif %}
   {% endblock %}
 {% endembed %}
 
@@ -19,7 +19,7 @@
   {% set can_edit_subscribers = is_granted('subscribers.manage') %}
   <div class="table-responsive">
     <table class="table table-hover align-middle">
-      <thead class="table-light">
+      <thead class="">
         <tr>
           <th scope="col">Message</th>
           <th scope="col">Subscriber</th>
@@ -43,7 +43,7 @@
             <form method="post" action="{{ path('admin_queue_delete') }}">
               <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
               <input type="hidden" name="queue_id" value="{{ row.q_id }}">
-              <button class="btn btn-sm btn-outline-danger" type="submit" aria-label="Remove {{ row.q_email }} from the queue"><i class="bi bi-x-lg" aria-hidden="true"></i><span class="d-none d-md-inline ms-1">Remove</span></button>
+              <button class="btn-sm btn-outline theme-danger" type="submit" aria-label="Remove {{ row.q_email }} from the queue"><i class="bi bi-x-lg" aria-hidden="true"></i><span class="d-none md:d-inline ms-1">Remove</span></button>
             </form>
           </td>
         </tr>
@@ -53,15 +53,15 @@
   </div>
   {% include '_pagination.html.twig' with {base: path('admin_queue')} %}
 
-  <div class="card border-danger-subtle mt-4">
-    <div class="card-body d-flex flex-wrap align-items-center justify-content-between gap-3">
+  <div class="card border-subtle-danger mt-7">
+    <div class="card-body d-flex flex-row flex-wrap align-items-center justify-content-between gap-5">
       <div>
         <h2 class="h6 mb-1">Clear the queue</h2>
-        <p class="small text-body-secondary mb-0">Removes all {{ pagination.total }} queued entries. Messages can be queued again afterwards.</p>
+        <p class="small fg-2 mb-0">Removes all {{ pagination.total }} queued entries. Messages can be queued again afterwards.</p>
       </div>
       <form method="post" action="{{ path('admin_queue_clear') }}" data-confirm="Clear the entire queue?">
         <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-        <button class="btn btn-outline-danger" type="submit"><i class="bi bi-trash me-1" aria-hidden="true"></i>Clear queue</button>
+        <button class="btn-outline theme-danger" type="submit"><i class="bi bi-trash me-1" aria-hidden="true"></i>Clear queue</button>
       </form>
     </div>
   </div>

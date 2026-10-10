@@ -72,6 +72,52 @@ final class MagicLinkRequesterTest extends IntegrationTestCase
         self::assertSame(0, (int) $this->db->fetchOne("SELECT COUNT(*) FROM subscribers WHERE s_email LIKE '%postmaster%'"));
     }
 
+    /**
+     * The v5 cleanup rules turn some typed addresses into someone else's (a subdomain of an
+     * attacker's domain, a "mailto" prefix): the link signs in that identity, so it must only
+     * ever reach that identity's own mailbox, never the address that was typed.
+     */
+    #[\PHPUnit\Framework\Attributes\DataProvider('rewrittenAddresses')]
+    public function testTheLinkGoesOnlyToTheIdentitysOwnAddress(string $typed): void
+    {
+        $id = $this->createSubscriber('alice@gmail.com');
+
+        self::assertTrue($this->service(MagicLinkRequester::class)->request($typed));
+
+        self::assertEmailCount(1);
+        $email = self::getMailerMessage();
+        self::assertInstanceOf(Email::class, $email);
+        self::assertSame(['alice@gmail.com'], array_map(static fn(\Symfony\Component\Mime\Address $a): string => $a->getAddress(), $email->getTo()));
+        self::assertSame(['alt_s_id' => $id, 'alt_email' => 'alice@gmail.com'],
+            $this->db->fetchAssociative('SELECT alt_s_id, alt_email FROM auth_login_tokens ORDER BY alt_id DESC LIMIT 1'));
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function rewrittenAddresses(): iterable
+    {
+        yield 'subdomain of another domain' => ['alice@gmail.attacker.example'];
+        yield 'mailto prefix' => ['mailtoalice@gmail.com'];
+        yield 'www prefix' => ['www.alice@gmail.com'];
+    }
+
+    /** Over the per-IP limit nothing is created: no subscriber, no membership, no consent event. */
+    public function testRateLimitedRequestsCreateNoIdentity(): void
+    {
+        $owner = $this->createSubscriber('earlier@example.com');
+        $now = time();
+        $tokens = $this->service(\App\Repository\AuthLoginTokenRepository::class);
+        for ($i = 0; $i < 20; $i++) {
+            $tokens->create($owner, 'earlier@example.com', hash('sha256', 'flood' . $i), date('Y-m-d H:i:s', $now - 60), date('Y-m-d H:i:s', $now + 600),
+                '203.0.113.9', 'test', 'profile', null, null);
+        }
+        $this->service(\Symfony\Component\HttpFoundation\RequestStack::class)
+            ->push(\Symfony\Component\HttpFoundation\Request::create('/login', 'POST', server: ['REMOTE_ADDR' => '203.0.113.9']));
+
+        self::assertFalse($this->service(MagicLinkRequester::class)->request('flood-new@example.com'));
+        self::assertSame(0, (int) $this->db->fetchOne("SELECT COUNT(*) FROM subscribers WHERE s_email = 'flood-new@example.com'"));
+        self::assertEmailCount(0);
+    }
+
     public function testProfileUpdateIsStoredAndNotified(): void
     {
         $id = $this->createSubscriber('jane@example.com', 'Jane');

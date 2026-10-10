@@ -4,11 +4,11 @@
 
 {% block content %}
 {% include 'layout/_page_header.html.twig' with {title: 'Privacy policy', description: site.listName ~ ' and your personal information.'} %}
-<div class="app-narrow ms-0 d-grid gap-4">
+<div class="app-narrow ms-0 d-grid gap-7">
   <div>
     <div class="card">
-      <div class="card-body d-flex gap-3">
-        <i class="bi bi-shield-check fs-3 text-primary flex-shrink-0" aria-hidden="true"></i>
+      <div class="card-body d-flex flex-row gap-5">
+        <i class="bi bi-shield-check fs-2xl fg-primary flex-shrink-0" aria-hidden="true"></i>
         <div>
           <h2 class="h5">Your information</h2>
           <p class="mb-0">Your personal information is safe with us. We will not divulge it to anyone.</p>
@@ -18,12 +18,12 @@
   </div>
   <div>
     <div class="card">
-      <div class="card-body d-flex gap-3">
-        <i class="bi bi-box-arrow-right fs-3 text-primary flex-shrink-0" aria-hidden="true"></i>
+      <div class="card-body d-flex flex-row gap-5">
+        <i class="bi bi-box-arrow-right fs-2xl fg-primary flex-shrink-0" aria-hidden="true"></i>
         <div>
           <h2 class="h5">Opt out of email subscription</h2>
           <p>You may opt out of receiving emails at any time: use the unsubscribe link in any message, or sign in to manage your lists.</p>
-          <a class="btn btn-outline-primary btn-sm" href="{{ path('subscribe') }}"><i class="bi bi-list-check me-1" aria-hidden="true"></i>Manage your lists</a>
+          <a class="btn-outline theme-primary btn-sm" href="{{ path('subscribe') }}"><i class="bi bi-list-check me-1" aria-hidden="true"></i>Manage your lists</a>
         </div>
       </div>
     </div>

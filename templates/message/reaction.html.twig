@@ -6,15 +6,15 @@
 {% set like = reaction == 'like' %}
 {% include 'layout/_page_header.html.twig' with {title: like ? 'Like this message' : 'Dislike this message', description: like ? 'Let us know this message was useful to you.' : 'Let us know this message was not relevant to you; it helps us send you less of the same.'} %}
 <form action="{{ path('message_reaction_submit', {reaction: reaction}) }}" method="post" class="card app-narrow ms-0">
-  <div class="card-body d-flex align-items-center gap-3">
+  <div class="card-body d-flex flex-row align-items-center gap-5">
     <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
     <input type="hidden" name="subscriber_token" value="{{ token }}">
     <input type="hidden" name="muid" value="{{ muid }}">
-    <i class="bi {{ like ? 'bi-hand-thumbs-up text-success' : 'bi-hand-thumbs-down text-danger' }} fs-2" aria-hidden="true"></i>
+    <i class="bi {{ like ? 'bi-hand-thumbs-up text-success' : 'bi-hand-thumbs-down text-danger' }} fs-3xl" aria-hidden="true"></i>
     <p class="mb-0">Confirm to record your {{ reaction }}.</p>
   </div>
   <div class="card-footer">
-    <button class="btn {{ like ? 'btn-success' : 'btn-outline-danger' }}" type="submit">Confirm {{ reaction }}</button>
+    <button class="btn {{ like ? 'btn-solid theme-success' : 'btn-outline theme-danger' }}" type="submit">Confirm {{ reaction }}</button>
   </div>
 </form>
 {% endblock %}

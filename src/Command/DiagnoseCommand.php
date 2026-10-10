@@ -119,6 +119,21 @@ final class DiagnoseCommand extends Command
         return $findings;
     }
 
+    /**
+     * PostgreSQL 16 or later: webhook storage and pruning use pg_input_is_valid(), which older
+     * servers lack, so every webhook would be refused while everything else looked healthy.
+     *
+     * @param int $versionNum server_version_num, e.g. 160004
+     * @return array{0: 'OK'|'ERROR', 1: string}
+     */
+    public static function postgresFinding(int $versionNum): array
+    {
+        $version = intdiv($versionNum, 10000) . '.' . $versionNum % 10000;
+        return $versionNum >= 160000
+            ? ['OK', 'PostgreSQL ' . $version]
+            : ['ERROR', 'PostgreSQL ' . $version . ' is too old: ctnlist needs 16 or later (catto-mail webhooks would be refused)'];
+    }
+
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $this->errors = 0;
@@ -149,12 +164,14 @@ final class DiagnoseCommand extends Command
 
         // Database.
         try {
-            $this->db->fetchOne('SELECT 1');
+            $version = (int) $this->db->fetchOne('SHOW server_version_num');
             $say('OK', 'database reachable');
         } catch (\Throwable $e) {
             $say('ERROR', 'database not reachable: ' . $e->getMessage());
             return Command::FAILURE;
         }
+        [$level, $message] = self::postgresFinding($version);
+        $say($level, $message);
 
         // The suppression database (banlist): checked at confirmation, queue build and before every send.
         if (($this->suppression ?: 'banlist') === 'banlist') {

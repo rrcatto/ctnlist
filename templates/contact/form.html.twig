@@ -7,15 +7,15 @@
 {{ form_start(form, {attr: {class: 'card card-body'}}) }}
   {{ form_widget(form.suid) }}
   {{ form_widget(form.muid) }}
-  <div class="row g-3">
-    <div class="col-md-6">{{ form_row(form.name) }}</div>
-    <div class="col-md-6">{{ form_row(form.email) }}</div>
-    <div class="col-md-6">{{ form_row(form.cell) }}</div>
-    <div class="col-md-6">{{ form_row(form.company) }}</div>
-    <div class="col-md-6">{{ form_row(form.website) }}</div>
-    <div class="col-md-6">{{ form_row(form.topic) }}</div>
+  <div class="row g-5">
+    <div class="md:col-6">{{ form_row(form.name) }}</div>
+    <div class="md:col-6">{{ form_row(form.email) }}</div>
+    <div class="md:col-6">{{ form_row(form.cell) }}</div>
+    <div class="md:col-6">{{ form_row(form.company) }}</div>
+    <div class="md:col-6">{{ form_row(form.website) }}</div>
+    <div class="md:col-6">{{ form_row(form.topic) }}</div>
     <div class="col-12">{{ form_row(form.message) }}</div>
-    <div class="col-12"><button class="btn btn-primary" type="submit"><i class="bi bi-send me-1" aria-hidden="true"></i>Send request</button></div>
+    <div class="col-12"><button class="btn-solid theme-primary" type="submit"><i class="bi bi-send me-1" aria-hidden="true"></i>Send request</button></div>
   </div>
 {{ form_end(form) }}
 {% endblock %}

@@ -4,12 +4,12 @@
 
 {% block content %}
 {% include 'layout/_page_header.html.twig' with {title: title} %}
-<div class="alert alert-info" role="status">{{ message }}</div>
+<div class="alert theme-info" role="status"><div>{{ message }}</div></div>
 {% set links = (links ?? [])|filter(link => link.permission is not defined or is_granted(link.permission)) %}
 {% if links is not empty %}
-  <div class="d-flex flex-wrap gap-2">
+  <div class="d-flex flex-wrap gap-3">
     {% for link in links %}
-      <a class="btn {{ loop.first ? 'btn-primary' : 'btn-outline-secondary' }}" href="{{ path(link.route) }}">{{ link.label }}</a>
+      <a class="btn {{ loop.first ? 'btn-solid theme-primary' : 'btn-outline theme-secondary' }}" href="{{ path(link.route) }}">{{ link.label }}</a>
     {% endfor %}
   </div>
 {% endif %}

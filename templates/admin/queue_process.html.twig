@@ -9,13 +9,13 @@
   <div class="card-body">
     <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
     <input type="hidden" name="muid" value="{{ muid }}">
-    <div class="alert alert-warning small" role="note"><i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>This delivers email to subscribers. Sending continues until the limit is reached, the queue is empty or sending is stopped.</div>
+    <div class="alert theme-warning small" role="note"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div>This delivers email to subscribers. Sending continues until the limit is reached, the queue is empty or sending is stopped.</div></div>
     <label class="form-label" for="p-limit">Maximum messages to send</label>
     <input class="form-control" id="p-limit" type="number" min="0" name="limit" value="{{ limit }}">
   </div>
-  <div class="card-footer d-flex flex-wrap gap-2">
-    <button class="btn btn-success" type="submit"><i class="bi bi-send me-1" aria-hidden="true"></i>Start sending</button>
-    <a class="btn btn-outline-secondary" href="{{ path('admin_queue') }}">Cancel</a>
+  <div class="card-footer d-flex flex-wrap gap-3">
+    <button class="btn-solid theme-success" type="submit"><i class="bi bi-send me-1" aria-hidden="true"></i>Start sending</button>
+    <a class="btn-outline theme-secondary" href="{{ path('admin_queue') }}">Cancel</a>
   </div>
 </form>
 {% endblock %}

@@ -64,9 +64,12 @@ final class SubscriberRepository
         if (!preg_match(self::UUID_PATTERN, $uuid)) {
             return false;
         }
+        // Kept within the INTEGER column: an anonymous contact link can be reloaded without limit,
+        // and an out-of-range value would make every later update of this subscriber fail.
+        $value = $increment ? 's_priority::BIGINT + CAST(:priority AS BIGINT)' : 'CAST(:priority AS BIGINT)';
         return $this->db->executeStatement(
             'UPDATE subscribers
-             SET s_priority = ' . ($increment ? 's_priority + :priority' : ':priority') . ',
+             SET s_priority = LEAST(GREATEST(' . $value . ', -2147483648), 2147483647),
                  s_bounces = 0, s_emailsleft = :left, s_last_interacted = :interacted
              WHERE s_uuid = :uuid',
             ['priority' => $priority, 'left' => $emailsLeft, 'interacted' => $lastInteracted, 'uuid' => $uuid]

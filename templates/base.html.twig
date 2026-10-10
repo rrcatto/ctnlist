@@ -1,12 +1,14 @@
 <!DOCTYPE html>
-<html lang="en">
+{# Always the light colour mode (Bootstrap 6 otherwise follows the visitor's system setting): message HTML in the archive and the editor is written for a light page. #}
+<html lang="en" data-bs-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ site.listName }} | {% block title %}{% endblock %}</title>
   <meta name="description" content="{% block description %}{{ site.listName }} mailing list: subscribe, manage your subscription and read past messages.{% endblock %}">
   <link rel="icon" href="{{ asset('images/favicon.svg') }}" type="image/svg+xml">
-  {# Bootstrap 5.3.8 and Bootstrap Icons 1.13.1, served from this site (assets/lib, see its README). #}
+  {# Bootstrap 6.0.0-alpha.1 and Bootstrap Icons 1.13.1, served from this site (assets/lib, see its README).
+     Bootstrap's JavaScript is an ES module: assets/app.js imports it, so it arrives through the import map. #}
   <link rel="stylesheet" href="{{ asset('lib/bootstrap/bootstrap.min.css') }}">
   <link rel="stylesheet" href="{{ asset('lib/bootstrap-icons/bootstrap-icons.min.css') }}">
   <link rel="stylesheet" href="{{ asset('styles/app.css') }}">
@@ -14,14 +16,14 @@
   {{ importmap('app', {nonce: csp_nonce()}) }}
 </head>
 <body class="d-flex flex-column min-vh-100">
-  <a class="visually-hidden-focusable position-absolute top-0 start-0 m-2 btn btn-light" href="#main">Skip to content</a>
+  <a class="visually-hidden-focusable position-absolute top-0 start-0 m-3 btn-solid theme-secondary" href="#main">Skip to content</a>
 
   <header class="app-header sticky-top shadow-sm">
     {% include 'layout/_navbar.html.twig' %}
     {% include 'layout/_admin_menu.html.twig' %}
   </header>
 
-  <main id="main" class="flex-grow-1 py-4">
+  <main id="main" class="flex-grow-1 py-7">
     <div class="container app-content">
       {% include 'layout/_flash.html.twig' %}
       {% block content %}{% endblock %}
@@ -30,7 +32,6 @@
 
   {% include 'layout/_footer.html.twig' %}
 
-  <script src="{{ asset('lib/bootstrap/bootstrap.bundle.min.js') }}"></script>
   {% block javascripts %}{% endblock %}
 </body>
 </html>

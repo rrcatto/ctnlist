@@ -4,21 +4,21 @@
 
 {% block content %}
 {% embed 'layout/_page_header.html.twig' with {title: 'Webhook events', description: 'Signed events received from catto-mail, de-duplicated by event id and processed after the acknowledgement. Unknown event types are kept and ignored. Raw bodies are never shown here; they are kept in the database until processed and then for the retention period.'} %}
-  {% block actions %}<a class="btn btn-outline-secondary" href="{{ path('admin_delivery') }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>Integration</a>{% endblock %}
+  {% block actions %}<a class="btn-outline theme-secondary" href="{{ path('admin_delivery') }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>Integration</a>{% endblock %}
 {% endembed %}
 
-<form class="card card-body bg-body-tertiary mb-3" method="get" action="{{ path('admin_delivery_webhooks') }}" role="search">
-  <div class="row g-2 align-items-end">
-    <div class="col-sm-6 col-md-4">
+<form class="card card-body bg-1 mb-5" method="get" action="{{ path('admin_delivery_webhooks') }}" role="search">
+  <div class="row g-3 align-items-end">
+    <div class="sm:col-6 md:col-4">
       <label class="form-label small" for="webhook-filter">Show</label>
       {% if related %}<input type="hidden" name="j" value="{{ related }}">{% endif %}
-      <select class="form-select" id="webhook-filter" name="f">
+      <select class="form-control" id="webhook-filter" name="f">
         {% for value, label in filters %}<option value="{{ value }}"{{ value == filter ? ' selected' }}>{{ label }}</option>{% endfor %}
       </select>
     </div>
-    <div class="col-auto d-flex gap-2">
-      <button class="btn btn-primary" type="submit"><i class="bi bi-search me-1" aria-hidden="true"></i>Search</button>
-      <a class="btn btn-outline-secondary" href="{{ path('admin_delivery_webhooks') }}">Clear</a>
+    <div class="col-auto d-flex gap-3">
+      <button class="btn-solid theme-primary" type="submit"><i class="bi bi-search me-1" aria-hidden="true"></i>Search</button>
+      <a class="btn-outline theme-secondary" href="{{ path('admin_delivery_webhooks') }}">Clear</a>
     </div>
   </div>
 </form>
@@ -29,28 +29,28 @@
 {% else %}
   <div class="table-responsive">
     <table class="table table-hover align-middle">
-      <thead class="table-light"><tr><th scope="col">Type</th><th scope="col">Event id</th><th scope="col">Received</th><th scope="col">Processed</th><th scope="col">Outcome</th><th scope="col">Related</th></tr></thead>
+      <thead class=""><tr><th scope="col">Type</th><th scope="col">Event id</th><th scope="col">Received</th><th scope="col">Processed</th><th scope="col">Outcome</th><th scope="col">Related</th></tr></thead>
       <tbody>
       {% for event in events %}
         <tr>
           <td><code>{{ event.cwe_type }}</code></td>
           <td class="small text-break">{{ event.cwe_event_id }}</td>
           <td class="small text-nowrap">{{ event.cwe_received_at|slice(0, 16) }}</td>
-          <td class="small text-nowrap">{{ event.cwe_processed_at ? event.cwe_processed_at|slice(0, 16) : '—' }}{% if event.pruned %}<div class="text-body-secondary">body pruned</div>{% endif %}</td>
+          <td class="small text-nowrap">{{ event.cwe_processed_at ? event.cwe_processed_at|slice(0, 16) : '—' }}{% if event.pruned %}<div class="fg-2">body pruned</div>{% endif %}</td>
           <td class="small text-break">
             {% if event.cwe_processed_at %}
-              {% if event.cwe_outcome starts with 'failed:' %}<span class="badge text-bg-danger">failed</span> {{ event.cwe_outcome|slice(7, 150) }}
-              {% elseif event.cwe_outcome starts with 'ignored' %}<span class="badge text-bg-secondary">ignored</span> {{ event.cwe_outcome|slice(0, 150) }}
+              {% if event.cwe_outcome starts with 'failed:' %}<span class="badge theme-danger">failed</span> {{ event.cwe_outcome|slice(7, 150) }}
+              {% elseif event.cwe_outcome starts with 'ignored' %}<span class="badge theme-secondary">ignored</span> {{ event.cwe_outcome|slice(0, 150) }}
               {% else %}{{ event.cwe_outcome }}{% endif %}
             {% else %}
-              <span class="badge text-bg-warning">pending</span>{% if event.cwe_attempts %} {{ event.cwe_attempts }} attempt{{ event.cwe_attempts == 1 ? '' : 's' }}{% endif %}{% if event.cwe_error %}: {{ event.cwe_error|slice(0, 150) }}{% endif %}
+              <span class="badge theme-warning">pending</span>{% if event.cwe_attempts %} {{ event.cwe_attempts }} attempt{{ event.cwe_attempts == 1 ? '' : 's' }}{% endif %}{% if event.cwe_error %}: {{ event.cwe_error|slice(0, 150) }}{% endif %}
             {% endif %}
           </td>
           <td class="small text-nowrap">
             {% if event.reprocessable and is_granted('queue.process') %}
               <form method="post" action="{{ path('admin_delivery_reprocess', {event: event.cwe_event_id}) }}" class="mb-1" data-confirm="Process this event again? Its effects are applied at most once.">
                 <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-                <button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Process again</button>
+                <button class="btn-sm btn-outline theme-secondary" type="submit"><i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Process again</button>
               </form>
             {% endif %}
             {% if event.send_job_id %}<a href="{{ path('admin_delivery_job', {id: event.send_job_id}) }}">Send job {{ event.send_job_id }}</a>

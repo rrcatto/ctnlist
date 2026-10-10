@@ -1,6 +1,6 @@
 {# Shown instead of an empty table. Variables: message, optional icon (Bootstrap Icons name) and hint. #}
-<div class="text-center text-body-secondary border border-dashed rounded-3 py-5 px-3">
-  <i class="bi bi-{{ icon ?? 'inbox' }} fs-2 d-block mb-2" aria-hidden="true"></i>
-  <p class="fw-semibold text-body mb-1">{{ message }}</p>
+<div class="text-center fg-2 border border-dashed rounded-5 py-12 px-5">
+  <i class="bi bi-{{ icon ?? 'inbox' }} fs-3xl d-block mb-3" aria-hidden="true"></i>
+  <p class="fw-semibold fg-body mb-1">{{ message }}</p>
   {% if hint ?? false %}<p class="small mb-0">{{ hint }}</p>{% endif %}
 </div>

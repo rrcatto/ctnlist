@@ -29,6 +29,13 @@ final class CattoMailSendRepository
         csj_completed_at, csj_last_checked_at';
     private const RECIPIENT_COLUMNS = 'crp_id, crp_uuid, crp_csj_id, crp_cb_id, crp_s_uuid, crp_email, crp_muid, crp_list_shortcode, crp_type,
         crp_subject, crp_html, crp_text, crp_unsubscribe_url, crp_remote_message_id, crp_status, crp_effect_applied_at';
+    /**
+     * When run r last showed progress: its start, its newest job, its newest accepted batch (a staging
+     * run uploads a batch every 500 recipients). Not its age: a long queue run is still alive.
+     */
+    private const RUN_ACTIVITY = 'GREATEST(r.cr_created_at,
+        (SELECT MAX(aj.csj_created_at) FROM cattomail_send_jobs aj WHERE aj.csj_cr_id = r.cr_id),
+        (SELECT MAX(ab.cb_accepted_at) FROM cattomail_batches ab JOIN cattomail_send_jobs abj ON abj.csj_id = ab.cb_csj_id WHERE abj.csj_cr_id = r.cr_id))';
 
     public function __construct(
         private readonly Connection $db,
@@ -66,10 +73,10 @@ final class CattoMailSendRepository
         return $this->db->fetchOne('SELECT 1 FROM cattomail_recipients r JOIN cattomail_send_jobs j ON j.csj_id = r.crp_csj_id WHERE j.csj_cr_id = ? LIMIT 1', [$runId]) !== false;
     }
 
-    /** The run has finished staging, or started before $abandonedBefore (its process is gone). */
+    /** The run has finished staging, or was last active before $abandonedBefore (its process is gone). */
     public function runIsOver(int $runId, string $abandonedBefore): bool
     {
-        return (bool) $this->db->fetchOne('SELECT cr_finished_at IS NOT NULL OR cr_created_at < ? FROM cattomail_runs WHERE cr_id = ?', [$abandonedBefore, $runId]);
+        return (bool) $this->db->fetchOne('SELECT r.cr_finished_at IS NOT NULL OR ' . self::RUN_ACTIVITY . ' < ? FROM cattomail_runs r WHERE r.cr_id = ?', [$abandonedBefore, $runId]);
     }
 
     public function runKind(int $runId): string
@@ -140,7 +147,7 @@ final class CattoMailSendRepository
 
     /**
      * Jobs not yet sealed at catto-mail whose run has finished (or was
-     * abandoned before $abandonedBefore): they need create/upload/submit retries.
+     * abandoned: last active before $abandonedBefore): they need create/upload/submit retries.
      *
      * @return list<SendJob>
      */
@@ -151,7 +158,7 @@ final class CattoMailSendRepository
                     j.csj_message_class, j.csj_request, j.csj_status, j.csj_total, j.csj_summary, j.csj_error, j.csj_attempts, j.csj_created_at,
                     j.csj_submitted_at, j.csj_completed_at, j.csj_last_checked_at
              FROM cattomail_send_jobs j JOIN cattomail_runs r ON r.cr_id = j.csj_cr_id
-             WHERE j.csj_status IN ('open', 'ready') AND (r.cr_finished_at IS NOT NULL OR r.cr_created_at < ?)
+             WHERE j.csj_status IN ('open', 'ready') AND (r.cr_finished_at IS NOT NULL OR " . self::RUN_ACTIVITY . " < ?)
              ORDER BY j.csj_id LIMIT " . max(1, $limit),
             [$abandonedBefore]
         ));
@@ -178,6 +185,12 @@ final class CattoMailSendRepository
     }
 
     /** Close a job to new recipients (it can now be submitted) and record its size. */
+    /** Inside the staging transaction: lock the job and say whether recipients may still join it. */
+    public function lockOpenJob(int $jobId): bool
+    {
+        return $this->db->fetchOne('SELECT csj_status FROM cattomail_send_jobs WHERE csj_id = ? FOR UPDATE', [$jobId]) === 'open';
+    }
+
     public function closeJob(int $jobId): void
     {
         $this->db->executeStatement(

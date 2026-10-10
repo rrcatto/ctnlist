@@ -68,6 +68,12 @@ final class MessageActionTest extends SmokeTestCase
         $other = '01a10309-8535-7ba9-a26a-000000000000';
         self::assertSame(403, self::request($client, 'POST', '/like', ['csrf' => $csrf, 'subscriber_token' => $other, 'muid' => self::$muid])['status']);
         self::assertSame(404, self::request(self::client(), 'GET', "/resend/{$other}/" . self::$muid)['status'], 'unknown subscriber');
+
+        // An administrator forwards as themselves: a posted token of someone else is not used.
+        $forward = self::submitForm($client, '/forward/' . self::$muid, 'forward', ['forward[token]' => $other, 'forward[emails]' => self::FRIEND]);
+        self::assertSame(200, $forward['status']);
+        self::assertStringNotContainsString('Unknown subscriber', $forward['body']);
+        self::assertStringContainsString('Forwarded the current message to 0 recipient(s).', $forward['body']);
     }
 
     /** @param array<string, string> $fields */

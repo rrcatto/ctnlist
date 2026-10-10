@@ -8,7 +8,7 @@
 {% set last = pagination.lastPage %}
 {% macro page(number, base, query, current) %}
   {%- set distance = (number - current)|abs -%}
-  <li class="page-item{{ number == current ? ' active' }}{{ distance > 1 ? ' d-none d-sm-block' }}">
+  <li class="page-item{{ number == current ? ' active' }}{{ distance > 1 ? ' d-none sm:d-block' }}">
     {%- if number == current -%}
       <span class="page-link" aria-current="page">{{ number }}</span>
     {%- else -%}
@@ -26,8 +26,8 @@
   </li>
 {%- endmacro %}
 {% import _self as pager %}
-<div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-3">
-  <p class="small text-body-secondary mb-0">Page {{ current }} of {{ last }} &middot; {{ pagination.total }} {{ pagination.total == 1 ? 'record' : 'records' }}</p>
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mt-5">
+  <p class="small fg-2 mb-0">Page {{ current }} of {{ last }} &middot; {{ pagination.total }} {{ pagination.total == 1 ? 'record' : 'records' }}</p>
   {% if last > 1 %}
     <nav aria-label="Pagination">
       <ul class="pagination pagination-sm mb-0">

@@ -6,33 +6,33 @@
 {% block content %}
 {% include 'layout/_page_header.html.twig' with {title: 'Address validation', description: 'catto-mail checks addresses for syntax, mail domains and SMTP acceptance. The results are information only: they never change a subscriber, a suggested correction is never applied, and a deliverable address says nothing about consent.'} %}
 
-{% if problem %}<div class="alert alert-warning" role="note"><i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>{{ problem }}</div>{% endif %}
+{% if problem %}<div class="alert theme-warning" role="note"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div>{{ problem }}</div></div>{% endif %}
 
-<div class="row g-4">
-  <div class="col-lg-4">
+<div class="row g-7">
+  <div class="lg:col-4">
     {{ form_start(form, {action: path('admin_validation'), attr: {class: 'card'}}) }}
       <div class="card-header fw-semibold">Validate addresses</div>
       <div class="card-body">
         {{ form_errors(form) }}
         {{ form_row(form.listId, {row_attr: {class: 'mb-0'}}) }}
       </div>
-      <div class="card-footer"><button class="btn btn-primary" type="submit"{{ problem ? ' disabled' }}><i class="bi bi-patch-check me-1" aria-hidden="true"></i>Start validation</button></div>
+      <div class="card-footer"><button class="btn-solid theme-primary" type="submit"{{ problem ? ' disabled' }}><i class="bi bi-patch-check me-1" aria-hidden="true"></i>Start validation</button></div>
     {{ form_end(form) }}
   </div>
-  <div class="col-lg-8">
+  <div class="lg:col-8">
     {% if jobs is empty %}
       {% include 'layout/_empty_state.html.twig' with {icon: 'patch-question', message: 'No validation jobs yet.'} %}
     {% else %}
       <div class="table-responsive">
         <table class="table table-hover align-middle">
-          <thead class="table-light"><tr><th scope="col">Job</th><th scope="col">Status</th><th scope="col" class="text-end">Addresses</th><th scope="col">Classification</th></tr></thead>
+          <thead class=""><tr><th scope="col">Job</th><th scope="col">Status</th><th scope="col" class="text-end">Addresses</th><th scope="col">Classification</th></tr></thead>
           <tbody>
           {% for job in jobs %}
             <tr>
-              <td><a class="fw-semibold" href="{{ path('admin_validation_job', {id: job.cvj_id}) }}">{{ job.cvj_scope ?: 'Job ' ~ job.cvj_id }}</a><div class="small text-body-secondary">{{ job.cvj_created_at|slice(0, 16) }}</div></td>
-              <td>{{ cm.job_status(job.cvj_status) }}{% if job.cvj_error %}<div class="small text-danger text-break">{{ job.cvj_error|slice(0, 120) }}</div>{% endif %}</td>
+              <td><a class="fw-semibold" href="{{ path('admin_validation_job', {id: job.cvj_id}) }}">{{ job.cvj_scope ?: 'Job ' ~ job.cvj_id }}</a><div class="small fg-2">{{ job.cvj_created_at|slice(0, 16) }}</div></td>
+              <td>{{ cm.job_status(job.cvj_status) }}{% if job.cvj_error %}<div class="small fg-danger text-break">{{ job.cvj_error|slice(0, 120) }}</div>{% endif %}</td>
               <td class="text-end">{{ job.cvj_processed }} / {{ job.cvj_total }}</td>
-              <td class="small">{% for class in classifications %}{% if (job.cvj_counts[class] ?? 0) > 0 %}<span class="me-2 text-nowrap">{{ cm.classification(class) }} {{ job.cvj_counts[class] }}</span>{% endif %}{% endfor %}</td>
+              <td class="small">{% for class in classifications %}{% if (job.cvj_counts[class] ?? 0) > 0 %}<span class="me-3 text-nowrap">{{ cm.classification(class) }} {{ job.cvj_counts[class] }}</span>{% endif %}{% endfor %}</td>
             </tr>
           {% endfor %}
           </tbody>

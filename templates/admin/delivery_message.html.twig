@@ -5,12 +5,12 @@
 
 {% block content %}
 {% embed 'layout/_page_header.html.twig' with {title: message.m_subject ?: 'Message ' ~ message.m_uniqid, description: 'catto-mail send jobs for this message: one per list and run, at most 10,000 recipients each.'} %}
-  {% block actions %}<a class="btn btn-outline-secondary" href="{{ path('admin_messages') }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>Messages</a>{% endblock %}
+  {% block actions %}<a class="btn-outline theme-secondary" href="{{ path('admin_messages') }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>Messages</a>{% endblock %}
 {% endembed %}
 
 {% if counts is not empty %}
-  <p class="small">{% for status, n in counts %}<span class="me-3 text-nowrap">{{ cm.message_status(status) }} {{ n }}</span>{% endfor %}</p>
-  <p class="small text-body-secondary">“remote accepted” means the receiving server accepted the message, not that it reached an inbox.</p>
+  <p class="small">{% for status, n in counts %}<span class="me-5 text-nowrap">{{ cm.message_status(status) }} {{ n }}</span>{% endfor %}</p>
+  <p class="small fg-2">“remote accepted” means the receiving server accepted the message, not that it reached an inbox.</p>
 {% endif %}
 
 {% if jobs is empty %}
@@ -18,15 +18,15 @@
 {% else %}
   <div class="table-responsive">
     <table class="table table-hover align-middle">
-      <thead class="table-light"><tr><th scope="col">Job</th><th scope="col">Run</th><th scope="col">List</th><th scope="col">Class</th><th scope="col">Status</th><th scope="col" class="text-end">Recipients</th><th scope="col">Submitted</th></tr></thead>
+      <thead class=""><tr><th scope="col">Job</th><th scope="col">Run</th><th scope="col">List</th><th scope="col">Class</th><th scope="col">Status</th><th scope="col" class="text-end">Recipients</th><th scope="col">Submitted</th></tr></thead>
       <tbody>
       {% for job in jobs %}
         <tr>
-          <td><a href="{{ path('admin_delivery_job', {id: job.csj_id}) }}">Job {{ job.csj_id }}</a>{% if job.csj_remote_id %}<div class="small text-body-secondary text-break">{{ job.csj_remote_id }}</div>{% endif %}</td>
+          <td><a href="{{ path('admin_delivery_job', {id: job.csj_id}) }}">Job {{ job.csj_id }}</a>{% if job.csj_remote_id %}<div class="small fg-2 text-break">{{ job.csj_remote_id }}</div>{% endif %}</td>
           <td class="small">{% set run = runs[job.csj_cr_id] %}<a href="{{ path('admin_delivery_run', {uuid: run.uuid}) }}">{{ run.kind }}</a>, job {{ job.csj_seq }}</td>
           <td>{{ job.csj_list_shortcode ?: '—' }}</td>
           <td class="small">{{ job.csj_message_class }}</td>
-          <td>{{ cm.job_status(job.csj_status) }}{% if job.csj_error %}<div class="small text-danger text-break">{{ job.csj_error|slice(0, 140) }}</div>{% endif %}</td>
+          <td>{{ cm.job_status(job.csj_status) }}{% if job.csj_error %}<div class="small fg-danger text-break">{{ job.csj_error|slice(0, 140) }}</div>{% endif %}</td>
           <td class="text-end">{{ job.csj_total }}</td>
           <td class="small text-nowrap">{{ job.csj_submitted_at ? job.csj_submitted_at|slice(0, 16) : '—' }}</td>
         </tr>

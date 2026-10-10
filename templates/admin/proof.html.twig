@@ -8,14 +8,14 @@
 {{ form_start(form, {attr: {class: 'card app-narrow ms-0'}}) }}
   <div class="card-body">
     {% if not test_email_valid %}
-      <div class="alert alert-warning small" role="note"><i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>{{ test_email is empty ? 'MAIL_TEST_ADDRESS is not set' : 'MAIL_TEST_ADDRESS (' ~ test_email ~ ') is not a valid email address' }}; enter the address to send the proof to.</div>
+      <div class="alert theme-warning small" role="note"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div>{{ test_email is empty ? 'MAIL_TEST_ADDRESS is not set' : 'MAIL_TEST_ADDRESS (' ~ test_email ~ ') is not a valid email address' }}; enter the address to send the proof to.</div></div>
     {% endif %}
     {{ form_errors(form) }}
     {{ form_row(form.email, {row_attr: {class: 'mb-0'}}) }}
   </div>
-  <div class="card-footer d-flex flex-wrap gap-2">
-    <button class="btn btn-primary" type="submit"><i class="bi bi-envelope-check me-1" aria-hidden="true"></i>Send proof</button>
-    <a class="btn btn-outline-secondary" href="{{ path('admin_message', {muid: muid}) }}">Back to the message</a>
+  <div class="card-footer d-flex flex-wrap gap-3">
+    <button class="btn-solid theme-primary" type="submit"><i class="bi bi-envelope-check me-1" aria-hidden="true"></i>Send proof</button>
+    <a class="btn-outline theme-secondary" href="{{ path('admin_message', {muid: muid}) }}">Back to the message</a>
   </div>
 {{ form_end(form) }}
 {% endblock %}

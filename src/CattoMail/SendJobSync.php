@@ -21,6 +21,7 @@ final class SendJobSync
         private readonly CattoMailSendRepository $outbox,
         private readonly CattoMailClient $client,
         private readonly DeliveryProblems $problems,
+        private readonly CattoMailSender $sender,
     ) {
     }
 
@@ -35,6 +36,12 @@ final class SendJobSync
             return 'unknown send job';
         }
         $status = (string) ($remote['status'] ?? '');
+        if ($job['csj_status'] === 'ready' && in_array($status, ['queued', 'processing', 'dispatched', 'completed'], true)) {
+            // catto-mail sealed it, but the submitting process stopped before recording the handoff
+            // (and the worker's retry has not run yet): record it now, or its recipients would never
+            // reach the Send Log once the job moved on.
+            $this->sender->recordSubmission($job, $status);
+        }
         $summary = is_array($remote['summary_counts'] ?? null) ? $remote['summary_counts'] : null;
         $this->outbox->updateJobState($job['csj_id'], $status, $summary, DeliveryProblems::timestamp(is_string($remote['completed_at'] ?? null) ? $remote['completed_at'] : null));
         $synced = 0;

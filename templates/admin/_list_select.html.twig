@@ -1,5 +1,5 @@
 {# A <select> of active lists. Variables: lists, name, selected (id), blank (optional label for "no list"). #}
-<select class="form-select" name="{{ name }}" id="{{ name }}">
+<select class="form-control" name="{{ name }}" id="{{ name }}">
   {% if blank is defined %}<option value="">{{ blank }}</option>{% endif %}
   {% for list in lists %}
     <option value="{{ list.l_id }}"{{ list.l_id == selected ? ' selected' }}>{{ list.l_name }} ({{ list.l_shortcode }})</option>

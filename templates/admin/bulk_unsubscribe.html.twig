@@ -5,32 +5,32 @@
 {% block content %}
 {% include 'layout/_page_header.html.twig' with {title: 'Bulk unsubscribe', description: 'Removes many addresses from a list, or adds them to the global suppression list.'} %}
 
-{{ form_start(form, {attr: {class: 'card border-danger-subtle', 'data-confirm': 'Unsubscribe or suppress these addresses?'}}) }}
+{{ form_start(form, {attr: {class: 'card border-subtle-danger', 'data-confirm': 'Unsubscribe or suppress these addresses?'}}) }}
   <div class="card-body">
-    <div class="alert alert-warning small" role="note"><i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>Global suppression applies to every list and every installation that shares the suppression database: suppressed addresses lose their list memberships.</div>
+    <div class="alert theme-warning small" role="note"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div>Global suppression applies to every list and every installation that shares the suppression database: suppressed addresses lose their list memberships.</div></div>
     {{ form_errors(form) }}
-    <div class="row g-3">
-      <div class="col-md-8">{{ form_row(form.listId, {row_attr: {class: 'mb-0'}}) }}</div>
+    <div class="row g-5">
+      <div class="md:col-8">{{ form_row(form.listId, {row_attr: {class: 'mb-0'}}) }}</div>
       <div class="col-12">
         <fieldset>
-          <legend class="form-label fs-6 fw-normal">{{ form.scope.vars.label }}</legend>
+          <legend class="form-label fs-md fw-normal">{{ form.scope.vars.label }}</legend>
           {{ form_errors(form.scope) }}
           {% for choice in form.scope %}
-            <div class="mb-2">
+            <div class="mb-3">
               {{ form_widget(choice, {attr: {'aria-describedby': choice.vars.id ~ '_help'}}) }}
-              <div class="form-text mt-0 ms-4" id="{{ choice.vars.id }}_help">{{ scopes[choice.vars.value][1] }}</div>
+              <div class="form-text mt-0 ms-7" id="{{ choice.vars.id }}_help">{{ scopes[choice.vars.value][1] }}</div>
             </div>
           {% endfor %}
           {% do form.scope.setRendered %}
         </fieldset>
       </div>
-      <div class="col-md-8">{{ form_row(form.reason, {row_attr: {class: 'mb-0'}}) }}</div>
+      <div class="md:col-8">{{ form_row(form.reason, {row_attr: {class: 'mb-0'}}) }}</div>
       <div class="col-12">{{ form_row(form.emails, {row_attr: {class: 'mb-0'}}) }}</div>
     </div>
   </div>
-  <div class="card-footer d-flex flex-wrap gap-2">
-    <button class="btn btn-danger" type="submit"><i class="bi bi-person-dash me-1" aria-hidden="true"></i>Unsubscribe addresses</button>
-    <a class="btn btn-outline-secondary" href="{{ path('admin_subscribers') }}">Cancel</a>
+  <div class="card-footer d-flex flex-wrap gap-3">
+    <button class="btn-solid theme-danger" type="submit"><i class="bi bi-person-dash me-1" aria-hidden="true"></i>Unsubscribe addresses</button>
+    <a class="btn-outline theme-secondary" href="{{ path('admin_subscribers') }}">Cancel</a>
   </div>
 {{ form_end(form) }}
 {% endblock %}

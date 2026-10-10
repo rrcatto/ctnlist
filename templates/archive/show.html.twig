@@ -4,15 +4,16 @@
 
 {% block content %}
 {% embed 'layout/_page_header.html.twig' with {title: archive.a_subject, description: 'Archived ' ~ archive.a_datecreated|slice(0, 10)} %}
-  {% block actions %}<a class="btn btn-outline-secondary" href="{{ path('archives') }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>All archives</a>{% endblock %}
+  {% block actions %}<a class="btn-outline theme-secondary" href="{{ path('archives') }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>All archives</a>{% endblock %}
 {% endembed %}
-<div class="row g-4">
-  <div class="{{ form ? 'col-lg-8' : 'col-12' }}">
+<div class="row g-7">
+  <div class="{{ form ? 'lg:col-8' : 'col-12' }}">
     {# The archived message HTML, rendered when the message was first queued. #}
-    <div class="card"><div class="card-body overflow-x-auto">{{ archive.a_html|sanitize_html('app.message_html') }}</div></div>
+    {# The message's own HTML sits in a plain block: a card body is a flex column, which would restyle its top-level elements. #}
+    <div class="card"><div class="card-body overflow-x-auto"><div>{{ archive.a_html|sanitize_html('app.message_html') }}</div></div></div>
   </div>
   {% if form %}
-    <div class="col-lg-4">
+    <div class="lg:col-4">
       {{ form_start(form, {attr: {class: 'card', id: 'forward-archive'}}) }}
         <div class="card-header fw-semibold">Forward this message</div>
         <div class="card-body">
@@ -22,7 +23,7 @@
           {{ form_widget(form.archiveId) }}
           {{ form_row(form.emails, {row_attr: {class: 'mb-0'}}) }}
         </div>
-        <div class="card-footer"><button class="btn btn-primary" type="submit"><i class="bi bi-forward me-1" aria-hidden="true"></i>Forward message</button></div>
+        <div class="card-footer"><button class="btn-solid theme-primary" type="submit"><i class="bi bi-forward me-1" aria-hidden="true"></i>Forward message</button></div>
       {{ form_end(form) }}
     </div>
   {% endif %}

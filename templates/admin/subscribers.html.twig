@@ -11,24 +11,24 @@
 } %}
   {% block actions %}
     {% if is_granted('subscribers.manage') %}
-      <a class="btn btn-primary" href="{{ path('admin_bulk_subscribe') }}"><i class="bi bi-person-plus me-1" aria-hidden="true"></i>Bulk subscribe</a>
-      <a class="btn btn-outline-secondary" href="{{ path('admin_import') }}"><i class="bi bi-upload me-1" aria-hidden="true"></i>Import</a>
-      <a class="btn btn-outline-secondary" href="{{ path('admin_export') }}" title="Writes export files to the installation's logs/ directory"><i class="bi bi-download me-1" aria-hidden="true"></i>Export</a>
+      <a class="btn-solid theme-primary" href="{{ path('admin_bulk_subscribe') }}"><i class="bi bi-person-plus me-1" aria-hidden="true"></i>Bulk subscribe</a>
+      <a class="btn-outline theme-secondary" href="{{ path('admin_import') }}"><i class="bi bi-upload me-1" aria-hidden="true"></i>Import</a>
+      <a class="btn-outline theme-secondary" href="{{ path('admin_export') }}" title="Writes export files to the installation's logs/ directory"><i class="bi bi-download me-1" aria-hidden="true"></i>Export</a>
     {% endif %}
   {% endblock %}
 {% endembed %}
 
-<form method="get" action="{{ base }}" class="card card-body bg-body-tertiary mb-4" role="search" aria-label="Filter subscribers">
-  <div class="row g-3 align-items-end">
-    <div class="col-md-4"><label class="form-label" for="f-e">Email address contains</label><input class="form-control" id="f-e" type="search" name="e" value="{{ filters.e }}"></div>
-    <div class="col-md-3"><label class="form-label" for="l">List</label>{% include 'admin/_list_select.html.twig' with {name: 'l', selected: filters.l, blank: 'All lists'} %}</div>
-    <div class="col-6 col-md-2"><label class="form-label" for="f-r">Rows per page</label><input class="form-control" id="f-r" type="number" min="1" max="200" name="r" value="{{ pagination.perPage }}"></div>
-    <div class="col-6 col-md-3">
-      <div class="form-check mb-2"><input class="form-check-input" type="checkbox" name="u" value="1" id="include-unsubscribed"{{ filters.u ? ' checked' }}><label class="form-check-label" for="include-unsubscribed">Include unsubscribed</label></div>
+<form method="get" action="{{ base }}" class="card card-body bg-1 mb-7" role="search" aria-label="Filter subscribers">
+  <div class="row g-5 align-items-end">
+    <div class="md:col-4"><label class="form-label" for="f-e">Email address contains</label><input class="form-control" id="f-e" type="search" name="e" value="{{ filters.e }}"></div>
+    <div class="md:col-3"><label class="form-label" for="l">List</label>{% include 'admin/_list_select.html.twig' with {name: 'l', selected: filters.l, blank: 'All lists'} %}</div>
+    <div class="col-6 md:col-2"><label class="form-label" for="f-r">Rows per page</label><input class="form-control" id="f-r" type="number" min="1" max="200" name="r" value="{{ pagination.perPage }}"></div>
+    <div class="col-6 md:col-3">
+      <div class="form-field mb-3"><input class="check" type="checkbox" name="u" value="1" id="include-unsubscribed"{{ filters.u ? ' checked' }}><label for="include-unsubscribed">Include unsubscribed</label></div>
     </div>
-    <div class="col-12 d-flex gap-2">
-      <button class="btn btn-primary" type="submit"><i class="bi bi-search me-1" aria-hidden="true"></i>Search</button>
-      <a class="btn btn-outline-secondary" href="{{ base }}">Clear</a>
+    <div class="col-12 d-flex gap-3">
+      <button class="btn-solid theme-primary" type="submit"><i class="bi bi-search me-1" aria-hidden="true"></i>Search</button>
+      <a class="btn-outline theme-secondary" href="{{ base }}">Clear</a>
     </div>
   </div>
 </form>
@@ -39,7 +39,7 @@
   {% set can_edit = is_granted('subscribers.manage') %}
   <div class="table-responsive">
     <table class="table table-hover align-middle">
-      <thead class="table-light">
+      <thead class="">
         <tr>
           <th scope="col">Email</th>
           <th scope="col">Name</th>
@@ -57,9 +57,9 @@
           <td>{{ (row.s_fname ~ ' ' ~ row.s_lname)|trim }}</td>
           <td>
             {% for membership in row.memberships %}
-              <span class="text-nowrap me-2">{{ membership.name }} {{ ui.membership_badge(membership.state) }}</span>
+              <span class="text-nowrap me-3">{{ membership.name }} {{ ui.membership_badge(membership.state) }}</span>
             {% else %}
-              <span class="text-body-secondary">–</span>
+              <span class="fg-2">–</span>
             {% endfor %}
           </td>
           <td class="text-end">{{ row.s_priority }}</td>

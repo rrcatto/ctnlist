@@ -4,35 +4,35 @@
 
 {% block content %}
 {% embed 'layout/_page_header.html.twig' with {title: 'Edit profile', description: email} %}
-  {% block actions %}<a class="btn btn-outline-secondary" href="{{ path('profile') }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>My profile</a>{% endblock %}
+  {% block actions %}<a class="btn-outline theme-secondary" href="{{ path('profile') }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>My profile</a>{% endblock %}
 {% endembed %}
 {# Profile picture: its own form (a file upload), above the details. #}
-{{ form_start(image_form, {attr: {class: 'card mb-4', id: 'profile-picture'}}) }}
+{{ form_start(image_form, {attr: {class: 'card mb-7', id: 'profile-picture'}}) }}
   <div class="card-header fw-semibold">Profile picture</div>
   <div class="card-body" data-profile-image data-size="{{ image_size }}">
     {{ form_errors(image_form) }}
-    <div class="row g-4 align-items-start">
-      <div class="col-sm-auto text-center" data-profile-image-current>
+    <div class="row g-7 align-items-start">
+      <div class="sm:col-auto text-center" data-profile-image-current>
         <img class="app-avatar app-avatar-lg border" src="{{ profile_image_url(app.user) }}" alt="{{ has_image ? 'Your profile picture' : 'No profile picture yet' }}" width="128" height="128">
         <div class="form-text">{{ has_image ? 'Your picture now.' : 'No picture yet.' }}</div>
       </div>
       <div class="col">
         {{ form_row(image_form.image) }}
-        <div class="row g-3 align-items-start" data-profile-image-editor hidden>
-          <div class="col-md-auto">
+        <div class="row g-5 align-items-start" data-profile-image-editor hidden>
+          <div class="md:col-auto">
             <div class="app-image-stage" data-profile-image-stage tabindex="0" role="img" aria-label="Your picture: drag, or use the arrow keys, to position it; + and - zoom">
               <canvas width="640" height="640"></canvas>
             </div>
           </div>
-          <div class="col-md">
+          <div class="md:col">
             <label class="form-label" for="profile-image-zoom">Zoom</label>
-            <input class="form-range" type="range" id="profile-image-zoom" min="1" max="4" step="0.02" value="1" data-profile-image-zoom>
-            <div class="btn-group btn-group-sm my-3" role="group" aria-label="Rotate">
-              <button class="btn btn-outline-secondary" type="button" data-profile-image-action="rotate-left"><i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>Rotate left</button>
-              <button class="btn btn-outline-secondary" type="button" data-profile-image-action="rotate-right"><i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Rotate right</button>
-              <button class="btn btn-outline-secondary" type="button" data-profile-image-action="reset"><i class="bi bi-bootstrap-reboot me-1" aria-hidden="true"></i>Reset</button>
+            <div class="form-range"><input class="form-range-input" type="range" id="profile-image-zoom" min="1" max="4" step="0.02" value="1" data-profile-image-zoom></div>
+            <div class="btn-group btn-group-sm my-5" role="group" aria-label="Rotate">
+              <button class="btn-outline theme-secondary" type="button" data-profile-image-action="rotate-left"><i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>Rotate left</button>
+              <button class="btn-outline theme-secondary" type="button" data-profile-image-action="rotate-right"><i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Rotate right</button>
+              <button class="btn-outline theme-secondary" type="button" data-profile-image-action="reset"><i class="bi bi-bootstrap-reboot me-1" aria-hidden="true"></i>Reset</button>
             </div>
-            <div class="d-flex align-items-center gap-3">
+            <div class="d-flex align-items-center gap-5">
               <canvas class="app-image-preview border" width="192" height="192" data-profile-image-preview aria-label="Preview of your profile picture"></canvas>
               <div class="form-text mt-0">Preview: how your picture will look in the menu and on your profile.</div>
             </div>
@@ -41,10 +41,10 @@
       </div>
     </div>
   </div>
-  <div class="card-footer d-flex flex-wrap gap-2">
-    <button class="btn btn-primary" type="submit"><i class="bi bi-image me-1" aria-hidden="true"></i>Save picture</button>
+  <div class="card-footer d-flex flex-wrap gap-3">
+    <button class="btn-solid theme-primary" type="submit"><i class="bi bi-image me-1" aria-hidden="true"></i>Save picture</button>
     {% if has_image %}
-      <button class="btn btn-outline-danger" type="submit" form="remove-profile-picture" data-confirm="Remove your profile picture?"><i class="bi bi-trash me-1" aria-hidden="true"></i>Remove picture</button>
+      <button class="btn-outline theme-danger" type="submit" form="remove-profile-picture" data-confirm="Remove your profile picture?"><i class="bi bi-trash me-1" aria-hidden="true"></i>Remove picture</button>
     {% endif %}
   </div>
 {{ form_end(image_form) }}
@@ -57,23 +57,23 @@
 {{ form_start(form, {attr: {class: 'card'}}) }}
   <div class="card-body">
     {% if not form.vars.valid %}
-      <div class="alert alert-danger" role="alert">{% if form.vars.errors|length %}{{ form_errors(form) }}{% else %}Please correct the fields marked below; nothing was saved.{% endif %}</div>
+      <div class="alert theme-danger" role="alert"><div>{% if form.vars.errors|length %}{{ form_errors(form) }}{% else %}Please correct the fields marked below; nothing was saved.{% endif %}</div></div>
     {% endif %}
-    <div class="row g-3">
-      <div class="col-md-6">{{ form_row(form.firstName, {row_attr: {class: 'mb-0'}}) }}</div>
-      <div class="col-md-6">{{ form_row(form.lastName, {row_attr: {class: 'mb-0'}}) }}</div>
-      <div class="col-md-6">{{ form_row(form.phone, {row_attr: {class: 'mb-0'}}) }}</div>
-      <div class="col-md-6">{{ form_row(form.birthday, {row_attr: {class: 'mb-0'}}) }}</div>
-      <div class="col-md-4">{{ form_row(form.gender, {row_attr: {class: 'mb-0'}}) }}</div>
-      <div class="col-md-4">{{ form_row(form.province, {row_attr: {class: 'mb-0'}}) }}</div>
-      <div class="col-md-4">{{ form_row(form.country, {row_attr: {class: 'mb-0'}}) }}</div>
-      <div class="col-md-6">{{ form_row(form.business, {row_attr: {class: 'mb-0'}}) }}</div>
-      <div class="col-md-6">{{ form_row(form.url, {row_attr: {class: 'mb-0'}}) }}</div>
+    <div class="row g-5">
+      <div class="md:col-6">{{ form_row(form.firstName, {row_attr: {class: 'mb-0'}}) }}</div>
+      <div class="md:col-6">{{ form_row(form.lastName, {row_attr: {class: 'mb-0'}}) }}</div>
+      <div class="md:col-6">{{ form_row(form.phone, {row_attr: {class: 'mb-0'}}) }}</div>
+      <div class="md:col-6">{{ form_row(form.birthday, {row_attr: {class: 'mb-0'}}) }}</div>
+      <div class="md:col-4">{{ form_row(form.gender, {row_attr: {class: 'mb-0'}}) }}</div>
+      <div class="md:col-4">{{ form_row(form.province, {row_attr: {class: 'mb-0'}}) }}</div>
+      <div class="md:col-4">{{ form_row(form.country, {row_attr: {class: 'mb-0'}}) }}</div>
+      <div class="md:col-6">{{ form_row(form.business, {row_attr: {class: 'mb-0'}}) }}</div>
+      <div class="md:col-6">{{ form_row(form.url, {row_attr: {class: 'mb-0'}}) }}</div>
     </div>
   </div>
-  <div class="card-footer d-flex flex-wrap gap-2">
-    <button class="btn btn-primary" type="submit"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>Save profile</button>
-    <a class="btn btn-outline-secondary" href="{{ path('profile') }}">Cancel</a>
+  <div class="card-footer d-flex flex-wrap gap-3">
+    <button class="btn-solid theme-primary" type="submit"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>Save profile</button>
+    <a class="btn-outline theme-secondary" href="{{ path('profile') }}">Cancel</a>
   </div>
 {{ form_end(form) }}
 {% endblock %}

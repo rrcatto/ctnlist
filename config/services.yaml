@@ -1,5 +1,7 @@
 parameters:
     app.timezone: '%env(APP_TIMEZONE)%'
+    # The application log's threshold (see the logger service below).
+    app.log_level: notice
     # Import logs and export files (v5: the installation's logs/ directory).
     app.instance_log_dir: '%kernel.instance_dir%/logs'
     app.log_dir: '%env(default:app.instance_log_dir:APP_LOG_DIR)%'
@@ -63,8 +65,20 @@ services:
     App\Suppression\SuppressionChecker:
         factory: ['@App\Suppression\SuppressionCheckerFactory', 'create']
 
+    # The application log (README "Logs"): Symfony's minimal logger on standard error, which
+    # PHP-FPM (catch_workers_output) and cron keep. Left to Symfony it keeps errors only, and the
+    # notices and warnings (recovery actions, settings changes, catto-mail failures) would be lost.
+    logger:
+        class: Symfony\Component\HttpKernel\Log\Logger
+        arguments: ['%app.log_level%', null, null, '@request_stack']
+
     # Site error templates for client errors even in debug mode (App\Twig\ErrorPageDebug).
     twig.error_renderer.html:
         class: Symfony\Bridge\Twig\ErrorRenderer\TwigErrorRenderer
         decorates: error_renderer.html
         arguments: ['@twig', '@twig.error_renderer.html.inner', '@App\Twig\ErrorPageDebug']
+
+when@test:
+    parameters:
+        # Tests provoke warnings on purpose; their output stays readable.
+        app.log_level: error

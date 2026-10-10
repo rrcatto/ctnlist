@@ -15,12 +15,12 @@
         <p>Continue to sign in to {{ site.listName }}.</p>
       {% endif %}
       {% if retry %}
-        <div class="alert alert-warning" role="alert">This page had expired, so you are not signed in yet. Choose {{ confirm_list ? 'Continue' : 'Sign in' }} again.</div>
+        <div class="alert theme-warning" role="alert"><div>This page had expired, so you are not signed in yet. Choose {{ confirm_list ? 'Continue' : 'Sign in' }} again.</div></div>
       {% endif %}
       <form name="sign_in" action="{{ path('auth_verify_submit') }}" method="post">
         <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
         <input type="hidden" name="token" value="{{ token }}">
-        <button class="btn btn-primary" type="submit"><i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i>{{ confirm_list ? 'Continue' : 'Sign in' }}</button>
+        <button class="btn-solid theme-primary" type="submit"><i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i>{{ confirm_list ? 'Continue' : 'Sign in' }}</button>
       </form>
     {% else %}
       <h1 class="h4">This sign-in link cannot be used</h1>
@@ -30,7 +30,7 @@
         {%- else %}It is not valid. Check that you opened the complete link from the email.
         {%- endif -%}
       </p>
-      <a class="btn btn-primary" href="{{ path('login') }}">Request a new sign-in link</a>
+      <a class="btn-solid theme-primary" href="{{ path('login') }}">Request a new sign-in link</a>
     {% endif %}
   </div>
 </div>

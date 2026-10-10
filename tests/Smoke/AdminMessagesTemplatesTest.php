@@ -77,7 +77,7 @@ final class AdminMessagesTemplatesTest extends SmokeTestCase
         self::assertMatchesRegularExpression('#id="message_maxSend_error1">Enter a whole number from 0#', $invalid['body']);
         self::assertStringContainsString('&lt;p&gt;Long unsaved body&lt;/p&gt;</textarea>', $invalid['body'], 'the HTML part is not lost');
         self::assertStringContainsString('>Unsaved text</textarea>', $invalid['body']);
-        self::assertMatchesRegularExpression('#name="message\[listIds\]\[\]" class="form-check-input" value="' . $allId . '" checked#', $invalid['body'], 'the selected lists are kept');
+        self::assertMatchesRegularExpression('#name="message\[listIds\]\[\]" class="check" value="' . $allId . '" checked#', $invalid['body'], 'the selected lists are kept');
         self::assertSame('<p>Draft</p>', self::scalar('SELECT m_html FROM messages WHERE m_uniqid = ?', [$muid]), 'nothing saved');
         self::assertSame($sent, self::scalar('SELECT COUNT(*) FROM sendlog'), 'saving never sends');
 

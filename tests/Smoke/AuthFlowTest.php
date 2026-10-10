@@ -250,6 +250,8 @@ final class AuthFlowTest extends SmokeTestCase
         self::assertNotNull($after);
         self::assertNotSame($before, $after, 'a new session id after sign-in');
         self::assertSame(0, (int) self::value('SELECT COUNT(*) FROM sessions WHERE ses_id = ?', [$before]), 'the old session is destroyed');
+        self::assertNotSame(302, self::request($client, 'POST', '/logout', ['csrf' => $oldToken])['status'],
+            'a CSRF token known before sign-in is not valid after it');
 
         // A copy of the pre-sign-in session id carries no usable state.
         $planted = self::client();

@@ -87,6 +87,17 @@ final class CattoMailClient
     }
 
     /**
+     * The size of $body as sent: Symfony HttpClient's `json` option encodes with these flags, which turn
+     * every <, >, &, ' and " into a six-byte \u escape (HTML grows by about half).
+     *
+     * @param array<mixed> $body
+     */
+    public static function jsonSize(array $body): int
+    {
+        return strlen(json_encode($body, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR));
+    }
+
+    /**
      * Seal and queue the job; naturally idempotent (a sealed job returns its state).
      *
      * @return array<string, mixed> the SendJob

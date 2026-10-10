@@ -9,42 +9,42 @@
     {% if job.csj_remote_id %}
       <form method="post" action="{{ path('admin_delivery_refresh', {id: job.csj_id}) }}">
         <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-        <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Check now</button>
+        <button class="btn-outline theme-secondary" type="submit"><i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Check now</button>
       </form>
     {% endif %}
     {% if job.csj_status in ['open', 'ready'] and is_granted('queue.process') %}
       <form method="post" action="{{ path('admin_delivery_retry', {id: job.csj_id}) }}" data-confirm="Hand this job to catto-mail now? Its stored keys make sure nothing is created or sent twice.">
         <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-        <button class="btn btn-outline-primary" type="submit"><i class="bi bi-send me-1" aria-hidden="true"></i>Retry sending</button>
+        <button class="btn-outline theme-primary" type="submit"><i class="bi bi-send me-1" aria-hidden="true"></i>Retry sending</button>
       </form>
     {% endif %}
     {% if job.csj_status == 'failed' and is_granted('queue.process') %}
       <form method="post" action="{{ path('admin_delivery_requeue', {id: job.csj_id}) }}" data-confirm="Return the subscribers of this failed job to the queue?">
         <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-        <button class="btn btn-outline-primary" type="submit"><i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>Return to queue</button>
+        <button class="btn-outline theme-primary" type="submit"><i class="bi bi-arrow-counterclockwise me-1" aria-hidden="true"></i>Return to queue</button>
       </form>
     {% endif %}
-    {% if job.csj_muid %}<a class="btn btn-outline-secondary" href="{{ path('admin_delivery_message', {muid: job.csj_muid}) }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>Message</a>{% endif %}
+    {% if job.csj_muid %}<a class="btn-outline theme-secondary" href="{{ path('admin_delivery_message', {muid: job.csj_muid}) }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>Message</a>{% endif %}
   {% endblock %}
 {% endembed %}
 
-<p>{{ cm.category(category) }} {{ cm.job_status(job.csj_status) }} <span class="small text-body-secondary ms-2">{{ job.csj_remote_id ? 'catto-mail job ' ~ job.csj_remote_id : 'not created at catto-mail yet' }}{{ job.csj_completed_at ? ' · finished ' ~ job.csj_completed_at|slice(0, 16) }}</span></p>
-{% if job.csj_error %}<div class="alert {{ job.csj_status == 'failed' ? 'alert-danger' : 'alert-warning' }} small text-break" role="alert">{{ job.csj_status == 'failed' ? 'catto-mail refused this job: ' : 'Last attempt failed (it is retried automatically): ' }}{{ job.csj_error }}</div>{% endif %}
+<p>{{ cm.category(category) }} {{ cm.job_status(job.csj_status) }} <span class="small fg-2 ms-3">{{ job.csj_remote_id ? 'catto-mail job ' ~ job.csj_remote_id : 'not created at catto-mail yet' }}{{ job.csj_completed_at ? ' · finished ' ~ job.csj_completed_at|slice(0, 16) }}</span></p>
+{% if job.csj_error %}<div class="alert {{ job.csj_status == 'failed' ? 'theme-danger' : 'theme-warning' }} small text-break" role="alert"><div>{{ job.csj_status == 'failed' ? 'catto-mail refused this job: ' : 'Last attempt failed (it is retried automatically): ' }}{{ job.csj_error }}</div></div>{% endif %}
 <p class="small">Part of the <a href="{{ path('admin_delivery_run', {uuid: run.uuid}) }}">{{ run.kind }} run</a> (job {{ job.csj_seq }}){% if job.csj_remote_id %} · <a href="{{ path('admin_delivery_webhooks', {j: job.csj_remote_id}) }}">its webhook events</a>{% endif %}</p>
-{% if category == 'Stuck' %}<div class="alert alert-warning small" role="note">This job has not moved on for a long time. The worker keeps retrying it; you can also retry or check it now. Nothing is sent twice.</div>{% endif %}
-{% if summary is not empty %}<p class="small">{% for status, n in summary %}{% if n > 0 %}<span class="me-3 text-nowrap">{{ cm.message_status(status) }} {{ n }}</span>{% endif %}{% endfor %}</p>{% endif %}
+{% if category == 'Stuck' %}<div class="alert theme-warning small" role="note"><div>This job has not moved on for a long time. The worker keeps retrying it; you can also retry or check it now. Nothing is sent twice.</div></div>{% endif %}
+{% if summary is not empty %}<p class="small">{% for status, n in summary %}{% if n > 0 %}<span class="me-5 text-nowrap">{{ cm.message_status(status) }} {{ n }}</span>{% endif %}{% endfor %}</p>{% endif %}
 
-<form method="get" class="card card-body bg-body-tertiary mb-3" role="search" aria-label="Filter recipients">
-  <div class="d-flex flex-wrap gap-2 align-items-end">
+<form method="get" class="card card-body bg-1 mb-5" role="search" aria-label="Filter recipients">
+  <div class="d-flex flex-wrap gap-3 align-items-end">
     <div>
       <label class="form-label small" for="d-status">Status</label>
-      <select class="form-select form-select-sm" id="d-status" name="s">
+      <select class="form-control form-control-sm" id="d-status" name="s">
         <option value="">All</option>
         {% for s in statuses %}<option value="{{ s }}"{{ status == s ? ' selected' }}>{{ s|replace({'_': ' '}) }}</option>{% endfor %}
       </select>
     </div>
-    <button class="btn btn-sm btn-primary" type="submit">Filter</button>
-    {% if status %}<a class="btn btn-sm btn-outline-secondary" href="{{ path('admin_delivery_job', {id: job.csj_id}) }}">Clear</a>{% endif %}
+    <button class="btn-sm btn-solid theme-primary" type="submit">Filter</button>
+    {% if status %}<a class="btn-sm btn-outline theme-secondary" href="{{ path('admin_delivery_job', {id: job.csj_id}) }}">Clear</a>{% endif %}
   </div>
 </form>
 
@@ -53,14 +53,14 @@
 {% else %}
   <div class="table-responsive">
     <table class="table table-hover align-middle">
-      <thead class="table-light"><tr><th scope="col">Recipient</th><th scope="col">Type</th><th scope="col">Status</th><th scope="col" class="text-end"><span class="visually-hidden">Events</span></th></tr></thead>
+      <thead class=""><tr><th scope="col">Recipient</th><th scope="col">Type</th><th scope="col">Status</th><th scope="col" class="text-end"><span class="visually-hidden">Events</span></th></tr></thead>
       <tbody>
       {% for r in recipients %}
         <tr>
           <td class="text-break">{% if r.crp_s_uuid and is_granted('subscribers.manage') %}<a href="{{ path('admin_subscriber', {token: r.crp_s_uuid}) }}">{{ r.crp_email }}</a>{% else %}{{ r.crp_email }}{% endif %}</td>
           <td class="small">{{ r.crp_type }}</td>
           <td>{{ cm.message_status(r.crp_status) }}</td>
-          <td class="text-end">{% if r.crp_remote_message_id %}<a class="btn btn-sm btn-outline-secondary" href="{{ path('admin_delivery_recipient', {uuid: r.crp_uuid}) }}">Events</a>{% endif %}</td>
+          <td class="text-end">{% if r.crp_remote_message_id %}<a class="btn-sm btn-outline theme-secondary" href="{{ path('admin_delivery_recipient', {uuid: r.crp_uuid}) }}">Events</a>{% endif %}</td>
         </tr>
       {% endfor %}
       </tbody>

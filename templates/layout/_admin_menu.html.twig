@@ -58,46 +58,52 @@
   {% endfor %}
 {% endif %}
 {% if visible_groups is not empty %}
-<nav class="navbar navbar-expand-lg bg-dark app-adminbar" data-bs-theme="dark" aria-label="Administration">
+<nav class="navbar lg:navbar-expand bg-1 app-adminbar" data-bs-theme="dark" aria-label="Administration">
   <div class="container">
-    <span class="navbar-text text-white-50 me-3 d-none d-lg-inline"><i class="bi bi-gear me-1" aria-hidden="true"></i>Admin</span>
-    <button class="navbar-toggler border-0 px-0 fs-6 text-white-50" type="button" data-bs-toggle="collapse" data-bs-target="#admin-nav" aria-controls="admin-nav" aria-expanded="false" aria-label="Toggle administration menu">
-      <i class="bi bi-gear me-1" aria-hidden="true"></i>Administration
+    <span class="navbar-text fg-3 me-5 d-none lg:d-inline"><i class="bi bi-gear me-1" aria-hidden="true"></i>Admin</span>
+    <button class="navbar-toggler btn-text btn-sm px-0 fg-2" type="button" data-bs-toggle="drawer" data-bs-target="#admin-nav" aria-controls="admin-nav" aria-expanded="false" aria-label="Toggle administration menu">
+      <i class="bi bi-gear" aria-hidden="true"></i>Administration
     </button>
-    <div class="collapse navbar-collapse" id="admin-nav">
-      <ul class="navbar-nav">
-        {% for group in visible_groups %}
-          {% set group_active = route in group.routes %}
-          {% if group.items|length == 1 %}
-            {% set item = group.items|first %}
-            <li class="nav-item">
-              <a class="nav-link{{ group_active ? ' active' }}" href="{{ path(item.route) }}"{% if route == item.route %} aria-current="page"{% endif %}><i class="bi bi-{{ group.icon }} me-1" aria-hidden="true"></i>{{ item.label }}</a>
-            </li>
-          {% else %}
-            {% set menu_id = 'admin-menu-' ~ loop.index %}
-            <li class="nav-item dropdown">
-              <a class="nav-link dropdown-toggle{{ group_active ? ' active' }}" href="#" id="{{ menu_id }}" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                <i class="bi bi-{{ group.icon }} me-1" aria-hidden="true"></i>{{ group.label }}
-                {%- set badge_item = group.items|filter(item => (item.badge ?? false))|first %}
-                {%- if badge_item %}
-                  <span class="badge rounded-pill text-bg-secondary ms-1">{{ attribute(counters, badge_item.counter) }}</span>
-                {%- endif %}
-              </a>
-              <ul class="dropdown-menu" aria-labelledby="{{ menu_id }}">
-                {% for item in group.items %}
-                  <li>
-                    <a class="dropdown-item d-flex justify-content-between align-items-center gap-3{{ route == item.route ? ' active' }}" href="{{ path(item.route) }}"{% if route == item.route %} aria-current="page"{% endif %}>
+    {# Below the lg breakpoint the administration menu is a drawer; from lg up Bootstrap lays it out inline. #}
+    <dialog class="drawer drawer-end" tabindex="-1" id="admin-nav" aria-labelledby="admin-nav-label">
+      <div class="drawer-header">
+        <h2 class="drawer-title h5" id="admin-nav-label">Administration</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="drawer" aria-label="Close"></button>
+      </div>
+      <div class="drawer-body">
+        <ul class="nav navbar-nav">
+          {% for group in visible_groups %}
+            {% set group_active = route in group.routes %}
+            {% if group.items|length == 1 %}
+              {% set item = group.items|first %}
+              <li class="nav-item">
+                <a class="nav-link{{ group_active ? ' active' }}" href="{{ path(item.route) }}"{% if route == item.route %} aria-current="page"{% endif %}><i class="bi bi-{{ group.icon }}" aria-hidden="true"></i>{{ item.label }}</a>
+              </li>
+            {% else %}
+              {% set menu_id = 'admin-menu-' ~ loop.index %}
+              <li class="nav-item">
+                <button class="nav-link{{ group_active ? ' active' }}" type="button" id="{{ menu_id }}" data-bs-toggle="menu" aria-expanded="false">
+                  <i class="bi bi-{{ group.icon }}" aria-hidden="true"></i>{{ group.label }}
+                  {%- set badge_item = group.items|filter(item => (item.badge ?? false))|first %}
+                  {%- if badge_item %}
+                    <span class="badge rounded-pill theme-secondary">{{ attribute(counters, badge_item.counter) }}</span>
+                  {%- endif %}
+                  <i class="bi bi-chevron-down small" aria-hidden="true"></i>
+                </button>
+                <div class="menu" aria-labelledby="{{ menu_id }}">
+                  {% for item in group.items %}
+                    <a class="menu-item justify-content-between{{ route == item.route ? ' active' }}" href="{{ path(item.route) }}"{% if route == item.route %} aria-current="page"{% endif %}>
                       <span>{{ item.label }}</span>
-                      {% if item.counter is defined %}<span class="badge rounded-pill text-bg-light">{{ attribute(counters, item.counter) }}</span>{% endif %}
+                      {% if item.counter is defined %}<span class="badge rounded-pill badge-subtle theme-secondary">{{ attribute(counters, item.counter) }}</span>{% endif %}
                     </a>
-                  </li>
-                {% endfor %}
-              </ul>
-            </li>
-          {% endif %}
-        {% endfor %}
-      </ul>
-    </div>
+                  {% endfor %}
+                </div>
+              </li>
+            {% endif %}
+          {% endfor %}
+        </ul>
+      </div>
+    </dialog>
   </div>
 </nav>
 {% endif %}

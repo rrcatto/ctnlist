@@ -106,7 +106,7 @@ final class CattoMailSmokeTest extends SmokeTestCase
         self::assertMatchesRegularExpression('#href="/delivery/webhooks/3\?[^"]*f=ignored[^"]*"#', $page, 'filters kept in the links');
         self::assertMatchesRegularExpression('#href="/delivery/webhooks/3\?[^"]*j=' . $job . '#', $page);
         self::assertStringContainsString('body pruned', $page);
-        self::assertStringContainsString('<span class="badge text-bg-secondary">ignored</span>', $page);
+        self::assertStringContainsString('<span class="badge theme-secondary">ignored</span>', $page);
 
         $runs = self::request($admin, 'GET', '/delivery/runs?r=1')['body'];
         self::assertStringContainsString('<nav aria-label="Pagination">', $runs);

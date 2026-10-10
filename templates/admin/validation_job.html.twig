@@ -9,38 +9,38 @@
     {% if job.cvj_status == 'pending' %}
       <form method="post" action="{{ path('admin_validation_submit', {id: job.cvj_id}) }}" data-confirm="Submit this job to catto-mail now? Its stored key makes sure it is created only once.">
         <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-        <button class="btn btn-outline-primary" type="submit"><i class="bi bi-send me-1" aria-hidden="true"></i>Retry submission</button>
+        <button class="btn-outline theme-primary" type="submit"><i class="bi bi-send me-1" aria-hidden="true"></i>Retry submission</button>
       </form>
     {% endif %}
     <form method="post" action="{{ path('admin_validation_refresh', {id: job.cvj_id}) }}">
       <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-      <button class="btn btn-outline-secondary" type="submit"><i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Check now</button>
+      <button class="btn-outline theme-secondary" type="submit"><i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Check now</button>
     </form>
-    <a class="btn btn-outline-secondary" href="{{ path('admin_validation') }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>All jobs</a>
+    <a class="btn-outline theme-secondary" href="{{ path('admin_validation') }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>All jobs</a>
   {% endblock %}
 {% endembed %}
 
-<p class="mb-1">{{ cm.job_status(job.cvj_status) }} <span class="small text-body-secondary ms-2">{{ job.cvj_processed }} of {{ job.cvj_total }} addresses processed{{ job.cvj_results_complete ? ' · results stored' }}</span></p>
-<p class="small text-body-secondary">Submitted {{ job.cvj_created_at|slice(0, 16) }}{{ job.cvj_last_checked_at ? ' · last checked ' ~ job.cvj_last_checked_at|slice(0, 16) }}{{ job.cvj_completed_at ? ' · completed ' ~ job.cvj_completed_at|slice(0, 16) }}</p>
+<p class="mb-1">{{ cm.job_status(job.cvj_status) }} <span class="small fg-2 ms-3">{{ job.cvj_processed }} of {{ job.cvj_total }} addresses processed{{ job.cvj_results_complete ? ' · results stored' }}</span></p>
+<p class="small fg-2">Submitted {{ job.cvj_created_at|slice(0, 16) }}{{ job.cvj_last_checked_at ? ' · last checked ' ~ job.cvj_last_checked_at|slice(0, 16) }}{{ job.cvj_completed_at ? ' · completed ' ~ job.cvj_completed_at|slice(0, 16) }}</p>
 {% if job.cvj_counts %}
-  <p class="small mb-2">{% for c in classifications %}<span class="me-3 text-nowrap">{{ cm.classification(c) }} {{ job.cvj_counts[c] ?? 0 }}</span>{% endfor %}</p>
+  <p class="small mb-3">{% for c in classifications %}<span class="me-5 text-nowrap">{{ cm.classification(c) }} {{ job.cvj_counts[c] ?? 0 }}</span>{% endfor %}</p>
 {% endif %}
-{% if job.cvj_detail_pruned_at %}<p class="small text-body-secondary"><i class="bi bi-scissors me-1" aria-hidden="true"></i>Results superseded by a newer validation of the same subscriber were removed {{ job.cvj_detail_pruned_at|slice(0, 10) }} (retention); the counts above are this job's original counts.</p>{% endif %}
+{% if job.cvj_detail_pruned_at %}<p class="small fg-2"><i class="bi bi-scissors me-1" aria-hidden="true"></i>Results superseded by a newer validation of the same subscriber were removed {{ job.cvj_detail_pruned_at|slice(0, 10) }} (retention); the counts above are this job's original counts.</p>{% endif %}
 {% if job.cvj_remote_id and is_granted('logs.view') %}<p class="small"><a href="{{ path('admin_delivery_webhooks', {j: job.cvj_remote_id}) }}">Webhook events for this job</a></p>{% endif %}
 {% if suggestions %}<p class="small"><i class="bi bi-lightbulb me-1" aria-hidden="true"></i>{{ suggestions }} suggested correction{{ suggestions == 1 ? '' : 's' }} (shown in the table; never applied: only the subscriber can change their address).</p>{% endif %}
-{% if job.cvj_error %}<div class="alert alert-danger small text-break" role="alert">{{ job.cvj_error }}</div>{% endif %}
+{% if job.cvj_error %}<div class="alert theme-danger small text-break" role="alert"><div>{{ job.cvj_error }}</div></div>{% endif %}
 
-<form method="get" class="card card-body bg-body-tertiary mb-3" role="search" aria-label="Filter results">
-  <div class="d-flex flex-wrap gap-2 align-items-end">
+<form method="get" class="card card-body bg-1 mb-5" role="search" aria-label="Filter results">
+  <div class="d-flex flex-wrap gap-3 align-items-end">
     <div>
       <label class="form-label small" for="v-class">Classification</label>
-      <select class="form-select form-select-sm" id="v-class" name="c">
+      <select class="form-control form-control-sm" id="v-class" name="c">
         <option value="">All</option>
         {% for c in classifications|merge(['pending']) %}<option value="{{ c }}"{{ class == c ? ' selected' }}>{{ c|replace({'_': ' '}) }}{{ (job.cvj_counts[c] ?? null) is not null ? ' (' ~ job.cvj_counts[c] ~ ')' }}</option>{% endfor %}
       </select>
     </div>
-    <button class="btn btn-sm btn-primary" type="submit">Filter</button>
-    {% if class %}<a class="btn btn-sm btn-outline-secondary" href="{{ path('admin_validation_job', {id: job.cvj_id}) }}">Clear</a>{% endif %}
+    <button class="btn-sm btn-solid theme-primary" type="submit">Filter</button>
+    {% if class %}<a class="btn-sm btn-outline theme-secondary" href="{{ path('admin_validation_job', {id: job.cvj_id}) }}">Clear</a>{% endif %}
   </div>
 </form>
 
@@ -49,20 +49,20 @@
 {% else %}
   <div class="table-responsive">
     <table class="table table-hover align-middle">
-      <thead class="table-light"><tr><th scope="col">Address</th><th scope="col">Classification</th><th scope="col">Checks</th><th scope="col">Suggestion</th><th scope="col">Diagnostic</th></tr></thead>
+      <thead class=""><tr><th scope="col">Address</th><th scope="col">Classification</th><th scope="col">Checks</th><th scope="col">Suggestion</th><th scope="col">Diagnostic</th></tr></thead>
       <tbody>
       {% for r in results %}
         <tr>
           <td class="text-break">{% if r.s_id and is_granted('subscribers.manage') %}<a href="{{ path('admin_subscriber', {token: r.cva_s_uuid}) }}">{{ r.cva_address }}</a>{% else %}{{ r.cva_address }}{% endif %}</td>
-          <td>{{ cm.classification(r.cva_classification) }}{% if r.cva_confidence %}<div class="small text-body-secondary">{{ r.cva_confidence }} confidence</div>{% endif %}</td>
+          <td>{{ cm.classification(r.cva_classification) }}{% if r.cva_confidence %}<div class="small fg-2">{{ r.cva_confidence }} confidence</div>{% endif %}</td>
           <td class="small text-nowrap">
             {% if r.cva_syntax_status %}syntax {{ r.cva_syntax_status }}<br>{% endif %}
             {% if r.cva_domain_status %}domain {{ r.cva_domain_status|replace({'_': ' '}) }}<br>{% endif %}
             {% if r.cva_smtp_status %}SMTP {{ r.cva_smtp_status|replace({'_': ' '}) }}{% endif %}
-            {% for flag, label in {cva_is_role: 'role', cva_is_disposable: 'disposable', cva_is_catch_all: 'accept-all', cva_is_typo_suspected: 'typo?'} %}{% if r[flag] %}<span class="badge text-bg-light border ms-1">{{ label }}</span>{% endif %}{% endfor %}
+            {% for flag, label in {cva_is_role: 'role', cva_is_disposable: 'disposable', cva_is_catch_all: 'accept-all', cva_is_typo_suspected: 'typo?'} %}{% if r[flag] %}<span class="badge badge-subtle theme-secondary ms-1">{{ label }}</span>{% endif %}{% endfor %}
           </td>
-          <td class="small text-break">{% if r.cva_suggested_address %}<span title="Suggestion only; never applied">{{ r.cva_suggested_address }}</span><div class="text-body-secondary">suggestion only{{ r.cva_suggestion_confidence ? ', ' ~ r.cva_suggestion_confidence ~ ' confidence' }}</div>{% endif %}</td>
-          <td class="small text-break">{% if r.cva_diagnostic_code %}<code>{{ r.cva_diagnostic_code }}</code>{% endif %}{% if r.cva_diagnostic_text %}<div class="text-body-secondary">{{ r.cva_diagnostic_text|slice(0, 160) }}</div>{% endif %}</td>
+          <td class="small text-break">{% if r.cva_suggested_address %}<span title="Suggestion only; never applied">{{ r.cva_suggested_address }}</span><div class="fg-2">suggestion only{{ r.cva_suggestion_confidence ? ', ' ~ r.cva_suggestion_confidence ~ ' confidence' }}</div>{% endif %}</td>
+          <td class="small text-break">{% if r.cva_diagnostic_code %}<code>{{ r.cva_diagnostic_code }}</code>{% endif %}{% if r.cva_diagnostic_text %}<div class="fg-2">{{ r.cva_diagnostic_text|slice(0, 160) }}</div>{% endif %}</td>
         </tr>
       {% endfor %}
       </tbody>

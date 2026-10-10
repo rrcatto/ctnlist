@@ -6,22 +6,22 @@
 {% block content %}
 {% include 'layout/_page_header.html.twig' with {title: 'Roles and access control', description: 'Roles grant permissions; subscribers hold roles. Pages and actions check permissions, so a custom role can be given exactly the tools it needs. System roles are fixed.'} %}
 
-<div class="card mb-4">
+<div class="card mb-7">
   <div class="card-header fw-semibold">Roles</div>
   <div class="table-responsive">
     <table class="table table-hover align-middle mb-0">
-      <thead class="table-light"><tr><th scope="col">Role</th><th scope="col">Type</th><th scope="col" class="text-end">Members</th><th scope="col" class="text-end">Permissions</th><th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th></tr></thead>
+      <thead class=""><tr><th scope="col">Role</th><th scope="col">Type</th><th scope="col" class="text-end">Members</th><th scope="col" class="text-end">Permissions</th><th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th></tr></thead>
       <tbody>
       {% for role in roles %}
         <tr>
           <td>
             <a class="fw-semibold" href="{{ path('admin_role', {id: role.r_id}) }}">{{ role.r_name }}</a> <code class="small">{{ role.r_key }}</code>
-            {% if role.r_description %}<div class="small text-body-secondary d-none d-md-block">{{ role.r_description }}</div>{% endif %}
+            {% if role.r_description %}<div class="small fg-2 d-none md:d-block">{{ role.r_description }}</div>{% endif %}
           </td>
           <td>{{ ui.system_badge(role.r_system) }}</td>
           <td class="text-end">{{ member_counts[role.r_id] ?? 0 }}</td>
           <td class="text-end">{{ (granted[role.r_id] ?? [])|length }}</td>
-          <td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="{{ path('admin_role', {id: role.r_id}) }}">{{ role.r_system ? 'View' : 'Manage' }}</a></td>
+          <td class="text-end"><a class="btn-sm btn-outline theme-secondary" href="{{ path('admin_role', {id: role.r_id}) }}">{{ role.r_system ? 'View' : 'Manage' }}</a></td>
         </tr>
       {% endfor %}
       </tbody>
@@ -29,14 +29,14 @@
   </div>
 </div>
 
-<div class="card mb-4" id="assign">
+<div class="card mb-7" id="assign">
   <div class="card-header fw-semibold">Assign a role to a subscriber</div>
   <div class="card-body">
-    {{ form_start(search_form, {attr: {class: 'row g-2 align-items-start mb-3', role: 'search', 'aria-label': 'Find a subscriber'}}) }}
-      <div class="col-md-8">{{ form_row(search_form.q, {row_attr: {class: 'mb-0'}}) }}</div>
-      <div class="col-md-4 d-flex gap-2 pt-md-4 mt-md-2">
-        <button class="btn btn-primary" type="submit"><i class="bi bi-search me-1" aria-hidden="true"></i>Search</button>
-        {% if search %}<a class="btn btn-outline-secondary" href="{{ path('admin_roles') }}#assign">Clear</a>{% endif %}
+    {{ form_start(search_form, {attr: {class: 'row g-3 align-items-start mb-5', role: 'search', 'aria-label': 'Find a subscriber'}}) }}
+      <div class="md:col-8">{{ form_row(search_form.q, {row_attr: {class: 'mb-0'}}) }}</div>
+      <div class="md:col-4 d-flex gap-3 md:pt-7 md:mt-3">
+        <button class="btn-solid theme-primary" type="submit"><i class="bi bi-search me-1" aria-hidden="true"></i>Search</button>
+        {% if search %}<a class="btn-outline theme-secondary" href="{{ path('admin_roles') }}#assign">Clear</a>{% endif %}
       </div>
     {{ form_end(search_form) }}
 
@@ -50,40 +50,40 @@
             {% set current = held[subscriber.s_id] ?? [] %}
             {% set current_keys = current|map(role => role.r_key) %}
             {% set assignable = roles|filter(role => role.r_key not in current_keys) %}
-            <li class="list-group-item d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 py-3">
-              <div class="me-md-3 text-break">
+            <li class="list-group-item d-flex flex-column md:flex-row justify-content-between md:align-items-center gap-3 py-5">
+              <div class="md:me-5 text-break">
                 <div class="fw-semibold">{{ subscriber.s_email }}</div>
-                {% if (subscriber.s_fname ~ subscriber.s_lname)|trim %}<div class="small text-body-secondary">{{ (subscriber.s_fname ~ ' ' ~ subscriber.s_lname)|trim }}</div>{% endif %}
-                <div class="mt-1"><span class="visually-hidden">Current roles:</span>{% for role in current %}<span class="badge {{ role.r_system ? 'text-bg-dark' : 'text-bg-info' }} me-1">{{ role.r_name }}</span>{% else %}<span class="small text-body-secondary">No roles</span>{% endfor %}</div>
+                {% if (subscriber.s_fname ~ subscriber.s_lname)|trim %}<div class="small fg-2">{{ (subscriber.s_fname ~ ' ' ~ subscriber.s_lname)|trim }}</div>{% endif %}
+                <div class="mt-1"><span class="visually-hidden">Current roles:</span>{% for role in current %}<span class="badge {{ role.r_system ? 'theme-inverse' : 'theme-info' }} me-1">{{ role.r_name }}</span>{% else %}<span class="small fg-2">No roles</span>{% endfor %}</div>
               </div>
               {% if assignable is empty %}
-                <span class="small text-body-secondary">Holds every role</span>
+                <span class="small fg-2">Holds every role</span>
               {% else %}
-                <form method="post" action="{{ path('admin_roles_assign') }}" class="d-flex gap-2 flex-shrink-0">
+                <form method="post" action="{{ path('admin_roles_assign') }}" class="d-flex gap-3 flex-shrink-0">
                   <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
                   <input type="hidden" name="subscriber_id" value="{{ subscriber.s_id }}">
                   <input type="hidden" name="back" value="{{ back }}">
                   <label class="visually-hidden" for="assign-role-{{ subscriber.s_id }}">Role for {{ subscriber.s_email }}</label>
-                  <select class="form-select form-select-sm" id="assign-role-{{ subscriber.s_id }}" name="role_key" required>
+                  <select class="form-control form-control-sm" id="assign-role-{{ subscriber.s_id }}" name="role_key" required>
                     <option value="" selected disabled>Choose a role…</option>
                     {% for role in assignable|sort((a, b) => a.r_system <=> b.r_system) %}<option value="{{ role.r_key }}">{{ role.r_name }}{{ role.r_system ? ' (system)' }}</option>{% endfor %}
                   </select>
-                  <button class="btn btn-sm btn-primary" type="submit">Assign</button>
+                  <button class="btn-sm btn-solid theme-primary" type="submit">Assign</button>
                 </form>
               {% endif %}
             </li>
           {% endfor %}
         </ul>
-        {% if more_results %}<p class="small text-body-secondary mt-2 mb-0">More subscribers match; refine the search to see them.</p>{% endif %}
+        {% if more_results %}<p class="small fg-2 mt-3 mb-0">More subscribers match; refine the search to see them.</p>{% endif %}
       {% endif %}
     {% else %}
-      <p class="small text-body-secondary mb-0">Search for a subscriber to see the roles they hold and assign another. To remove a custom role from someone, open the role.</p>
+      <p class="small fg-2 mb-0">Search for a subscriber to see the roles they hold and assign another. To remove a custom role from someone, open the role.</p>
     {% endif %}
   </div>
 </div>
 
-<div class="row g-4 mb-4">
-  <div class="col-lg-6">
+<div class="row g-7 mb-7">
+  <div class="lg:col-6">
     {{ form_start(form, {attr: {class: 'card h-100', id: 'create-role'}}) }}
       <div class="card-header fw-semibold">Create custom role</div>
       <div class="card-body">
@@ -92,10 +92,10 @@
         {{ form_row(form.name) }}
         {{ form_row(form.description, {row_attr: {class: 'mb-0'}}) }}
       </div>
-      <div class="card-footer"><button class="btn btn-primary" type="submit"><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Create role</button></div>
+      <div class="card-footer"><button class="btn-solid theme-primary" type="submit"><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Create role</button></div>
     {{ form_end(form) }}
   </div>
-  <div class="col-lg-6">
+  <div class="lg:col-6">
     <div class="card h-100">
       <div class="card-header fw-semibold">Who can change what</div>
       <div class="card-body small">
@@ -108,10 +108,10 @@
 </div>
 
 <details>
-  <summary class="h5 mb-3">Permissions by role</summary>
+  <summary class="h5 mb-5">Permissions by role</summary>
   <div class="table-responsive">
     <table class="table table-sm table-hover align-middle">
-      <thead class="table-light">
+      <thead class="">
         <tr>
           <th scope="col">Permission</th>
           {% for role in roles %}<th scope="col" class="text-center">{{ role.r_name }}</th>{% endfor %}
@@ -120,10 +120,10 @@
       <tbody>
       {% for permission in permissions %}
         <tr>
-          <th scope="row" class="fw-normal"><code>{{ permission.ap_key }}</code><div class="small text-body-secondary">{{ permission.ap_name }}</div></th>
+          <th scope="row" class="fw-normal"><code>{{ permission.ap_key }}</code><div class="small fg-2">{{ permission.ap_name }}</div></th>
           {% for role in roles %}
             <td class="text-center">
-              {% if permission.ap_id in (granted[role.r_id] ?? []) %}<i class="bi bi-check-circle-fill text-success" aria-hidden="true"></i><span class="visually-hidden">granted</span>{% else %}<span class="text-body-tertiary" aria-hidden="true">–</span><span class="visually-hidden">not granted</span>{% endif %}
+              {% if permission.ap_id in (granted[role.r_id] ?? []) %}<i class="bi bi-check-circle-fill fg-success" aria-hidden="true"></i><span class="visually-hidden">granted</span>{% else %}<span class="fg-3" aria-hidden="true">–</span><span class="visually-hidden">not granted</span>{% endif %}
             </td>
           {% endfor %}
         </tr>

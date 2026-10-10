@@ -4,7 +4,7 @@
 
 {% block content %}
 {% embed 'layout/_page_header.html.twig' with {title: 'Send runs', description: 'Every queue run, proof, resend and forward handed to catto-mail, newest first. One run can be several catto-mail jobs (one per list, at most 10,000 recipients each).'} %}
-  {% block actions %}<a class="btn btn-outline-secondary" href="{{ path('admin_delivery') }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>Integration</a>{% endblock %}
+  {% block actions %}<a class="btn-outline theme-secondary" href="{{ path('admin_delivery') }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>Integration</a>{% endblock %}
 {% endembed %}
 
 {% if runs is empty %}

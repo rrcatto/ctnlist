@@ -8,7 +8,7 @@ use App\Command\DiagnoseCommand;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
-/** ctnlist:diagnose, Composer and the README agree on the PHP extensions ctnlist needs. */
+/** ctnlist:diagnose, Composer and the README agree on the PHP extensions ctnlist needs; diagnose also checks the PostgreSQL version. */
 final class PhpExtensionsTest extends TestCase
 {
     public function testDiagnoseRequiresExactlyWhatComposerRequiresForAnInstallation(): void
@@ -44,10 +44,17 @@ final class PhpExtensionsTest extends TestCase
         self::assertCount(count(DiagnoseCommand::REQUIRED_EXTENSIONS), $findings);
     }
 
+    public function testPostgreSqlMustBeVersion16OrLater(): void
+    {
+        self::assertSame(['OK', 'PostgreSQL 16.4'], DiagnoseCommand::postgresFinding(160004));
+        self::assertSame(['OK', 'PostgreSQL 17.0'], DiagnoseCommand::postgresFinding(170000));
+        self::assertSame('ERROR', DiagnoseCommand::postgresFinding(150008)[0], 'pg_input_is_valid() arrived in 16');
+    }
+
     public function testTheReadmeRequirementsNameEveryExtension(): void
     {
         $readme = (string) file_get_contents(dirname(__DIR__, 2) . '/README.md');
-        $line = preg_match('/^- PHP 8\.4\.1 or later .*$/m', $readme, $m) === 1 ? $m[0] : self::fail('the PHP requirement is not in README.md');
+        $line = preg_match('/^- PHP [0-9.]+ or later .*$/m', $readme, $m) === 1 ? $m[0] : self::fail('the PHP requirement is not in README.md');
         foreach (array_keys(DiagnoseCommand::REQUIRED_EXTENSIONS + DiagnoseCommand::RECOMMENDED_EXTENSIONS) as $extension) {
             self::assertStringContainsString('`' . $extension . '`', $line, $extension . ' in the README requirements');
         }

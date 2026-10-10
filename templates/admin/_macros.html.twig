@@ -2,8 +2,8 @@
 
 {# A list membership state: confirmed, pending, unsubscribed or not joined. #}
 {% macro membership_badge(state) %}
-  {%- set styles = {confirmed: 'text-bg-success', pending: 'text-bg-warning', unsubscribed: 'text-bg-secondary'} -%}
-  <span class="badge {{ styles[state] ?? 'text-bg-light border' }}">{{ state }}</span>
+  {%- set styles = {confirmed: 'theme-success', pending: 'theme-warning', unsubscribed: 'theme-secondary'} -%}
+  <span class="badge {{ styles[state] ?? 'badge-subtle theme-secondary' }}">{{ state }}</span>
 {%- endmacro %}
 
 {# State of a membership row from MembershipRepository::forSubscriber(). #}
@@ -12,10 +12,10 @@
 {% endmacro %}
 
 {% macro system_badge(system) %}
-  {%- if system %}<span class="badge text-bg-dark"><i class="bi bi-lock-fill me-1" aria-hidden="true"></i>System</span>{% else %}<span class="badge text-bg-light border">Custom</span>{% endif -%}
+  {%- if system %}<span class="badge theme-inverse"><i class="bi bi-lock-fill me-1" aria-hidden="true"></i>System</span>{% else %}<span class="badge badge-subtle theme-secondary">Custom</span>{% endif -%}
 {% endmacro %}
 
 {% macro active_badge(active) %}
-  {%- if active %}<span class="badge text-bg-success">Active</span>{% else %}<span class="badge text-bg-secondary">Inactive</span>{% endif -%}
+  {%- if active %}<span class="badge theme-success">Active</span>{% else %}<span class="badge theme-secondary">Inactive</span>{% endif -%}
 {% endmacro %}
 
