@@ -1,4 +1,4 @@
-# ctnlist 6.0.9
+# ctnlist 6.0.10
 
 ctnlist is a web-based mailing-list application created by Richard Royston Catto in 2009. Versions 5.0.x and 6.0.x are an incremental modernisation of the working v5.0 application, not a replacement of its established workflows.
 
@@ -25,6 +25,7 @@ Since 6.0 every route is a Symfony 8.1 controller and the Fat-Free Framework has
 - CSRF protection for state-changing actions
 - separate PostgreSQL global email/domain suppression database
 - production templates (nginx, PHP-FPM, cron, systemd) and a production preflight, `ctnlist:diagnose --production`
+- an acceptable use policy page, `/acceptable-use-policy`, linked from every page's footer and built from `docs/AUP.md`: the policy of catto-mail, the mail service the lists are sent through (replace the file to publish a different policy)
 
 ## Restored v5 functionality
 
@@ -124,6 +125,7 @@ deploy/         production templates: nginx server block and FastCGI snippet, PH
 src/            application code, namespace App\ (Controller/, Repository/ and domain folders: Campaign/, Queue/, Mail/, CattoMail/, Log/, Subscriber/, Security/, Suppression/, Maintenance/; Config/ (settings, production rules), Http/ (headers, CSP, rate limits, pagination), Session/, Twig/, Util/; Form/ and Validator/; Command/ for console commands)
 templates/      Twig templates: base.html.twig and layout/ (navbar, admin bar, flash messages, footer) form the site layout
 tests/          PHPUnit: Unit/, Integration/ (application against the ctnlist_test database), Smoke/ (HTTP against the stack's smoke installation), Support/ (FakeCattoMail)
+docs/           project documentation; AUP.md is also the source of the site's acceptable use policy page, so docs/ is part of an installed release
 dev/podman/     development container files
 ```
 
@@ -137,7 +139,7 @@ dev/podman/     development container files
 
 ### Layout and permissions
 
-The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.0.9/` (the path is set in `public_html/index.php`): owned by root, read-only to the PHP-FPM user (`www-data`), with `composer install --no-dev --optimize-autoloader` run there. Each installation has its own directory, e.g. `/var/www/<installation>`:
+The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.0.10/` (the path is set in `public_html/index.php`): owned by root, read-only to the PHP-FPM user (`www-data`), with `composer install --no-dev --optimize-autoloader` run there. Each installation has its own directory, e.g. `/var/www/<installation>`:
 
 | Path | Owner, mode | What |
 |---|---|---|
@@ -391,7 +393,7 @@ The development stacks are separate (catto-mail's pod is on an internal network,
 4. In `dev/podman/ctnlist.env`:
    - `CATTOMAIL_API_BASE_URL=https://localhost`;
    - `CATTOMAIL_API_CONNECT_HOST=catto-mail` (TLS is still verified for `localhost`);
-   - `CATTOMAIL_CA_FILE=/usr/local/lib/php/ctnlist/6.0.9/dev/podman/cattomail-ca.pem`;
+   - `CATTOMAIL_CA_FILE=/usr/local/lib/php/ctnlist/6.0.10/dev/podman/cattomail-ca.pem`;
    - the API key and webhook secret;
    - for subscription mail, `APP_BASE_URL=https://localhost:8543/` (ctnlist's development HTTPS listener).
 

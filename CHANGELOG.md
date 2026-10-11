@@ -2,6 +2,12 @@
 
 The release history of ctnlist. Versions 5.0.x and 6.0.x are an incremental modernisation of the working v5.0 application; the v5 behaviour they keep, and the deliberate changes from it, are listed in [RESTORED-FUNCTIONALITY.md](docs/RESTORED-FUNCTIONALITY.md).
 
+## 6.0.10 (2026-10-11)
+
+An acceptable use policy page:
+- **Acceptable use policy:** the site has a policy page, `/acceptable-use-policy`, linked from the footer of every page beside Privacy and Contact. It shows the acceptable use policy of catto-mail, the mail service ctnlist sends its mailing lists through: who may be mailed, what may not be sent, unsubscribing, the bounce and complaint rates, and where to report abuse.
+- **Built from the document:** the page is rendered from `docs/AUP.md` of the release, so the document is the only place the text lives. To publish a different policy, replace that file. The Markdown is rendered by ctnlist itself (headings, paragraphs, numbered and bulleted lists, tables, inline code, bold, emphasis and links); all of its text is escaped and no HTML passes through.
+
 ## 6.0.9 (2026-10-11)
 
 Message links and the contact form put in order, a wider message editor, and a plainer sign-in link page:

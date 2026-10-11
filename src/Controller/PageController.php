@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Util\Markdown;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Twig\Markup;
 
 /** Static site pages. */
 final class PageController extends AbstractController
@@ -33,5 +36,24 @@ final class PageController extends AbstractController
     public function privacy(): Response
     {
         return $this->render('page/privacy.html.twig');
+    }
+
+    /**
+     * The acceptable use policy, built from docs/AUP.md of the release: the
+     * rules of the mail service this site sends its mailing lists through.
+     * App\Util\Markdown escapes all of the document's text, so its HTML is
+     * printed as it is.
+     */
+    #[Route('/acceptable-use-policy', name: 'acceptable_use_policy', methods: ['GET'])]
+    public function acceptableUsePolicy(#[Autowire('%kernel.project_dir%/docs/AUP.md')] string $file): Response
+    {
+        $markdown = is_file($file) ? (string) file_get_contents($file) : '';
+        if (trim($markdown) === '') {
+            throw $this->createNotFoundException();
+        }
+        return $this->render('page/policy.html.twig', [
+            'title' => Markdown::title($markdown) ?? 'Acceptable Use Policy',
+            'policy' => new Markup(Markdown::toHtml($markdown), 'UTF-8'),
+        ]);
     }
 }

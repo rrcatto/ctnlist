@@ -118,6 +118,7 @@ final class LayoutTest extends SmokeTestCase
         self::assertMatchesRegularExpression('#<link rel="icon" href="/assets/images/favicon-[^"]+\.svg"#', $body);
         self::assertStringContainsString('<footer class="app-footer', $body);
         self::assertStringContainsString('href="/privacy"', $body);
+        self::assertStringContainsString('<a href="/acceptable-use-policy">Acceptable use</a>', $body, 'every page links to the policy');
         // The configured telephone number, as v5's footer showed it.
         self::withSetting('APP_TELEPHONE', '+27 21 555 0100', static function (): void {
             self::assertStringContainsString('<i class="bi bi-telephone me-3" aria-hidden="true"></i>+27 21 555 0100', self::request(self::client(), 'GET', '/privacy')['body']);
@@ -268,5 +269,30 @@ final class LayoutTest extends SmokeTestCase
         $response = self::signInWithLink($client, self::issueLoginToken($subscriberId));
         self::assertSame(302, $response['status']);
         return $client;
+    }
+
+    /** The acceptable use policy is a page built from docs/AUP.md of the release. */
+    public function testTheAcceptableUsePolicyPage(): void
+    {
+        $page = self::request(self::client(), 'GET', '/acceptable-use-policy');
+        self::assertSame(200, $page['status']);
+        $source = (string) file_get_contents(dirname(__DIR__, 2) . '/docs/AUP.md');
+        $title = self::match('/^#\s+(.+)$/m', $source, 'the document has a title')[1];
+        self::assertStringContainsString('<h1>' . htmlspecialchars(trim($title)) . '</h1>', $page['body']);
+        self::assertStringContainsString(htmlspecialchars(trim($title)) . '</title>', $page['body']);
+        preg_match_all('/^##\s+(.+)$/m', $source, $sections);
+        self::assertGreaterThanOrEqual(3, count($sections[1]));
+        foreach ($sections[1] as $section) {
+            self::assertStringContainsString('<h2>' . htmlspecialchars(trim($section)) . '</h2>', $page['body']);
+        }
+        self::assertStringContainsString('<table class="table align-middle">', $page['body']);
+        self::assertStringContainsString('<th scope="col">Measure</th>', $page['body']);
+        self::assertMatchesRegularExpression('#<ol><li>[^<]+<ul><li>#', $page['body'], 'numbered rules with nested points');
+        self::assertStringNotContainsString('| ---', $page['body'], 'no Markdown is left over');
+        // It is a page of the site like any other: the layout, the footer, and a policy the browser enforces.
+        self::assertStringContainsString('<footer class="app-footer', $page['body']);
+        self::assertStringContainsString("script-src 'self' 'nonce-", $page['headers']['content-security-policy'] ?? '');
+        self::assertStringNotContainsString(' style="', $page['body']);
+        self::assertSame(405, self::request(self::client(), 'POST', '/acceptable-use-policy')['status']);
     }
 }

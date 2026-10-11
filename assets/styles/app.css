@@ -88,6 +88,18 @@
     margin-inline: auto;
 }
 
+/* The acceptable use policy (rendered from docs/AUP.md): one readable column. */
+.app-policy {
+    max-width: 52rem;
+    margin-inline: auto;
+}
+.app-policy h2 {
+    margin-top: 2rem;
+}
+.app-policy li {
+    margin-bottom: 0.25rem;
+}
+
 /* Tabs scroll sideways on narrow screens instead of wrapping (Settings). */
 .app-tabs {
     scrollbar-width: thin;

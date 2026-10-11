@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ctnlist is a web-based mailing-list application: Symfony 8.1 on PHP 8.5+, PostgreSQL 16, Doctrine DBAL 4 (no ORM), Twig, Symfony Forms/Validator/Security and Phinx migrations. Campaign mail is delivered by catto-mail, a separate service reached through its HTTPS API and signed webhooks; transactional mail goes through ctnlist's own SMTP. v5.0 is the behavioural baseline: preserve established v5 workflows rather than redesign them (`docs/RESTORED-FUNCTIONALITY.md`). `README.md` covers features, deployment and operations; `CHANGELOG.md` is the release history; other documentation is in `docs/`.
 
-More detail is in nested CLAUDE.md files: `src/CattoMail/` (catto-mail integration), `src/Config/` (Settings), `templates/` (screens, forms, assets) and `tests/`.
+More detail is in nested CLAUDE.md files: `src/CattoMail/` (catto-mail integration, and working with the catto-mail repository), `src/Config/` (Settings), `templates/` (screens, forms, assets) and `tests/`.
+
+catto-mail is a separate repository (`github.com/rrcatto/catto-mail`, usually checked out beside this one as `../catto-mail`) with its own instructions, contract and gate. It is changed only when the owner asks for that in the task; `src/CattoMail/CLAUDE.md` says what to read there and where ctnlist is behind its contract.
 
 ## Rules
 
@@ -16,7 +18,7 @@ More detail is in nested CLAUDE.md files: `src/CattoMail/` (catto-mail integrati
 - A new admin page gets an entry in `templates/layout/_admin_menu.html.twig` naming the same permission as its controller's `#[IsGranted]`.
 - Behaviour that deliberately differs from v5 is listed in `docs/RESTORED-FUNCTIONALITY.md` ("Deliberate changes from v5"); keep it current.
 - Value objects and exceptions under `src/` must be excluded from service registration in `config/services.yaml`, or controller arguments typed with them break autowiring.
-- Releases: the version appears in `public_html/index.php` (`$sharedDirectory`), `src/Config/SiteConfig.php` (`VERSION`), `compose.yaml`, `dev/podman/Containerfile` and `README.md` (title and install paths). Release notes go in `CHANGELOG.md`; `docs/project-status.md` (where the project stands, also read by the owner's Claude web project) is brought up to date with each release.
+- Releases: the version appears in `public_html/index.php` (`$sharedDirectory`), `src/Config/SiteConfig.php` (`VERSION`), `compose.yaml`, `dev/podman/Containerfile` and `README.md` (title and install paths); the dev containers mount the repository at the versioned path, so run `bin/dev restart` after changing it. Release notes go in `CHANGELOG.md`; `docs/project-status.md` (where the project stands, also read by the owner's Claude web project) is brought up to date with each release.
 
 ## Development environment
 

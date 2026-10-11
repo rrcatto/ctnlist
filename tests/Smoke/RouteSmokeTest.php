@@ -91,7 +91,7 @@ final class RouteSmokeTest extends SmokeTestCase
 
     /** Routes open to everyone. */
     private const PUBLIC = [
-        '/', '/index', '/home', '/privacy', '/proof-link', '/login', '/auth/verify?token={signin}', '/subscribe', '/health',
+        '/', '/index', '/home', '/privacy', '/acceptable-use-policy', '/proof-link', '/login', '/auth/verify?token={signin}', '/subscribe', '/health',
         '/archives', '/archives/1', '/archive/{aid}', '/archive/{aid}/{token}/{muid}',
         '/profile/subscriber/{token}',
         '/confirm/{token}/{shortcode}', '/confirm/{token}/{shortcode}/{muid}',

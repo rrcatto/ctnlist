@@ -7,6 +7,7 @@ Project documentation lives here. Three kinds of file stay where their tools exp
 | [claude-project-instructions.md](claude-project-instructions.md) | Instructions for a Claude project (the Claude web or desktop app) about ctnlist. |
 | [project-status.md](project-status.md) | Where the project stands: what is released, what is waiting for a decision, what to check at deployment. Dated; update it with each release. |
 | [RESTORED-FUNCTIONALITY.md](RESTORED-FUNCTIONALITY.md) | The v5 workflows that are the behavioural baseline, and the deliberate changes from v5. |
+| [AUP.md](AUP.md) | The acceptable use policy of catto-mail, the mail service ctnlist sends through. The site's `/acceptable-use-policy` page is built from this file, so it is read at run time. |
 
 ## Setting up the Claude project
 

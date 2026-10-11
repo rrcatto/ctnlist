@@ -1,6 +1,18 @@
 # catto-mail integration
 
-ctnlist uses only catto-mail's public HTTPS `/v1` API and its signed webhooks, never its database. The contract is `docs/api/openapi.v1.yaml` in the catto-mail repository: read it there, do not copy it here, and report a needed contract change rather than implementing it. README "catto-mail integration" describes the feature for operators.
+ctnlist uses only catto-mail's public HTTPS `/v1` API and its signed webhooks, never its database. The contract is `docs/api/openapi.v1.yaml` in the catto-mail repository: read it there, do not copy it here, and never work around it in ctnlist. README "catto-mail integration" describes the feature for operators.
+
+**The catto-mail repository** (`github.com/rrcatto/catto-mail`, usually checked out beside this one as `../catto-mail`).
+- Read there: `docs/api/openapi.v1.yaml` (the contract; `info.version` is its version), `docs/api/integration-guide.md` (the contract explained for clients), `docs/contracts/status-vocabulary.yaml` (every status and event value) and `docs/integration/ctnlist.md` (catto-mail's record of this integration, and of the ctnlist work it is waiting for).
+- A needed contract change is reported to the owner. It is made in catto-mail, and only when the owner asks for it in that task. catto-mail has its own `CLAUDE.md`, specification and gate; its rules differ from ctnlist's (schema changes are new migrations there, for one).
+- `FakeCattoMail` is a hand-written copy of the contract's behaviour and the only catto-mail the tests see. When the contract changes, change the fake to match it exactly, together with `CattoMailClient`; never loosen the fake to make a test pass.
+- **Contract version.** `CattoMailConfig` and `FakeCattoMail` were written against OpenAPI 1.0.0-draft.7. The contract is now 1.0.0-draft.10, and ctnlist does not follow it in four places:
+  - The connect flow of draft.10 is not used: catto-mail's connect page (`/dashboard/connect`, an authorisation-code flow with PKCE), `POST /v1/connect/exchange` (the API key and webhook signing secret, once), `DELETE /v1/connection` and `GET /v1/sending-domains` (`can_send` per sending domain). The key and the secret are still copied into `.env` by hand. catto-mail's integration guide, section 15, is the client's description of the flow.
+  - The webhook event `repermission.responded` (a recipient's answer to a re-permission message that catto-mail sent from an address batch) is stored and ignored as an unknown type. catto-mail's `docs/integration/ctnlist.md` specifies the handling. The event's `data.batch.list_id` is the part of ctnlist's List-Id inside the angle brackets: `<shortcode>.<APP_DOMAIN>` in lower case (`OutgoingMessageFactory::forList()`).
+  - `429` with the problem type `quota-exceeded` (the client's daily or monthly quota; its `Retry-After` can be hours) is handled like a rate limit: retried in place, then by the worker on every pass.
+  - catto-mail can set a client's recipients per send job below 10,000 and an installation's recipients per batch below 500. ctnlist holds both as constants (`CattoMailConfig::MAX_*`), so a lower limit refuses the job (`422`, `recipient-limit-exceeded` or `batch-too-large`).
+
+  Timestamps changed from UTC (`Z`) to the installation's offset (`+02:00`); `DeliveryProblems::timestamp()` reads both.
 
 **Configuration and client.**
 - `CattoMailConfig` is built from `.env` (`CATTOMAIL_*`) by `CattoMailConfigFactory`. It is never a Setting and never rendered or logged; `__debugInfo` redacts it and it cannot be serialised.
