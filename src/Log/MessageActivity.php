@@ -13,6 +13,7 @@ enum MessageActivity
     case Update;
     case Confirm;
     case Forward;
+    /** A contact form sent from the message's {contact} link (v5's name for it). */
     case Booking;
     case Subscribe;
     case Unsubscribe;

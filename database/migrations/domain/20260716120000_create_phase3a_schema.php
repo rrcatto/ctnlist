@@ -43,7 +43,7 @@ $$;
 
 CREATE TABLE archives (
     a_id SERIAL PRIMARY KEY,
-    a_subject VARCHAR(200),
+    a_subject VARCHAR(250),
     a_html TEXT,
     a_datecreated TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     a_viewed INTEGER NOT NULL DEFAULT 0
@@ -165,7 +165,7 @@ CREATE TABLE messages (
     m_t_id INTEGER NOT NULL DEFAULT 0,
     m_from_name VARCHAR(100),
     m_from_address VARCHAR(254),
-    m_subject VARCHAR(200),
+    m_subject VARCHAR(250),
     m_priority INTEGER NOT NULL DEFAULT 0,
     m_html TEXT,
     m_text TEXT,
@@ -197,7 +197,7 @@ CREATE INDEX idx_message_lists_list ON message_lists (ml_l_id);
 CREATE TABLE queue (
     q_id BIGSERIAL PRIMARY KEY,
     q_muid VARCHAR(32) NOT NULL,
-    q_subject VARCHAR(200),
+    q_subject VARCHAR(250),
     q_s_uuid UUID NOT NULL,
     q_email VARCHAR(254) NOT NULL,
     q_list_shortcode VARCHAR(6) NOT NULL DEFAULT '',
@@ -218,7 +218,7 @@ CREATE TABLE sendlog (
     sl_email VARCHAR(254) NOT NULL DEFAULT '',
     sl_s_uuid UUID,
     sl_list_shortcode VARCHAR(6) NOT NULL DEFAULT '',
-    sl_subject VARCHAR(200) NOT NULL DEFAULT ''
+    sl_subject VARCHAR(250) NOT NULL DEFAULT ''
 );
 CREATE INDEX idx_sendlog_type ON sendlog (sl_type);
 CREATE INDEX idx_sendlog_email ON sendlog (LOWER(sl_email));

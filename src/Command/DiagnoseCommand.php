@@ -43,7 +43,8 @@ use Symfony\Component\DependencyInjection\Attribute\AutowireServiceClosure;
 final class DiagnoseCommand extends Command
 {
     /** Settings ctnlist no longer reads (kept in step with bin/dev OBSOLETE_ENV). */
-    public const OBSOLETE = ['MAIL_UNSUBSCRIBE_ADDRESS', 'MAIL_SMTP_SERVERS_JSON', 'MAIL_BATCH_SIZE', 'MAIL_BATCH_DELAY', 'MAIL_BOUNCE_LIMIT', 'APP_STORE_URL', 'MAIL_RATE_PER_MINUTE'];
+    public const OBSOLETE = ['MAIL_UNSUBSCRIBE_ADDRESS', 'MAIL_SMTP_SERVERS_JSON', 'MAIL_BATCH_SIZE', 'MAIL_BATCH_DELAY', 'MAIL_BOUNCE_LIMIT', 'APP_STORE_URL', 'MAIL_RATE_PER_MINUTE',
+        'APP_ADVERTISE_URL', 'APP_BOOKING_URL', 'APP_CONTACT_URL'];
 
     /**
      * PHP extensions ctnlist needs, and what for: exactly those `composer install --no-dev` requires, ctnlist's own

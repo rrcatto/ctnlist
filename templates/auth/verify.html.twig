@@ -1,4 +1,8 @@
-{# The page a sign-in link opens (SignInLinkPage). Only the Sign in button (POST) uses the link up. #}
+{#
+  The page a sign-in link opens (SignInLinkPage). Only the Sign in button (POST)
+  uses the link up, so the page says plainly that opening the link has signed
+  nobody in yet, and why.
+#}
 {% extends 'base.html.twig' %}
 
 {% block title %}{{ state == 'usable' ? (confirm_list ? 'Confirm your subscription' : 'Sign in') : 'Sign-in link' }}{% endblock %}
@@ -7,21 +11,22 @@
 <div class="card app-narrow">
   <div class="card-body">
     {% if state == 'usable' %}
-      {% if confirm_list %}
-        <h1 class="h4">Confirm your subscription</h1>
-        <p>Sign in to confirm your subscription to <strong>{{ confirm_list }}</strong>. You are subscribed only once you confirm on the next page.</p>
-      {% else %}
-        <h1 class="h4">Sign in</h1>
-        <p>Continue to sign in to {{ site.listName }}.</p>
-      {% endif %}
+      {% set button = confirm_list ? 'Continue' : 'Sign in' %}
+      <h1 class="h4">One more step: press {{ button }}</h1>
       {% if retry %}
-        <div class="alert theme-warning" role="alert"><div>This page had expired, so you are not signed in yet. Choose {{ confirm_list ? 'Continue' : 'Sign in' }} again.</div></div>
+        <div class="alert theme-warning" role="alert"><div>This page had expired, so nothing happened. Press {{ button }} again.</div></div>
+      {% endif %}
+      {% if confirm_list %}
+        <p><strong>You are not signed in yet.</strong> Press the Continue button below to sign in, then confirm your subscription to <strong>{{ confirm_list }}</strong> on the next page. You are subscribed only once you confirm there.</p>
+      {% else %}
+        <p><strong>You are not signed in yet.</strong> Press the Sign in button below to finish signing in to {{ site.listName }}.</p>
       {% endif %}
       <form name="sign_in" action="{{ path('auth_verify_submit') }}" method="post">
         <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
         <input type="hidden" name="token" value="{{ token }}">
-        <button class="btn-solid theme-primary" type="submit"><i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i>{{ confirm_list ? 'Continue' : 'Sign in' }}</button>
+        <button class="btn-solid theme-primary btn-lg" type="submit"><i class="bi bi-box-arrow-in-right me-1" aria-hidden="true"></i>{{ button }}</button>
       </form>
+      <p class="small fg-2 mb-0">Opening the link in your email does not sign you in by itself. Some mail programs open links automatically to check them, which would use up your one-time link before you could.</p>
     {% else %}
       <h1 class="h4">This sign-in link cannot be used</h1>
       <p>

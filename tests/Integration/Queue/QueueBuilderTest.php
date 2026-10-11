@@ -102,6 +102,29 @@ final class QueueBuilderTest extends IntegrationTestCase
         self::assertNotNull($this->service(QueueBuilder::class)->queueMessage(str_repeat('c', 32))->problem, 'unknown message');
     }
 
+    public function testABlankMessageIsNotQueued(): void
+    {
+        $news = $this->createList('NEWS', 'News');
+        $this->setMembership($this->createSubscriber('a@example.com'), $news, true);
+        $blank = $this->createMessage('Blank "draft"', [$news]);
+        $this->db->executeStatement("UPDATE messages SET m_html = '<p>&nbsp;</p>', m_text = ' ' WHERE m_uniqid = ?", [$blank]);
+        $ready = $this->createMessage('Ready', [$news]);
+        $builder = $this->service(QueueBuilder::class);
+
+        $outcome = $builder->queueMessage($blank);
+        self::assertSame(0, $outcome->queued);
+        self::assertSame('The message was not queued because it is blank: it has no text and no image in its HTML or text part. The saved message has not been altered.', $outcome->problem);
+
+        $rotation = $builder->queueRotation([$ready, $blank], 10);
+        self::assertSame(0, $rotation->queued, 'the whole request is refused, so the selection can be put right');
+        self::assertStringContainsString('the message "Blank "draft"" cannot be sent: it is blank', (string) $rotation->problem);
+        self::assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM queue'));
+        self::assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM messages WHERE m_datesent IS NOT NULL OR m_a_id <> 0'), 'no message was prepared (dated, archived)');
+
+        $this->db->executeStatement("UPDATE messages SET m_text = 'Now it says something' WHERE m_uniqid = ?", [$blank]);
+        self::assertSame(1, $builder->queueMessage($blank)->queued, 'a text part alone is content');
+    }
+
     public function testRotationGivesEachSubscriberOneMessage(): void
     {
         $news = $this->createList('NEWS', 'News');

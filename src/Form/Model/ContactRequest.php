@@ -35,7 +35,7 @@ final class ContactRequest
     #[Assert\Length(max: 10000)]
     public string $message = '';
 
-    /** The subscriber and message of a {contact}/{booking} link, if any (hidden fields: empty is null). */
+    /** The subscriber and message of a {contact} link, if any (hidden fields: empty is null). */
     public ?string $suid = null;
     public ?string $muid = null;
 

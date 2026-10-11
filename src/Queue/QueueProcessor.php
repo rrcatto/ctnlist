@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Queue;
 
+use App\Campaign\MessageContent;
 use App\Campaign\TemplateRenderer;
 use App\CattoMail\CattoMailException;
 use App\CattoMail\CattoMailSender;
@@ -132,13 +133,14 @@ final class QueueProcessor
                 }
                 if ($message['m_sent'] >= $message['m_max_send']) {
                     $problem = 'Message ' . $message['m_uniqid'] . ' has reached its maximum of ' . $message['m_max_send']
-                        . ' sends (Maximum sends on the message); the rest stays queued.';
+                        . ' sends (Maximum emails to send on the message); the rest stays queued.';
                     return $staged;
                 }
 
-                $rendered = $this->renderer->render($message, $recipient, $list);
-                if (trim($rendered->html) === '' && trim($rendered->text) === '') {
-                    $problem = 'Message ' . $message['m_uniqid'] . ' has no content; it was not sent.';
+                // Blank since it was queued, or (with a template) rendering to nothing.
+                $rendered = MessageContent::isBlank($message['m_html'], $message['m_text']) ? null : $this->renderer->render($message, $recipient, $list);
+                if ($rendered === null || (trim($rendered->html) === '' && trim($rendered->text) === '')) {
+                    $problem = 'Message ' . $message['m_uniqid'] . ' was not sent because ' . MessageContent::BLANK . '; it stays queued.';
                     return $staged;
                 }
                 $queueId = $row['q_id'];

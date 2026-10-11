@@ -123,7 +123,7 @@ final class MessageLog
     {
         return $this->db->fetchAllAssociative(
             'SELECT sml_email, sml_list_shortcode, sml_reads, sml_last_read, sml_likes, sml_last_like, sml_dislikes, sml_last_dislike,
-                    sml_forwards, sml_subscribe, sml_unsubscribe
+                    sml_forwards, sml_bookings, sml_last_booking, sml_subscribe, sml_unsubscribe
              FROM smlog WHERE sml_muid = ? AND sml_reads > 0 AND LOWER(sml_email) LIKE LOWER(?)
              ORDER BY sml_last_read DESC, sml_id DESC LIMIT ' . max(1, $limit) . ' OFFSET ' . max(0, $offset),
             [$muid, Like::contains($email)]

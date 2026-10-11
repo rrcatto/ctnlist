@@ -136,4 +136,32 @@ final class MessageServiceTest extends IntegrationTestCase
         }
         self::assertSame($before, $counts());
     }
+
+    /** A draft may be saved blank; a proof, a resend and a forward of it are refused and reach neither catto-mail nor the logs. */
+    public function testABlankMessageIsNeverSentDirectly(): void
+    {
+        $fake = $this->fakeCattoMail();
+        $service = $this->service(MessageService::class);
+        $this->createSubscriber('jane@example.com', 'Jane');
+        $muid = $service->save(null, ['m_subject' => 'Only a subject so far'] + self::INPUT, []);
+        self::assertSame('', $this->service(MessageRepository::class)->findByMuid($muid)['m_html'] ?? null, 'saved without content');
+
+        try {
+            $service->sendProof($muid, 'tester@outside.org');
+            self::fail('a blank proof was sent');
+        } catch (\InvalidArgumentException $e) {
+            self::assertSame('The proof was not sent because the message cannot be sent yet: it is blank: it has no text and no image in its HTML or text part.', $e->getMessage());
+        }
+        foreach (['RESEND', 'FORWARD-MESSAGE'] as $type) {
+            $outcome = $service->sendTo($muid, 'jane@example.com', $type);
+            self::assertFalse($outcome->accepted(), $type);
+            self::assertStringContainsString('it is blank', (string) $outcome->problem);
+        }
+        self::assertSame([], $fake->sendJobs, 'nothing reached catto-mail');
+        self::assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM sendlog'));
+        self::assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM smlog'));
+
+        $this->db->executeStatement("UPDATE messages SET m_html = '<p>Hello {firstname}</p>' WHERE m_uniqid = ?", [$muid]);
+        self::assertSame(SendOutcome::SUBMITTED, $service->sendProof($muid, 'tester@outside.org')->status, 'with content it goes');
+    }
 }

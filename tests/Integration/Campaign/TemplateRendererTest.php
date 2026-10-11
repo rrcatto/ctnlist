@@ -41,10 +41,10 @@ final class TemplateRendererTest extends IntegrationTestCase
     public function testAnonymousRenderingForArchives(): void
     {
         $muid = $this->createMessage('Hi');
-        $this->db->executeStatement('UPDATE messages SET m_html = ?, m_a_id = 7 WHERE m_uniqid = ?', ['{firstname}|{unsubscribe}|{archive}|{booking}|{suid}', $muid]);
+        $this->db->executeStatement('UPDATE messages SET m_html = ?, m_a_id = 7 WHERE m_uniqid = ?', ['{firstname}|{unsubscribe}|{archive}|{contact}|{suid}', $muid]);
 
         $html = $this->render($muid, null, '')->html;
-        self::assertSame('|UNSUBSCRIBE|<a href="https://ctnlist.test/archive/7">ARCHIVE</a>|BOOKING FORM|', $html, 'a plain label, not the raw placeholder or a personal link');
+        self::assertSame('|UNSUBSCRIBE|<a href="https://ctnlist.test/archive/7">ARCHIVE</a>|CONTACT FORM|', $html, 'a plain label, not the raw placeholder or a personal link');
     }
 
     /**
@@ -69,7 +69,7 @@ final class TemplateRendererTest extends IntegrationTestCase
         }
         $archive = $this->render($muid, null, '');
         self::assertStringNotContainsString($uuid, $archive->html . $archive->text);
-        self::assertStringContainsString('|BOOKING FORM|CONTACT FORM|', $archive->html);
+        self::assertStringContainsString('|UPDATE||CONTACT FORM|', $archive->html, 'the retired {booking} renders nothing');
         self::assertStringContainsString('|https://ctnlist.test/|', $archive->html, '{baseurl}');
         self::assertStringStartsWith('||||', $archive->html, 'unconfigured site links and retired placeholders render nothing');
     }
@@ -112,32 +112,40 @@ final class TemplateRendererTest extends IntegrationTestCase
         self::assertStringNotContainsString(TemplateRenderer::PROOF_RECIPIENT['s_uuid'], $html);
     }
 
-    /**
-     * A booking or contact link that is not a web address (stored in the
-     * database or set in .env without the Settings form's validation) is
-     * never rendered as a link.
-     */
-    public function testOnlyWebAddressesBecomeBookingAndContactLinks(): void
+    /** {contact} always opens ctnlist's own contact form for this subscriber and message: it is not a setting. */
+    public function testContactLinkNamesTheSubscriberAndTheMessage(): void
     {
-        $settings = $this->service(\App\Repository\SettingRepository::class);
-        $settings->set('APP_BOOKING_URL', 'javascript:alert(document.cookie)', false, null);
-        $settings->set('APP_CONTACT_URL', ' data:text/html,<script>alert(1)</script>', false, null);
-        $id = $this->createSubscriber('jane@example.com', 'Jane');
+        $uuid = $this->subscriberUuid($this->createSubscriber('jane@example.com', 'Jane'));
         $muid = $this->createMessage('Hi');
-        $this->db->executeStatement('UPDATE messages SET m_html = ?, m_text = ? WHERE m_uniqid = ?', ['[{booking}][{contact}]', '[{booking}][{contact}]', $muid]);
+        $this->db->executeStatement('UPDATE messages SET m_html = ?, m_text = ? WHERE m_uniqid = ?', ['[{contact}]', '[{Contact}]', $muid]);
 
-        $rendered = $this->render($muid, $this->subscriberUuid($id), '');
-        self::assertSame('[][]', $rendered->html);
-        self::assertSame('[][]', $rendered->text);
+        $rendered = $this->render($muid, $uuid, 'NEWS');
+        $url = 'https://ctnlist.test/contact-form/' . $uuid . '/' . $muid;
+        self::assertSame('[<a href="' . $url . '">CONTACT FORM</a>]', $rendered->html);
+        self::assertSame('[' . $url . ']', $rendered->text);
     }
 
-    public function testBookingLinkTemplatesAreFilledIn(): void
+    /**
+     * {booking} and {advertise} are retired with their settings and render
+     * nothing, whatever an old .env or stored override still says. A link
+     * written in the message does their work: {suid} and {muid} are filled in
+     * for the recipient.
+     */
+    public function testRetiredLinkPlaceholdersRenderNothingAndWrittenLinksAreFilledIn(): void
     {
-        $this->service(\App\Repository\SettingRepository::class)->set('APP_BOOKING_URL', '{BaseURL}book/{suid}', false, null);
-        $id = $this->createSubscriber('jane@example.com', 'Jane');
+        $settings = $this->service(\App\Repository\SettingRepository::class);
+        foreach (['APP_BOOKING_URL', 'APP_ADVERTISE_URL', 'APP_CONTACT_URL'] as $removed) {
+            $settings->set($removed, 'https://elsewhere.example.org/{suid}', false, null);
+        }
+        $uuid = $this->subscriberUuid($this->createSubscriber('jane@example.com', 'Jane'));
         $muid = $this->createMessage('Hi');
-        $this->db->executeStatement('UPDATE messages SET m_html = ? WHERE m_uniqid = ?', ['{booking}', $muid]);
-        self::assertSame('<a href="https://ctnlist.test/book/' . $this->subscriberUuid($id) . '">BOOKING FORM</a>', $this->render($muid, $this->subscriberUuid($id), '')->html);
+        $body = '[{booking}][{advertise}][https://example.org/book?s={suid}&m={muid}]';
+        $this->db->executeStatement('UPDATE messages SET m_html = ?, m_text = ? WHERE m_uniqid = ?', [$body . '{contact}', $body, $muid]);
+
+        $rendered = $this->render($muid, $uuid, '');
+        self::assertSame('[][][https://example.org/book?s=' . $uuid . '&m=' . $muid . ']', $rendered->text);
+        self::assertStringNotContainsString('elsewhere.example.org', $rendered->html, 'the removed settings are not read');
+        self::assertStringContainsString('href="https://ctnlist.test/contact-form/' . $uuid . '/' . $muid . '"', $rendered->html);
     }
 
     private function render(string $muid, ?string $uuid, string $list): \App\Campaign\RenderedMessage

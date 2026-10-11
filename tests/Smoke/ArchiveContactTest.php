@@ -7,17 +7,32 @@ namespace App\Tests\Smoke;
 /** Archive pages and the contact form. */
 final class ArchiveContactTest extends SmokeTestCase
 {
+    private const SUBSCRIBER = 'smoke-contact@ctnlist.test';
+
     private static int $archiveId;
+    private static int $subscriberId;
+    private static string $subscriberUuid;
+    private static string $muid;
 
     public static function setUpBeforeClass(): void
     {
         parent::setUpBeforeClass();
         self::$archiveId = (int) self::value("INSERT INTO archives (a_subject, a_html) VALUES ('Archive fixture', '<p id=\"archived\">Archived copy</p>') RETURNING a_id");
+        self::$db->prepare("INSERT INTO subscribers (s_email, s_fname, s_lname, s_phone, s_business) VALUES (?, 'Contacta', 'Smokesdottir', '+27 21 555 0199', 'Smoke Fixtures Ltd')
+            ON CONFLICT ((LOWER(s_email))) DO NOTHING")->execute([self::SUBSCRIBER]);
+        $subscriber = self::rows('SELECT s_id, s_uuid FROM subscribers WHERE s_email = ?', [self::SUBSCRIBER])[0];
+        self::$subscriberId = (int) $subscriber['s_id'];
+        self::$subscriberUuid = (string) $subscriber['s_uuid'];
+        self::$muid = bin2hex(random_bytes(16));
+        self::$db->prepare("INSERT INTO messages (m_uniqid, m_subject, m_html, m_text) VALUES (?, 'Contact fixture', '<p>{contact}</p>', '{contact}')")->execute([self::$muid]);
     }
 
     public static function tearDownAfterClass(): void
     {
         self::$db->prepare('DELETE FROM archives WHERE a_id = ?')->execute([self::$archiveId]);
+        self::$db->prepare('DELETE FROM messages WHERE m_uniqid = ?')->execute([self::$muid]);
+        self::$db->prepare('DELETE FROM auth_sessions WHERE as_s_id = ? AND as_created_at >= ?')->execute([self::$subscriberId, self::$startedAt]);
+        self::$db->prepare('DELETE FROM auth_login_tokens WHERE alt_s_id = ? AND alt_created_at >= ?')->execute([self::$subscriberId, self::$startedAt]);
         parent::tearDownAfterClass();
     }
 
@@ -79,8 +94,53 @@ final class ArchiveContactTest extends SmokeTestCase
             self::assertSame(429, $limited['status'], 'one message per hour for this address');
             self::assertStringContainsString('Too many messages have been sent from here recently.', $limited['body']);
         });
+    }
 
-        $prefilled = self::request(self::client(), 'GET', '/contact-form/' . self::$admin['s_uuid'])['body'];
-        self::assertStringContainsString('value="' . self::$admin['s_email'] . '"', $prefilled);
+    /**
+     * A contact link travels with a forwarded message, so the form shows the
+     * subscriber's details to nobody but that subscriber, signed in. Whoever
+     * sends it, it is counted for the link's subscriber and message, and the
+     * message's activity report shows it.
+     */
+    public function testContactLinkIsFilledInOnlyForItsOwnSubscriber(): void
+    {
+        $link = '/contact-form/' . self::$subscriberUuid . '/' . self::$muid;
+        $admin = self::client();
+        self::loginAsAdmin($admin);
+        foreach (['a visitor' => self::client(), 'another subscriber' => $admin] as $who => $client) {
+            $page = self::request($client, 'GET', $link);
+            self::assertSame(200, $page['status'], $who);
+            foreach ([self::SUBSCRIBER, 'Contacta', 'Smokesdottir', '+27 21 555 0199', 'Smoke Fixtures Ltd'] as $detail) {
+                self::assertStringNotContainsString($detail, $page['body'], "{$who} is not shown {$detail}");
+            }
+            $fields = self::formFields($page['body'], 'contact');
+            self::assertSame(self::$subscriberUuid, $fields['contact[suid]'], 'the link still names the subscriber for the record');
+            self::assertSame(self::$muid, $fields['contact[muid]']);
+        }
+
+        $own = self::client();
+        self::assertSame(302, self::signInWithLink($own, self::issueLoginToken(self::$subscriberId))['status']);
+        $fields = self::formFields(self::request($own, 'GET', $link)['body'], 'contact');
+        self::assertSame(['Contacta Smokesdottir', self::SUBSCRIBER, '+27 21 555 0199', 'Smoke Fixtures Ltd'],
+            [$fields['contact[name]'], $fields['contact[email]'], $fields['contact[cell]'], $fields['contact[company]']], 'their own details');
+
+        // Someone the message was forwarded to answers it.
+        self::withSetting('CONTACT_RATE_LIMIT', '100000', function () use ($link): void {
+            $response = self::submitForm(self::client(), $link, 'contact', [
+                'contact[name]' => 'Forwarded Reader', 'contact[email]' => 'smoke-forwarded-reader@example.com', 'contact[message]' => 'Please call me',
+            ]);
+            self::assertSame(200, $response['status']);
+            self::assertStringContainsString('Thank you for your submission!', $response['body']);
+            self::assertStringNotContainsString(self::SUBSCRIBER, $response['body']);
+        });
+        self::assertSame(1, (int) self::value('SELECT sml_bookings FROM smlog WHERE sml_s_uuid = ? AND sml_muid = ?', [self::$subscriberUuid, self::$muid]));
+
+        $report = self::request($admin, 'GET', '/message-views/' . self::$muid)['body'];
+        self::assertStringContainsString('>Contact forms</th><th scope="col">Last contact form</th>', $report);
+        $row = self::match('#<tr>\s*<td>' . preg_quote(self::SUBSCRIBER, '#') . '</td>(.*?)</tr>#s', $report, 'the subscriber is listed')[1];
+        preg_match_all('#<td[^>]*>(.*?)</td>#s', $row, $cells);
+        // After the address: list, reads, last read, likes, last like, dislikes, last dislike, forwards, contact forms, last contact form.
+        self::assertSame('1', $cells[1][8], 'one contact form');
+        self::assertMatchesRegularExpression('/^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d$/', $cells[1][9]);
     }
 }

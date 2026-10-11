@@ -50,9 +50,8 @@ final class MessageController extends AbstractController
     public function edit(string $muid, SiteConfig $site): Response
     {
         if ($muid === '') {
+            // Subject and content start empty (placeholders say what goes there): prefilled text would be saved, and sent, as it stands.
             $draft = new MessageDraft();
-            $draft->subject = 'Your subject here';
-            $draft->html = 'Enter your message here';
             $draft->fromAddress = $site->fromAddress;
         } else {
             $message = $this->messages->findByMuid($muid) ?? throw $this->createNotFoundException('Message does not exist.');
@@ -63,7 +62,7 @@ final class MessageController extends AbstractController
         return $this->editor($this->messageForm($draft));
     }
 
-    /** Save exactly what was entered (drafts may be incomplete); invalid input shows the editor again with everything kept. */
+    /** Save exactly what was entered (a draft needs only its subject); invalid input shows the editor again with everything kept. */
     #[Route('/message', name: 'admin_message_save', defaults: ['_csp' => ContentSecurityPolicy::EDITOR], methods: ['POST'])]
     public function save(Request $request, MessageService $service): Response
     {

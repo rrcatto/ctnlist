@@ -16,7 +16,7 @@ use Psr\Clock\ClockInterface;
 
 /**
  * Campaign message lifecycle: saving drafts exactly as the administrator
- * supplied them, preparing a message for its first queueing, and direct
+ * supplied them (a draft may be blank; no send path accepts a blank one), preparing a message for its first queueing, and direct
  * sends of campaign content (proofs to any address; resends and forwards to
  * subscribers), which go through catto-mail like queue sends.
  *
@@ -88,6 +88,7 @@ final class MessageService
      * memberships are untouched.
      *
      * @throws InvalidField for an invalid address
+     * @throws \InvalidArgumentException for a blank message
      * @throws MessageNotFound
      */
     public function sendProof(string $muid, string $email): SendOutcome
@@ -97,6 +98,9 @@ final class MessageService
             throw new InvalidField('email', 'Enter a valid email address for the proof.');
         }
         $message = $this->messages->findByMuid($muid) ?? throw new MessageNotFound($muid);
+        if (MessageContent::isBlank($message['m_html'], $message['m_text'])) {
+            throw new \InvalidArgumentException('The proof was not sent because the message cannot be sent yet: ' . MessageContent::BLANK . '.');
+        }
         $list = $this->messages->lists($message['m_id'])[0]['l_shortcode'] ?? '';
         $rendered = $this->renderer->renderProof($message, $list);
         return $this->sender->sendOne('proof', $this->outgoing->transactional($message, $list),
@@ -118,6 +122,9 @@ final class MessageService
         $recipient = trim($email) === '' ? null : $this->subscribers->findRecipientByEmail($email);
         if ($message === null || $recipient === null) {
             return SendOutcome::of(0, 0, 'Unknown message or subscriber.', false);
+        }
+        if (MessageContent::isBlank($message['m_html'], $message['m_text'])) {
+            return SendOutcome::of(0, 0, 'The message was not sent because ' . MessageContent::BLANK . '.', false);
         }
 
         $list = strtoupper(trim($listShortcode));

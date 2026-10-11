@@ -39,7 +39,7 @@ final class SettingsCatalogue
         'contact' => [
             'tab' => 'Contact',
             'label' => 'Contact details',
-            'description' => 'Contact details in the footer and the links that messages can include.',
+            'description' => 'Contact details in the footer, and the Facebook and X links that messages can include.',
             'settings' => [
                 'APP_STREET_ADDRESS' => ['width' => 'full', 'label' => 'Street address', 'type' => 'text', 'optional' => true],
                 'APP_TELEPHONE' => ['width' => 'third', 'label' => 'Telephone', 'type' => 'text', 'optional' => true],
@@ -47,9 +47,6 @@ final class SettingsCatalogue
                 'APP_WHATSAPP_URL' => ['width' => 'third', 'label' => 'WhatsApp link', 'type' => 'url', 'optional' => true],
                 'APP_FACEBOOK_URL' => ['width' => 'half', 'label' => 'Facebook page', 'type' => 'url', 'optional' => true, 'help' => 'Footer link and the {facebook} placeholder.'],
                 'APP_X_URL' => ['width' => 'half', 'label' => 'X (Twitter) page', 'type' => 'url', 'optional' => true, 'help' => 'The {twitter} placeholder.'],
-                'APP_ADVERTISE_URL' => ['width' => 'half', 'label' => 'Advertising page', 'type' => 'url', 'optional' => true, 'help' => 'The {advertise} placeholder.'],
-                'APP_BOOKING_URL' => ['width' => 'half', 'label' => 'Booking form link', 'type' => 'link', 'optional' => true, 'help' => 'The {booking} placeholder; may contain {BaseURL}, {suid} and {muid}.'],
-                'APP_CONTACT_URL' => ['width' => 'half', 'default' => '{BaseURL}contact-form/{suid}/{muid}', 'label' => 'Contact form link', 'type' => 'link', 'optional' => true, 'help' => 'The {contact} placeholder; may contain {BaseURL}, {suid} and {muid}.'],
             ],
         ],
         'sender' => [
@@ -68,7 +65,7 @@ final class SettingsCatalogue
         'smtp' => [
             'tab' => 'SMTP',
             'label' => 'Transactional mail',
-            'description' => 'The SMTP server for transactional mail (sign-in links, invitations, notifications, contact acknowledgements). Campaign content (queue sends, proofs, resends, forwards) is delivered by catto-mail, configured in .env.',
+            'description' => 'The SMTP server for transactional mail (sign-in links, invitations, notifications, contact-form mail). Campaign content (queue sends, proofs, resends, forwards) is delivered by catto-mail, configured in .env.',
             'settings' => [
                 'MAILER_DSN' => ['width' => 'full', 'label' => 'SMTP server', 'type' => 'dsn', 'secret' => true, 'optional' => true, 'help' => 'Used for transactional mail only.'],
             ],

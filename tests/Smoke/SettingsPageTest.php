@@ -91,6 +91,7 @@ final class SettingsPageTest extends SmokeTestCase
         }
         self::assertDoesNotMatchRegularExpression('/name="(DB_|GDB_|APP_SECRET|APP_SETTINGS_KEY|APP_ENV|APP_DEBUG|APP_BASE_URL|TRUSTED_PROXIES|SUPPRESSION_PROVIDER|CONTACT_LOG_FILE|APP_LOG_DIR|CATTOMAIL_)/', $body, 'infrastructure stays in .env');
         self::assertStringNotContainsString('MAIL_SMTP_SERVERS_JSON', $body, 'campaign content goes to catto-mail, not SMTP failover servers');
+        self::assertDoesNotMatchRegularExpression('/APP_(ADVERTISE|BOOKING|CONTACT)_URL/', $body, 'the message link settings are gone: {contact} is fixed, the others are written as links');
     }
 
     public function testOverrideBadgesAndReset(): void

@@ -4,21 +4,25 @@ declare(strict_types=1);
 
 namespace App\Form\Model;
 
+use App\Campaign\MessageContent;
 use App\Validator\EmailAddress;
 use App\Validator\WholeNumber;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**
- * A campaign message in the editor (MessageType). Drafts may be incomplete
- * and have no lists; only what cannot be stored or sent as entered is
- * rejected (lengths, a malformed sender address, out-of-range numbers).
- * Saving never sends.
+ * A campaign message in the editor (MessageType). A message needs a subject:
+ * it is what the message list shows and links. Otherwise a draft may be
+ * incomplete, blank and without lists; only what cannot be stored or sent as
+ * entered is rejected (lengths, a malformed sender address, out-of-range
+ * numbers). Saving never sends, and a blank message is refused when it is
+ * sent (MessageContent).
  */
 final class MessageDraft
 {
     public ?string $muid = null;
 
-    #[Assert\Length(max: 200)]
+    #[Assert\NotBlank(message: 'Enter a subject: the message is listed by it.', normalizer: 'trim')]
+    #[Assert\Length(max: MessageContent::SUBJECT_MAX)]
     public string $subject = '';
 
     public string $html = '';

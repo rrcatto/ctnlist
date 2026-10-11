@@ -26,6 +26,20 @@ document.addEventListener('submit', (event) => {
     }
 });
 
+// A menu of checkboxes (data-checklist) names the ticked choices on its toggle:
+// the data-checklist-summary inside the element before the menu. With none
+// ticked it shows data-checklist-empty.
+document.querySelectorAll('[data-checklist]').forEach((menu) => {
+    const summary = menu.previousElementSibling?.querySelector('[data-checklist-summary]');
+    if (!summary) {
+        return;
+    }
+    menu.addEventListener('change', () => {
+        const names = [...menu.querySelectorAll('input[type="checkbox"]:checked')].map((box) => box.labels[0]?.textContent.trim() ?? '');
+        summary.textContent = names.length > 0 ? names.join(', ') : (menu.dataset.checklistEmpty ?? '');
+    });
+});
+
 // Tab sets marked data-remember-tab keep the active tab in the URL hash (the
 // tab button's data-tab-hash; panes have other ids, so the browser does not
 // jump), and opening the page at …#hash shows that tab with the tab bar just

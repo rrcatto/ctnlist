@@ -5,18 +5,14 @@ declare(strict_types=1);
 namespace App\Mail;
 
 use App\Config\SiteConfig;
-use App\Log\MessageActivity;
-use App\Log\MessageLog;
 use App\Log\SendLog;
-use App\Repository\SubscriberRepository;
-use App\Subscriber\Engagement;
 use App\Util\Duration;
 use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
 
 /**
  * Application mail (not campaign content): notifications, sign-in links,
- * list confirmation invitations and contact acknowledgements. Each successful
+ * list confirmation invitations and contact-form mail. Each successful
  * handoff is written to the Send Log.
  */
 final class TransactionalMailer
@@ -25,9 +21,6 @@ final class TransactionalMailer
         private readonly SmtpServerPool $servers,
         private readonly MailConnectionFactory $connections,
         private readonly SendLog $sendLog,
-        private readonly MessageLog $messageLog,
-        private readonly SubscriberRepository $subscribers,
-        private readonly Engagement $engagement,
         private readonly SiteConfig $site,
     ) {
     }
@@ -76,11 +69,11 @@ final class TransactionalMailer
         $list = $this->site->listName;
         if ($confirmListName !== null) {
             $subject = 'Confirm your subscription to ' . $confirmListName;
-            $intro = 'To confirm your subscription to ' . $confirmListName . ' on ' . $list . ', open the link below, choose Continue and then confirm. You are subscribed only once you confirm.';
+            $intro = 'To confirm your subscription to ' . $confirmListName . ' on ' . $list . ', open the link below, press Continue on the page it opens, and then confirm. You are subscribed only once you confirm.';
             $action = 'Confirm my subscription';
         } else {
             $subject = $list . ' sign-in link';
-            $intro = 'To sign in to ' . $list . ', open the link below and choose Sign in.';
+            $intro = 'To sign in to ' . $list . ', open the link below, then press Sign in on the page it opens. Opening the link alone does not sign you in.';
             $action = 'Sign in to ' . $list;
         }
         $html = '<p>' . self::e($intro) . '</p>'
@@ -109,51 +102,56 @@ final class TransactionalMailer
     }
 
     /**
-     * Acknowledge a contact/order form, blind-copied to the administrator and
-     * the contact address. Records a booking for the message when known and
-     * raises the subscriber's priority. Returns the number of unique
-     * recipients (0 on failure), as the v5 contact workflow expects.
+     * The organisation's copy of a contact/order form: to the contact address
+     * and the administrator, answered by replying to the person who wrote. It
+     * carries the internal details of the submission (whose link was used,
+     * from where), so it never goes to the submitter. False when there is
+     * nobody to send it to or it could not be sent.
      */
-    public function sendContactAcknowledgement(string $toEmail, string $toName, string $html, string $text, string $subscriberUuid, string $muid): int
+    public function sendContactNotice(string $fromEmail, string $fromName, string $html, string $text, string $subscriberUuid, string $muid): bool
     {
-        $subscriberUuid = trim($subscriberUuid);
-        if ($subscriberUuid === '') {
-            $subscriberUuid = (string) ($this->subscribers->findIdentityByEmail($toEmail)['s_uuid'] ?? '');
-        }
-        $subject = $toEmail . ' - ' . $this->site->contactSubject;
-        $fromAddress = trim($this->site->contactEmail) !== '' ? $this->site->contactEmail : $this->site->fromAddress;
-        $fromName = trim($this->site->contactName) !== '' ? $this->site->contactName : $this->site->fromName;
-
-        $email = (new Email())
-            ->subject($subject)->html($html)->text($text)
-            ->from(self::address($fromAddress, $fromName))
-            ->to(self::address($toEmail, $toName));
-        if (trim($this->site->contactEmail) !== '') {
-            $email->returnPath(self::address($this->site->contactEmail));
-        }
-
-        $recipients = [strtolower(trim($toEmail)) => true];
-        $bcc = [];
-        foreach ([[$this->site->adminEmail, $this->site->adminName], [$this->site->contactEmail, $this->site->contactName]] as [$address, $name]) {
-            $key = strtolower(trim($address));
-            if ($key !== '' && !isset($recipients[$key])) {
-                $bcc[] = self::address($address, $name);
-                $recipients[$key] = true;
+        $to = [];
+        foreach ([[$this->site->contactEmail, $this->site->contactName], [$this->site->adminEmail, $this->site->adminName]] as [$address, $name]) {
+            if (trim($address) !== '') {
+                $to[strtolower(trim($address))] ??= self::address($address, $name);
             }
         }
-        if ($bcc !== []) {
-            $email->bcc(...$bcc);
+        if ($to === []) {
+            return false;
         }
-
+        $subject = 'Contact form: ' . $fromEmail;
+        $email = $this->contactMail($subject, $html, $text)->to(...array_values($to))->replyTo(self::address($fromEmail, $fromName));
         if (!$this->deliver($email)) {
-            return 0;
+            return false;
+        }
+        foreach ($to as $address) {
+            $this->sendLog->record($muid, 'CONTACT', $address->getAddress(), '', $subject, $subscriberUuid);
+        }
+        return true;
+    }
+
+    /** The acknowledgement to the person who filled in the contact/order form: what they wrote and nothing else. */
+    public function sendContactAcknowledgement(string $toEmail, string $toName, string $html, string $text, string $subscriberUuid, string $muid): bool
+    {
+        $subject = $toEmail . ' - ' . $this->site->contactSubject;
+        if (!$this->deliver($this->contactMail($subject, $html, $text)->to(self::address($toEmail, $toName)))) {
+            return false;
         }
         $this->sendLog->record($muid, 'CONTACT', $toEmail, '', $subject, $subscriberUuid);
-        $this->messageLog->record($subscriberUuid, $muid, MessageActivity::Booking);
-        if ($subscriberUuid !== '') {
-            $this->engagement->bump($subscriberUuid, 100000);
+        return true;
+    }
+
+    /** Contact-form mail comes from the contact address, or else from the site's sender. */
+    private function contactMail(string $subject, string $html, string $text): Email
+    {
+        $contact = trim($this->site->contactEmail);
+        $email = (new Email())
+            ->subject($subject)->html($html)->text($text)
+            ->from(self::address($contact !== '' ? $contact : $this->site->fromAddress, trim($this->site->contactName) !== '' ? $this->site->contactName : $this->site->fromName));
+        if ($contact !== '') {
+            $email->returnPath(self::address($contact));
         }
-        return count($recipients);
+        return $email;
     }
 
     private function sendPlain(string $toEmail, string $subject, string $html, string $text, string $type, string $listShortcode, string $subscriberUuid): bool

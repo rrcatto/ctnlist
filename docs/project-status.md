@@ -1,10 +1,16 @@
 # ctnlist: project status
 
-**As of 2026-10-10.** This page says where the project stands and what is waiting. `CHANGELOG.md` is the record of what each version changed; when the two disagree, the changelog and the code are right and this page needs updating.
+**As of 2026-10-11.** This page says where the project stands and what is waiting. `CHANGELOG.md` is the record of what each version changed; when the two disagree, the changelog and the code are right and this page needs updating.
 
 ## Where things are
 
-- **Released:** 6.0.8, tagged `v6.0.8` on `main` (2026-10-10). It contains the fixes from the pre-deployment defect audit, PHP 8.5 as the minimum, the interface moved to Bootstrap 6.0.0-alpha.1, and this `docs/` directory. `bin/dev check` passes on it (529 tests, PHPStan level 8 clean). 6.0.7 (2026-10-09) was the release-candidate hardening called Phase 10; Phase 9 was 6.0.6.
+- **Released:** 6.0.9, tagged `v6.0.9` on `main` (2026-10-11). `bin/dev check` passes on it (549 tests, PHPStan level 8 clean). It contains:
+  - the message link settings removed: `{contact}` always opens ctnlist's own contact form, and `{booking}` and `{advertise}` are retired;
+  - the contact form showing a subscriber's details only to that subscriber, signed in, with the organisation getting its own mail for each submission and the message activity report showing contact forms;
+  - the message editor laid out at the page's width, with the lists as a menu of checkboxes;
+  - a message needing a subject (up to 250 characters), and a blank message refused by every send path;
+  - the sign-in link page saying plainly that one more press is needed.
+- **Before it:** 6.0.8 (2026-10-10) had the fixes from the pre-deployment defect audit, PHP 8.5 as the minimum, the interface moved to Bootstrap 6.0.0-alpha.1, and this `docs/` directory. 6.0.7 (2026-10-09) was the release-candidate hardening called Phase 10; Phase 9 was 6.0.6.
 - **Next:** Phase 11, deployment to the new server. Not started.
 
 ## The defect audit, in brief
@@ -24,8 +30,7 @@ The full list is under 6.0.8 in `CHANGELOG.md`.
 
 ## Decisions waiting for the owner
 
-1. **Contact-form privacy.** Opening a subscriber's contact link shows that subscriber's name, address, phone and company to whoever holds the link (for example someone a newsletter was forwarded to), and the acknowledgement mail includes the subscriber's address. This is v5 behaviour and was left alone. The recommendation is to pre-fill only for the signed-in subscriber.
-2. **Bootstrap 6 while it is a pre-release.** The owner chose it on 2026-10-10. What stays open is when to take the next pre-release: each one can rename classes, which means going through the templates again.
+1. **Bootstrap 6 while it is a pre-release.** The owner chose it on 2026-10-10. What stays open is when to take the next pre-release: each one can rename classes, which means going through the templates again.
 
 ## To check during Phase 11
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Queue;
 
+use App\Campaign\MessageContent;
 use App\Campaign\MessageService;
 use App\Log\MessageLog;
 use App\Repository\MembershipRepository;
@@ -51,6 +52,9 @@ final class QueueBuilder
         }
         if ($this->messages->lists($message['m_id']) === []) {
             return QueueOutcome::refused('The message was not queued because it currently has no target lists. The saved message has not been altered.');
+        }
+        if (MessageContent::isBlank($message['m_html'], $message['m_text'])) {
+            return QueueOutcome::refused('The message was not queued because ' . MessageContent::BLANK . '. The saved message has not been altered.');
         }
         $message = $this->messageService->prepareForQueue($message);
         $limit = max(0, $limit);
@@ -102,13 +106,21 @@ final class QueueBuilder
             return QueueOutcome::queued(0);
         }
 
-        /** @var list<Message> $messages */
-        $messages = [];
+        // Every selected message is checked before any is prepared (archived, dated).
+        $selected = [];
         foreach ($muids as $muid) {
             $message = $this->messages->findByMuid($muid);
             if ($message === null) {
                 return QueueOutcome::refused('Message ' . $muid . ' does not exist.');
             }
+            if (MessageContent::isBlank($message['m_html'], $message['m_text'])) {
+                return QueueOutcome::refused('Nothing was queued because the message "' . $message['m_subject'] . '" cannot be sent: ' . MessageContent::BLANK . '.');
+            }
+            $selected[] = $message;
+        }
+        /** @var list<Message> $messages */
+        $messages = [];
+        foreach ($selected as $message) {
             if ($this->messages->lists($message['m_id']) !== []) {
                 $messages[] = $this->messageService->prepareForQueue($message);
             }

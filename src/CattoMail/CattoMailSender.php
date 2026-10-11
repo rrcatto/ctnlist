@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\CattoMail;
 
+use App\Campaign\MessageContent;
 use App\Log\MessageLog;
 use App\Log\SendLog;
 use App\Repository\CattoMailSendRepository;
@@ -382,7 +383,7 @@ final class CattoMailSender
             foreach ($recipients as $recipient) {
                 // The handoff to catto-mail is this delivery's successful handoff (invariant: Send Log).
                 $this->sendLog->record($recipient['crp_muid'], $recipient['crp_type'], $recipient['crp_email'], $recipient['crp_list_shortcode'],
-                    mb_substr($recipient['crp_subject'], 0, 200), $recipient['crp_s_uuid']);
+                    mb_substr($recipient['crp_subject'], 0, MessageContent::SUBJECT_MAX), $recipient['crp_s_uuid']);
                 if ($recipient['crp_s_uuid'] !== null) {
                     $this->messageLog->markSent($recipient['crp_s_uuid'], $recipient['crp_muid'], $recipient['crp_list_shortcode']);
                 }

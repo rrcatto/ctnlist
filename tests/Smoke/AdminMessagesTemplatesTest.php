@@ -55,6 +55,50 @@ final class AdminMessagesTemplatesTest extends SmokeTestCase
         $fields = ['message[fromName]' => 'Smoke', 'message[fromAddress]' => 'smoke@ctnlist.test', 'message[subject]' => $subject,
             'message[html]' => '<p>Draft</p>', 'message[text]' => 'Draft', 'message[listIds][]' => []];
 
+        // A new message starts with an empty subject and content (placeholders only), laid out at the page's width.
+        $new = self::request($client, 'GET', '/message')['body'];
+        self::assertMatchesRegularExpression('#<input type="text" id="message_subject" name="message\[subject\]" required="required"[^>]*maxlength="250"[^>]*placeholder="The subject line of the email"#', $new);
+        self::assertStringNotContainsString('Your subject here', $new);
+        self::assertStringNotContainsString('Enter your message here', $new);
+        self::assertMatchesRegularExpression('#<textarea id="message_html"[^>]*placeholder="Write the message here"[^>]*></textarea>#', $new, 'the HTML part starts empty');
+        self::assertStringNotContainsString('lg:col-4">' . "\n" . '      <div class="card', $new, 'no sidebar');
+        $previous = -1;
+        foreach (['message_fromName', 'message_fromAddress', 'message_listIds_toggle', 'message_priority', 'message_maxSend', 'message_subject', 'message_templateId', 'message_html', 'message_text'] as $id) {
+            $at = strpos($new, 'id="' . $id . '"');
+            self::assertNotFalse($at, $id);
+            self::assertGreaterThan($previous, $at, $id . ' comes after the field before it');
+            $previous = $at;
+        }
+        self::assertMatchesRegularExpression('#<button class="form-control form-control-caret[^"]*" type="button" id="message_listIds_toggle"\s+data-bs-toggle="menu" data-bs-auto-close="outside"#', $new, 'the lists are a menu that stays open');
+        self::assertMatchesRegularExpression('#<div class="menu app-checklist"[^>]*data-checklist[^>]*>\s*<div class="form-field"><input type="checkbox" id="message_listIds_\d+" name="message\[listIds\]\[\]" class="check"#', $new, 'of checkboxes');
+        self::assertStringContainsString('data-checklist-summary>No lists selected</span>', $new);
+
+        // A subject is required, and at most 250 characters; nothing else is.
+        foreach (['' => 'Enter a subject', '   ' => 'Enter a subject', str_repeat('x', 251) => 'This value is too long'] as $bad => $error) {
+            $refused = self::submitForm($client, '/message', 'message', ['message[subject]' => (string) $bad, 'message[html]' => '<p>Kept</p>'] + $fields);
+            self::assertSame(422, $refused['status'], 'subject of ' . strlen((string) $bad) . ' characters');
+            self::assertMatchesRegularExpression('#id="message_subject_error1">' . $error . '#', $refused['body']);
+            self::assertStringContainsString('&lt;p&gt;Kept&lt;/p&gt;</textarea>', $refused['body'], 'what was entered is kept');
+        }
+        self::assertSame(0, (int) self::scalar("SELECT COUNT(*) FROM messages WHERE m_html = '<p>Kept</p>'"), 'nothing saved without a valid subject');
+        $long = str_repeat('s', 250 - strlen(self::$suffix)) . self::$suffix;
+        self::assertStringContainsString('Message saved.', self::submitAndFollow($client, '/message', 'message', ['message[subject]' => $long, 'message[html]' => '', 'message[text]' => ''] + $fields));
+        $blank = (string) self::scalar('SELECT m_uniqid FROM messages WHERE m_subject = ?', [$long]);
+        self::assertSame(['', ''], [self::scalar('SELECT m_html FROM messages WHERE m_uniqid = ?', [$blank]), self::scalar('SELECT m_text FROM messages WHERE m_uniqid = ?', [$blank])], 'a blank draft is saved, whole subject and all');
+
+        // The blank draft cannot be sent: no proof, no queueing.
+        $sentBefore = self::scalar('SELECT COUNT(*) FROM sendlog');
+        $proof = self::submitForm($client, '/sendtome/' . $blank, 'proof', ['proof[email]' => 'proof@example.com']);
+        self::assertSame(422, $proof['status']);
+        self::assertStringContainsString('The proof was not sent because the message cannot be sent yet: it is blank', $proof['body']);
+        self::submitAndFollow($client, '/message/' . $blank, 'message', ['message[listIds][]' => [(string) self::scalar("SELECT l_id FROM lists WHERE l_shortcode = 'ALL'")]]);
+        $queueForm = self::request($client, 'GET', '/queuelist/' . $blank)['body'];
+        $queue = self::request($client, 'POST', '/queuelist', ['muid' => $blank, 'limit' => '500000', 'csrf' => self::csrfToken($queueForm, 'the queue form')]);
+        self::assertSame(200, $queue['status']);
+        self::assertStringContainsString('The message was not queued because it is blank', $queue['body']);
+        self::assertSame(0, (int) self::scalar('SELECT COUNT(*) FROM queue WHERE q_muid = ?', [$blank]));
+        self::assertSame($sentBefore, self::scalar('SELECT COUNT(*) FROM sendlog'), 'nothing was sent');
+
         $page = self::submitAndFollow($client, '/message', 'message', $fields);
         self::assertStringContainsString('Message saved.', $page);
         $muid = (string) self::scalar('SELECT m_uniqid FROM messages WHERE m_subject = ?', [$subject]);

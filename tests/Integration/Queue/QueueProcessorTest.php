@@ -88,9 +88,23 @@ final class QueueProcessorTest extends IntegrationTestCase
         $none = $this->service(QueueProcessor::class)->process();
         self::assertSame(0, $none->staged, 'zero means none');
         self::assertSame(SendOutcome::FAILED, $none->status, 'nothing for catto-mail to retry');
-        self::assertSame('Message ' . $muid . ' has reached its maximum of 0 sends (Maximum sends on the message); the rest stays queued.', $none->problem,
+        self::assertSame('Message ' . $muid . ' has reached its maximum of 0 sends (Maximum emails to send on the message); the rest stays queued.', $none->problem,
             'the run says why it stopped');
         self::assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM queue'));
+    }
+
+    public function testAMessageBlankedAfterQueueingIsNotSent(): void
+    {
+        [$muid] = $this->queued(['A', 'B']);
+        $this->db->executeStatement("UPDATE messages SET m_html = '<p><br></p>', m_text = '' WHERE m_uniqid = ?", [$muid]);
+
+        $outcome = $this->service(QueueProcessor::class)->process();
+        self::assertSame([0, 0], [$outcome->staged, $outcome->handedOff]);
+        self::assertSame('Message ' . $muid . ' was not sent because it is blank: it has no text and no image in its HTML or text part; it stays queued.', $outcome->problem);
+        self::assertSame(SendOutcome::FAILED, $outcome->status, 'nothing for catto-mail to retry');
+        self::assertSame(2, (int) $this->db->fetchOne('SELECT COUNT(*) FROM queue'), 'the queue is kept for when the message has content');
+        self::assertSame([], $this->fake->sendJobs);
+        self::assertSame(0, (int) $this->db->fetchOne("SELECT COUNT(*) FROM sendlog WHERE sl_type = 'MESSAGE'"));
     }
 
     /** Another live run holds the queue lock (in its own database session): this one is refused. */

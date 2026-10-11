@@ -65,15 +65,17 @@ final class TemplateRenderer
 
         $attr = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         // Site links: a link when the URL is configured, else nothing (never an empty href).
-        foreach (['{advertise}' => [$this->site->advertiseUrl, 'ADVERTISE'], '{facebook}' => [$this->site->facebookUrl, 'FACEBOOK'],
-            '{twitter}' => [$this->site->xUrl, 'TWITTER']] as $placeholder => [$url, $label]) {
+        foreach (['{facebook}' => [$this->site->facebookUrl, 'FACEBOOK'], '{twitter}' => [$this->site->xUrl, 'TWITTER']] as $placeholder => [$url, $label]) {
             $r($placeholder, $url === '' ? '' : '<a href="' . $attr($url) . '">' . $label . '</a>', $url);
         }
         // Retired placeholders render nothing rather than appear literally: {STORE}
-        // (the Ecwid store is gone) and {lms-booking} (never implemented: v5 only
-        // assigned it to unused variables, so it always printed as typed).
-        $r('{STORE}', '', '');
-        $r('{lms-booking}', '', '');
+        // (the Ecwid store is gone), {lms-booking} (never implemented: v5 only
+        // assigned it to unused variables, so it always printed as typed), and
+        // {booking} and {advertise}, whose links were settings: an ordinary link
+        // in the message or template does the same ({suid} and {muid} work in it).
+        foreach (['{STORE}', '{lms-booking}', '{booking}', '{advertise}'] as $retired) {
+            $r($retired, '', '');
+        }
 
         $subscribeUrl = $base . 'subscribe?m=' . rawurlencode($muid) . ($list !== '' ? '&l=' . rawurlencode($list) : '');
         $r('{subscribe}', '<a href="' . htmlspecialchars($subscribeUrl, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">SUBSCRIBE</a>', $subscribeUrl);
@@ -87,10 +89,10 @@ final class TemplateRenderer
         if ($recipient === null) {
             $archiveLink();
             // Subscriber links become their plain labels. v5 meant to do this for
-            // {booking} and {contact} too but left them literal (a defect): an
-            // archive must not show raw placeholders, nor a link carrying anyone's {suid}.
+            // {contact} too but left it literal (a defect): an archive must not
+            // show raw placeholders, nor a link carrying anyone's {suid}.
             foreach (['{unsubscribe}' => 'UNSUBSCRIBE', '{forward}' => 'FORWARD', '{preferences}' => 'UPDATE',
-                '{booking}' => 'BOOKING FORM', '{contact}' => 'CONTACT FORM', '{baseurl}' => $base, '{listshortcode}' => $list,
+                '{contact}' => 'CONTACT FORM', '{baseurl}' => $base, '{listshortcode}' => $list,
                 '{firstname}' => '', '{lastname}' => '', '{subscription}' => '', '{emailsleft}' => '',
                 '{confirm}' => 'OPT IN', '{like}' => 'YES', '{dislike}' => 'NO'] as $placeholder => $value) {
                 $r($placeholder, $value, $value);
@@ -122,13 +124,9 @@ final class TemplateRenderer
         $preferences = $link($base . 'profile/subscriber/' . $suid);
         $r('{preferences}', '<a href="' . $preferences . '">UPDATE</a>', $preferences);
 
-        // No booking or contact form configured (or not a web address): nothing, rather than a link to nowhere.
-        $booking = $this->linkTemplate($this->site->bookingUrl, $suid, $muid);
-        $booking = $booking === '' ? '' : $link($booking);
-        $r('{booking}', $booking === '' ? '' : '<a href="' . $attr($booking) . '">BOOKING FORM</a>', $booking);
-        $contact = $this->linkTemplate($this->site->contactUrl, $suid, $muid);
-        $contact = $contact === '' ? '' : $link($contact);
-        $r('{contact}', $contact === '' ? '' : '<a href="' . $attr($contact) . '">CONTACT FORM</a>', $contact);
+        // The contact form, which records the submission against this subscriber and message.
+        $contact = $link($base . 'contact-form/' . $suid . '/' . $muid);
+        $r('{contact}', '<a href="' . $contact . '">CONTACT FORM</a>', $contact);
 
         // Names are subscriber input: text in the HTML part, never markup.
         $r('{firstname}', $attr($recipient['s_fname']), $recipient['s_fname']);
@@ -159,7 +157,7 @@ final class TemplateRenderer
      * A proof copy: rendered as for a subscriber, so the layout looks as it
      * will, with test merge values (PROOF_RECIPIENT, no real subscriber).
      * Links that would act for a subscriber (unsubscribe, confirm, forward,
-     * preferences, reactions, booking and contact forms) lead to /proof-link,
+     * preferences, reactions, the contact form) lead to /proof-link,
      * which explains they are unavailable in a proof; there is no tracking
      * pixel and {suid} is empty.
      *
@@ -168,16 +166,5 @@ final class TemplateRenderer
     public function renderProof(array $message, string $listShortcode = ''): RenderedMessage
     {
         return $this->render($message, self::PROOF_RECIPIENT, $listShortcode, true);
-    }
-
-    /**
-     * Fill {BaseURL}, {suid} and {muid} in a configured link (BookingURL,
-     * ContactURL). Only a web address is ever used as a link: anything else
-     * (javascript:, data:, a typo) counts as not configured.
-     */
-    private function linkTemplate(string $url, string $suid, string $muid): string
-    {
-        $link = str_ireplace(['{BaseURL}', '{suid}', '{muid}'], [$this->site->baseUrl, $suid, $muid], $url);
-        return preg_match('#^https?://#i', $link) === 1 ? $link : '';
     }
 }

@@ -2,6 +2,18 @@
 
 The release history of ctnlist. Versions 5.0.x and 6.0.x are an incremental modernisation of the working v5.0 application; the v5 behaviour they keep, and the deliberate changes from it, are listed in [RESTORED-FUNCTIONALITY.md](docs/RESTORED-FUNCTIONALITY.md).
 
+## 6.0.9 (2026-10-11)
+
+Message links and the contact form put in order, a wider message editor, and a plainer sign-in link page:
+- **Message links are no longer settings:** the Advertising page, Booking form link and Contact form link are gone from Settings (`APP_ADVERTISE_URL`, `APP_BOOKING_URL`, `APP_CONTACT_URL`; `ctnlist:diagnose` and `bin/dev` say so if `.env` still sets one). `{contact}` always opens ctnlist's own contact form for the subscriber and the message. `{booking}` and `{advertise}` are retired and render nothing; write such a link in the message or template, where `{suid}` and `{muid}` identify the recipient and the message.
+- **Contact form privacy:** a subscriber's contact link no longer shows their name, address, phone and company to whoever opens it (it travels with a forwarded message): the form is filled in only for that subscriber, signed in. The acknowledgement sent to whoever submits the form holds only what they wrote.
+- **Contact form mail:** the organisation gets its own mail (to the contact address and the administrator, subject "Contact form: <address>") instead of a blind copy of the acknowledgement. It names the subscriber and the message of the link, now with the message's subject, and a reply to it goes to the person who wrote. The "Booking-Form-URL" line is gone. When this mail cannot be sent, the submitter is told so and nothing is acknowledged or counted.
+- **Message activity report:** shows the contact forms each subscriber sent from the message, with the time of the last one.
+- **Message editor:** the form uses the page's width instead of a main column and a sidebar. First the sender (From name, From address), then the lists, priority and maximum in one row, then the subject, template and content, much as v5 arranged it. The lists are a menu of checkboxes that stays open while lists are ticked and names the ticked ones. "Maximum sends" has its v5 label again, "Maximum emails to send".
+- **Subject:** a message cannot be saved without a subject, which may be up to 250 characters (it was 200). A new message starts with an empty subject and content, with placeholders, instead of "Your subject here" and "Enter your message here".
+- **Blank messages cannot be sent:** a draft may still be saved without content, but queueing it (alone or in the advanced queue), sending the queue, a proof, a resend and a forward refuse a message with no text and no image, and say why.
+- **Sign-in link page:** the page a sign-in link opens now says plainly "You are not signed in yet", names the button to press (Sign in, or Continue for a list confirmation) and explains why the extra step exists; the button is larger. The sign-in email says the same: opening the link alone does not sign you in.
+
 ## 6.0.8 (2026-10-10)
 
 The fixes from a defect audit of the whole codebase before deployment, PHP 8.5 as the minimum, and the interface moved to Bootstrap 6:

@@ -1,4 +1,4 @@
-# ctnlist 6.0.8
+# ctnlist 6.0.9
 
 ctnlist is a web-based mailing-list application created by Richard Royston Catto in 2009. Versions 5.0.x and 6.0.x are an incremental modernisation of the working v5.0 application, not a replacement of its established workflows.
 
@@ -9,7 +9,7 @@ Since 6.0 every route is a Symfony 8.1 controller and the Fat-Free Framework has
 - PHP 8.5+, Composer
 - Symfony 8.1 (including Symfony Security, Twig and Mailer) with Doctrine DBAL 4
 - PostgreSQL with versioned Phinx migrations
-- Symfony Mailer for transactional mail only (`src/Mail/`: sign-in links, invitations, notifications, contact acknowledgements); campaign content (queue sends, proofs, resends, forwards) is delivered by the catto-mail smarthost through its HTTPS API (`src/CattoMail/`)
+- Symfony Mailer for transactional mail only (`src/Mail/`: sign-in links, invitations, notifications, contact-form mail); campaign content (queue sends, proofs, resends, forwards) is delivered by the catto-mail smarthost through its HTTPS API (`src/CattoMail/`)
 - Symfony Forms and Validator for every input form; symfony/html-sanitizer (archive pages) and symfony/rate-limiter (contact form, forwards and resends, global opt-out changes)
 - Bootstrap 6 (6.0.0-alpha.1) and Bootstrap Icons served by the site through Symfony AssetMapper (no CDN, no Node or npm), under a strict Content-Security-Policy; Bootstrap 6 needs a recent browser (Chrome or Edge 130, Firefox 132, Safari 18 or later)
 - PHP `gd` (with JPEG and WebP) and `exif` for profile pictures
@@ -30,7 +30,7 @@ Since 6.0 every route is a Symfony 8.1 controller and the Fat-Free Framework has
 
 ### Message and template workflow
 
-Messages and templates can be saved as incomplete drafts. A message can have no lists, one list or several lists. The system stores exactly the lists selected by the administrator and never silently attaches `ALL`.
+Messages and templates can be saved as incomplete drafts. A message needs only a subject (at most 250 characters), by which the message list shows it; its content can be added later, but a blank message cannot be sent: queueing it, sending the queue, a proof, a resend and a forward all refuse it and say why. A message can have no lists, one list or several lists. The system stores exactly the lists selected by the administrator and never silently attaches `ALL`.
 
 The message list again provides the operational controls used by v5:
 
@@ -60,7 +60,7 @@ The ordinary campaign workflow sends a message once to a subscriber. The unique 
 
 All campaign-content paths—including queue delivery, forwarding, proof copies and deliberate resends—are delivered by catto-mail and update `sendlog` when catto-mail has accepted them (the send job is sealed); deliveries to subscribers also update `smlog`. A proof can go to any valid address (by default `MAIL_TEST_ADDRESS`), which needs no subscriber record: it is logged as PROOF in `sendlog` only and does not affect the queue, consent, memberships or the once-only guard.
 
-`smlog` again records list context, sent/read activity, likes, dislikes, forwards, profile updates, confirmations, subscriptions, unsubscriptions and bookings/contact activity.
+`smlog` again records list context, sent/read activity, likes, dislikes, forwards, profile updates, confirmations, subscriptions, unsubscriptions and contact forms sent from a message (`sml_bookings`, shown in the message's activity report).
 
 ### Transactional email and Send Log
 
@@ -75,7 +75,7 @@ Subscriber state-changing actions again send transactional notifications. The ma
 - forwarded campaign copies
 - forwarding notifications
 - proof and resend copies
-- contact/order acknowledgements
+- contact forms: the organisation's copy and the submitter's acknowledgement
 
 ### Subscriber administration and integrations
 
@@ -137,7 +137,7 @@ dev/podman/     development container files
 
 ### Layout and permissions
 
-The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.0.8/` (the path is set in `public_html/index.php`): owned by root, read-only to the PHP-FPM user (`www-data`), with `composer install --no-dev --optimize-autoloader` run there. Each installation has its own directory, e.g. `/var/www/<installation>`:
+The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.0.9/` (the path is set in `public_html/index.php`): owned by root, read-only to the PHP-FPM user (`www-data`), with `composer install --no-dev --optimize-autoloader` run there. Each installation has its own directory, e.g. `/var/www/<installation>`:
 
 | Path | Owner, mode | What |
 |---|---|---|
@@ -192,7 +192,7 @@ Before a release goes live. The items marked † need the production server and 
 | Subscriber import file | 20 MB, `.txt`/`.csv` (form validation); pasted address lists up to 10 MB |
 | Profile picture | the editor posts only the cropped square (well under 1 MB); without JavaScript the original (up to 8 MB) |
 | catto-mail webhook | 1 MiB: nginx `client_max_body_size 1m` on `/cattomail/webhook`, and the application refuses a larger declared or actual body before verifying the signature |
-| Message subject, names, settings | field lengths in the forms (e.g. subject 200, one-line settings 2,000 characters) |
+| Message subject, names, settings | field lengths in the forms (e.g. subject 250, one-line settings 2,000 characters) |
 
 ### Health check
 
@@ -215,20 +215,20 @@ Per-installation settings are read from `.env` outside the public web directory.
 
 The main application uses `DB_*` settings. The separate global suppression database uses `GDB_*` settings in an externally managed `ban.env`. Set `GDB_ENV_DIRECTORY` and, when necessary, `GDB_ENV_FILE` in the installation `.env` (default: `config/phinx/ban.env` in the shared tree); the same variables can be exported when running the banlist Phinx configuration. `SUPPRESSION_PROVIDER=none` disables the suppression database and is only accepted with `APP_ENV` `dev` or `test`.
 
-Transactional mail (sign-in links, invitations, notifications, contact acknowledgements) goes through the SMTP server in `MAILER_DSN`, one connection per message. Campaign content goes through catto-mail (`CATTOMAIL_*`, below). Optional legacy synchronisation targets use `SYNC_DATABASES_JSON`.
+Transactional mail (sign-in links, invitations, notifications, contact-form mail) goes through the SMTP server in `MAILER_DSN`, one connection per message. Campaign content goes through catto-mail (`CATTOMAIL_*`, below). Optional legacy synchronisation targets use `SYNC_DATABASES_JSON`.
 
 Sign-in links expire after `AUTH_MAGIC_LINK_TTL` seconds and are rate-limited per address (`AUTH_MAGIC_LINK_MAX_PER_EMAIL` within `AUTH_MAGIC_LINK_EMAIL_WINDOW`) and per client IP (`AUTH_MAGIC_LINK_MAX_PER_IP` within `AUTH_MAGIC_LINK_IP_WINDOW`); a signed-in session lasts `AUTH_SESSION_TTL` seconds. The sign-in page and email state the link lifetime in words from the same setting. Contact messages are limited per hour per client IP and per address (`CONTACT_RATE_LIMIT`, default 5), forwards and resends per subscriber (`FORWARD_RATE_LIMIT`, default 10; holders of `messages.manage` are exempt), and requests or withdrawals of the catto-mail global opt-out to six per subscriber per hour (each one calls catto-mail); over a limit the page answers 429. Public subscribe requests and the confirmation prompts on subscriber links send sign-in links, so the sign-in limits apply to them. There is no CAPTCHA. Contact-form submissions are appended to `CONTACT_LOG_FILE` (default: the installation's `logs/contact.log`). Bulk-subscribe and import logs (`emails_added.txt`) and the export files (`export-subscribers.txt`, `export-remove.txt`) are written to `APP_LOG_DIR` (default: the installation's `logs/`).
 
 ### Settings page
 
-Administrators, and any role given the `settings.manage` permission, can change a selected set of settings at **Admin → Settings** without editing `.env`: site identity, contact details and message links, the mail sender and proof address, the transactional SMTP server, the contact form, the subscription messages, the archive and the sign-in limits. The SMTP server is for administrators only: it receives every sign-in link, so whoever could change it could sign in as anyone.
+Administrators, and any role given the `settings.manage` permission, can change a selected set of settings at **Admin → Settings** without editing `.env`: site identity, contact details, the mail sender and proof address, the transactional SMTP server, the contact form, the subscription messages, the archive and the sign-in limits. The SMTP server is for administrators only: it receives every sign-in link, so whoever could change it could sign in as anyone.
 
 - Each setting resolves as **database override → `.env` → built-in default**, and the page shows which one is in effect (Database, .env or Default). Overrides are stored in the `options` table; nothing is written to `.env`. Database overrides are optional: an installation without any runs exactly from its `.env`.
 - Saving a value equal to the inherited one, or "Reset override" / "Reset section", removes the override so `.env` (or the default) applies again. Changes apply from the next page or email; a send that is already running keeps the SMTP settings it started with.
 - Secret settings are encrypted in the database with AES-256-GCM using the dedicated `APP_SETTINGS_KEY` from `.env` (32 random bytes, Base64; generate with `openssl rand -base64 32`), and `APP_SETTINGS_KEY` is required to decrypt all of them. Today the only secret setting is the SMTP server (`MAILER_DSN`, which carries its password). The key is needed only once a secret is saved there; without it the SMTP section explains what to add. Secrets are never sent to the browser (leave the field empty to keep the current one) and never logged.
 - **Do not change `APP_SETTINGS_KEY` while encrypted settings exist**: they become unreadable, and mail that needs them fails (the Settings page reports it) until they are entered again or reset. A future key rotation must decrypt with the old key and re-encrypt with the new key before the new key is deployed.
 - Stay in `.env` only: `APP_SECRET`, `APP_SETTINGS_KEY`, `APP_ENV`/`APP_DEBUG`, `APP_INSTANCE_ID`, the catto-mail settings (`CATTOMAIL_*`), the database and suppression-database settings, `TRUSTED_PROXIES`, `APP_BASE_URL`/`APP_DOMAIN`, `APP_TIMEZONE`, file paths (`CONTACT_LOG_FILE`, `APP_LOG_DIR`), the cookie names (`AUTH_SESSION_COOKIE`, `PHP_SESSION_COOKIE`), `APP_ADMIN_EMAIL` and the synchronisation targets.
-- Web addresses must be `http(s)://`; the booking and contact links must start with `https://`, `http://` or `{BaseURL}`; one-line values (names, subjects) cannot contain line breaks.
+- Web addresses must be `http(s)://`; one-line values (names, subjects) cannot contain line breaks.
 
 ### Security notes
 
@@ -239,13 +239,14 @@ Administrators, and any role given the `settings.manage` permission, can change 
 - **Cookies.** The auth cookie (`AUTH_SESSION_COOKIE`) is HttpOnly, SameSite=Lax, host-only, path `/`, lives `AUTH_SESSION_TTL`, and is Secure whenever the request is HTTPS or `APP_BASE_URL` is https. The PHP session cookie (CSRF tokens, flash messages) is HttpOnly, SameSite=Lax, a browser-session cookie, and Secure on HTTPS requests (`cookie_secure: auto`), so the development stack keeps working over plain http. Anonymous pages without a form set no cookie.
 - **Headers.** Every application response carries `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin` (subscriber UUIDs are in paths), a `Permissions-Policy`, HSTS over HTTPS, and a Content-Security-Policy (`App\Http\ContentSecurityPolicy`): `default-src 'self'`; scripts from the site plus a per-request nonce for the import map (no `unsafe-eval`, no `unsafe-inline`); styles, fonts and connections from the site only; images from the site, `data:` and `blob:` (the profile picture editor); `object-src 'none'`, `base-uri 'none'`, `form-action 'self'`, and `frame-ancestors 'none'` (no page may be framed; nothing needs embedding). The message and template editors (CKEditor writes inline styles) and the public archive page (authored campaign HTML keeps its inline styles and remote images) allow inline styles and https images; scripts stay nonce-only there too. In debug mode Symfony removes the policy from its own exception pages. nginx adds `nosniff`, caching and HSTS to the static files it serves (`deploy/nginx`).
 - **Frontend files are served by the site.** Bootstrap 6.0.0-alpha.1 and Bootstrap Icons 1.13.1 (with their font files) are vendored under `assets/lib/` and served through AssetMapper, verified against their published checksums (`assets/lib/README.md`); there is no runtime CDN. Bootstrap 6 is a pre-release and supports only recent browsers (Chrome and Edge 130, Firefox 132, Safari 18 on macOS and iOS, or later): on older ones pages do not render correctly, the public subscribe, sign-in and unsubscribe pages included. The site always uses the light colour mode. CKEditor 5 (48.3.0) is a prebuilt bundle in `public_html/vendor/ckeditor5/`, with the emoji list it would otherwise fetch from CKEditor's CDN, loaded only on the message and template editors.
-- **Output.** Twig escapes everything. The only HTML printed as such on the site is message HTML on the public archive, after the sanitiser (`config/packages/html_sanitizer.yaml`: no scripts, event handlers, `javascript:` links, frames or forms). Mail is sent as composed; subscriber names and configured URLs are escaped in its HTML part. Booking and contact links (`APP_BOOKING_URL`, `APP_CONTACT_URL`) must start with `https://`, `http://` or `{BaseURL}`, and anything else is never rendered as a link; web addresses in Settings must be http(s); one-line settings (sender name, subjects) cannot contain line breaks.
+- **Output.** Twig escapes everything. The only HTML printed as such on the site is message HTML on the public archive, after the sanitiser (`config/packages/html_sanitizer.yaml`: no scripts, event handlers, `javascript:` links, frames or forms). Mail is sent as composed; subscriber names and configured URLs are escaped in its HTML part. Web addresses in Settings must be http(s); one-line settings (sender name, subjects) cannot contain line breaks.
+- **Contact links.** A message's `{contact}` link opens the contact form for anyone who holds it, because messages are forwarded. The form is filled in with the subscriber's details only for that subscriber, signed in, and the acknowledgement sent to whoever submits it holds only what they wrote. The subscriber and message of the link are named in the organisation's copy, the contact log and the message's activity report.
 - **Errors.** With `APP_DEBUG=false` error pages show no exception, SQL, path or trace, also while the database is unavailable; the details go to the log.
 - **Logs** never contain secrets, setting values, tokens or message bodies; the Site Log omits query strings and masks one-click unsubscribe signatures. The nginx template's access-log format records no query strings (the sign-in link carries its token there).
 
 ### Message placeholders
 
-Placeholders are case-insensitive. For a subscriber: `{firstname}`, `{lastname}`, `{emailsleft}`, `{subscription}` (the subscription message, itself filled), `{unsubscribe}`, `{confirm}`, `{forward}`, `{preferences}`, `{like}`, `{dislike}`, `{booking}` (`APP_BOOKING_URL`, may contain `{BaseURL}`, `{suid}`, `{muid}`), `{contact}` (`APP_CONTACT_URL`), `{usertrack}` (open-tracking pixel, HTML only), `{suid}`, `{muid}`, `{baseurl}`, `{listshortcode}`; for everyone: `{subscribe}`, `{archive}`, `{listname}`, `{domain}`, `{organisation}`, `{advertise}` (`APP_ADVERTISE_URL`), `{facebook}` (`APP_FACEBOOK_URL`), `{twitter}` (`APP_X_URL`). In archives subscriber links become plain labels (UNSUBSCRIBE, FORWARD, UPDATE, OPT IN, YES, NO, BOOKING FORM, CONTACT FORM), names and identifiers are empty. Site links whose URL is not configured render nothing. `{STORE}` and `{lms-booking}` are retired and render nothing. Proofs fill names with test values and point subscriber links at a page explaining that a proof has no subscriber.
+Placeholders are case-insensitive. For a subscriber: `{firstname}`, `{lastname}`, `{emailsleft}`, `{subscription}` (the subscription message, itself filled), `{unsubscribe}`, `{confirm}`, `{forward}`, `{preferences}`, `{like}`, `{dislike}`, `{contact}` (the contact form, recording the subscriber and the message), `{usertrack}` (open-tracking pixel, HTML only), `{suid}`, `{muid}`, `{baseurl}`, `{listshortcode}`; for everyone: `{subscribe}`, `{archive}`, `{listname}`, `{domain}`, `{organisation}`, `{facebook}` (`APP_FACEBOOK_URL`), `{twitter}` (`APP_X_URL`). In archives subscriber links become plain labels (UNSUBSCRIBE, FORWARD, UPDATE, OPT IN, YES, NO, CONTACT FORM), names and identifiers are empty. Site links whose URL is not configured render nothing. `{STORE}`, `{lms-booking}`, `{booking}` and `{advertise}` are retired and render nothing: write such a link in the message or template instead, where `{suid}` and `{muid}` identify the recipient and the message (`https://example.com/book?s={suid}&m={muid}`). Proofs fill names with test values and point subscriber links at a page explaining that a proof has no subscriber.
 
 ## catto-mail integration
 
@@ -390,7 +391,7 @@ The development stacks are separate (catto-mail's pod is on an internal network,
 4. In `dev/podman/ctnlist.env`:
    - `CATTOMAIL_API_BASE_URL=https://localhost`;
    - `CATTOMAIL_API_CONNECT_HOST=catto-mail` (TLS is still verified for `localhost`);
-   - `CATTOMAIL_CA_FILE=/usr/local/lib/php/ctnlist/6.0.8/dev/podman/cattomail-ca.pem`;
+   - `CATTOMAIL_CA_FILE=/usr/local/lib/php/ctnlist/6.0.9/dev/podman/cattomail-ca.pem`;
    - the API key and webhook secret;
    - for subscription mail, `APP_BASE_URL=https://localhost:8543/` (ctnlist's development HTTPS listener).
 
@@ -514,7 +515,7 @@ bin/dev up          # build and start, composer install, migrations (including t
 bin/dev help        # all commands
 ```
 
-The application is at http://localhost:8180 (and https://localhost:8543 with a generated development certificate). Transactional mail is captured by Mailpit at http://localhost:8125: sign in as `admin@ctnlist.test`: open the link it receives and choose Sign in. The development instance runs without a banlist database (`SUPPRESSION_PROVIDER=none`) and, until catto-mail is connected ([development route](#catto-mail-development-route)), sends no campaign content: the queue, proofs and resends report that catto-mail is not configured and keep their work.
+The application is at http://localhost:8180 (and https://localhost:8543 with a generated development certificate). Transactional mail is captured by Mailpit at http://localhost:8125: sign in as `admin@ctnlist.test`: open the link it receives, then press Sign in on the page it opens (opening the link alone signs nobody in). The development instance runs without a banlist database (`SUPPRESSION_PROVIDER=none`) and, until catto-mail is connected ([development route](#catto-mail-development-route)), sends no campaign content: the queue, proofs and resends report that catto-mail is not configured and keep their work.
 
 ## Testing and validation
 

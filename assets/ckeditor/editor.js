@@ -72,10 +72,13 @@ const LICENSE_KEY = 'GPL';
 // CKEditor needs an absolute URL.
 const EMOJI_DEFINITIONS = new URL(document.currentScript.dataset.emojiDefinitions, document.baseURI).href;
 
+// The textarea CKEditor replaces; its placeholder attribute, if any, shows while the HTML part is empty.
+const SOURCE = document.querySelector('[data-html-editor]');
+
 const editorConfig = {
-	attachTo: document.querySelector('[data-html-editor]'),
+	attachTo: SOURCE,
 	root: {
-		placeholder: ''
+		placeholder: SOURCE?.getAttribute('placeholder') ?? ''
 	},
 	toolbar: {
 		items: [

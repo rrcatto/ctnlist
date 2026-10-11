@@ -33,6 +33,7 @@ services:
             - '../src/Security/SubscriberUser.php'
             - '../src/**/*NotFound.php'
             - '../src/Mail/SmtpServer.php'
+            - '../src/Campaign/MessageContent.php'
             - '../src/Campaign/RenderedMessage.php'
             - '../src/Queue/QueueOutcome.php'
             - '../src/Http/Pagination.php'

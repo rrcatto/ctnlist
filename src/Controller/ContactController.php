@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
-use App\Config\SiteConfig;
 use App\Form\Model\ContactRequest;
 use App\Http\RequestThrottle;
 use App\Form\Type\ContactType;
@@ -20,10 +19,12 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\CurrentUser;
 
 /**
- * The contact/order form. From a message's {contact}/{booking} link it is
- * prefilled for the subscriber and counts as strong engagement (v5 priority
- * +12345, or +23456 when the message is known); otherwise it requires
- * signing in.
+ * The contact/order form. A message's {contact} link opens it for that
+ * subscriber and message, which counts as strong engagement (v5 priority
+ * +12345, or +23456 when the message is known) and is recorded with the
+ * submission. Anyone holding the link may use it (messages are forwarded),
+ * so it is filled in with the subscriber's details only for that subscriber,
+ * signed in. Without a link the form requires signing in.
  */
 final class ContactController extends AbstractController
 {
@@ -39,14 +40,13 @@ final class ContactController extends AbstractController
     }
 
     #[Route('/contact-form/{token}/{muid}', name: 'contact_subscriber', defaults: ['muid' => ''], methods: ['GET'])]
-    public function subscriberForm(string $token, string $muid, SubscriberRepository $subscribers, Engagement $engagement): Response
+    public function subscriberForm(string $token, string $muid, #[CurrentUser] ?SubscriberUser $user, SubscriberRepository $subscribers, Engagement $engagement): Response
     {
         $engagement->bump($token, $muid === '' ? 12345 : 23456);
         $request = new ContactRequest();
         $request->suid = $token;
         $request->muid = $muid;
-        $identity = $subscribers->findIdentityByUuid($token);
-        $profile = $identity === null ? null : $subscribers->profile($identity['s_id']);
+        $profile = $user !== null && strtolower(trim($token)) === $user->uuid ? $subscribers->profile($user->id) : null;
         if ($profile !== null) {
             $request->name = trim($profile['s_fname'] . ' ' . $profile['s_lname']);
             $request->email = (string) $profile['s_email'];
@@ -58,7 +58,7 @@ final class ContactController extends AbstractController
     }
 
     #[Route('/contact-form', name: 'contact_submit', methods: ['POST'])]
-    public function submit(Request $request, ContactService $contact, SiteConfig $site, RequestThrottle $throttle): Response
+    public function submit(Request $request, ContactService $contact, RequestThrottle $throttle): Response
     {
         $form = $this->contactForm(new ContactRequest());
         $form->handleRequest($request);
@@ -74,7 +74,7 @@ final class ContactController extends AbstractController
             return $this->render('page/result.html.twig', ['title' => 'Contact', 'message' => self::TOO_MANY],
                 new Response(status: Response::HTTP_TOO_MANY_REQUESTS));
         }
-        $message = $contact->submit($data->fields() + ['realm' => $site->bookingUrl], [
+        $message = $contact->submit($data->fields(), [
             'subscriber_uuid' => (string) $data->suid,
             'muid' => (string) $data->muid,
             'ip' => (string) $request->getClientIp(),

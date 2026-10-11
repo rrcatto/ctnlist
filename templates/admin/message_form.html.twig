@@ -1,14 +1,15 @@
 {% extends 'admin/_editor_page.html.twig' %}
 
 {#
-  Message editor (MessageType). Invalid input shows the editor again with
-  everything entered kept, including the HTML and text parts. Saving never
-  sends; Proof, Queue and Activity are separate actions.
+  Message editor (MessageType). Only the subject is required. Invalid input
+  shows the editor again with everything entered kept, including the HTML and
+  text parts. Saving never sends; Proof, Queue and Activity are separate
+  actions, and they refuse a blank message.
 #}
 {% block title %}{{ muid ? 'Edit message' : 'Create message' }}{% endblock %}
 
 {% block content %}
-{% embed 'layout/_page_header.html.twig' with {title: muid ? 'Edit message' : 'Create message', description: 'A message can be saved as a draft with no list selected and assigned to lists later.'} %}
+{% embed 'layout/_page_header.html.twig' with {title: muid ? 'Edit message' : 'Create message', description: 'A message needs a subject. It can be saved as a draft without content or lists, which can be added later.'} %}
   {% block actions %}
     {% if muid %}
       <a class="btn-outline theme-secondary" href="{{ path('admin_proof', {muid: muid}) }}"><i class="bi bi-envelope-check me-1" aria-hidden="true"></i>Send proof</a>
@@ -25,43 +26,52 @@
     </div>
   {% endif %}
   {{ form_widget(form.muid) }}
-  <div class="row g-7">
-    <div class="lg:col-8">
-      {{ form_row(form.subject) }}
-      {{ form_row(form.html) }}
-      {{ form_row(form.text) }}
-    </div>
 
-    <div class="lg:col-4">
-      <div class="card mb-7">
-        <div class="card-header fw-semibold">Audience</div>
-        <div class="card-body">
-          <p class="small fg-2">Confirmed members of the selected lists are queued once each. <code>ALL</code> is never selected automatically.</p>
-          {{ form_errors(form.listIds) }}
-          {% for choice in form.listIds %}
-            {% set list = lists[choice.vars.value] ?? null %}
-            {{ form_widget(choice, {label: '<strong>' ~ choice.vars.label|e ~ '</strong>' ~ (list and list.l_description ? ' <span class="fg-2 small">– ' ~ list.l_description|e ~ '</span>' : ''), label_html: true}) }}
-          {% else %}
-            <p class="mb-0 fg-2">There are no active lists.</p>
-          {% endfor %}
-          {% do form.listIds.setRendered %}
-        </div>
-      </div>
+  {# Who it is from, who it goes to and how much of it is sent; then the message itself, at the page's full width. #}
+  <div class="row g-5 mb-5">
+    <div class="md:col-6">{{ form_row(form.fromName, {row_attr: {class: 'mb-0'}}) }}</div>
+    <div class="md:col-6">{{ form_row(form.fromAddress, {row_attr: {class: 'mb-0'}}) }}</div>
+  </div>
 
-      <div class="card">
-        <div class="card-header fw-semibold">Sending</div>
-        <div class="card-body">
-          {{ form_row(form.templateId) }}
-          {{ form_row(form.fromName) }}
-          {{ form_row(form.fromAddress) }}
-          <div class="row g-5">
-            <div class="col-6">{{ form_row(form.priority, {row_attr: {class: 'mb-0'}}) }}</div>
-            <div class="col-6">{{ form_row(form.maxSend, {row_attr: {class: 'mb-0'}}) }}</div>
+  <div class="row g-5 mb-5">
+    <div class="md:col-6">
+      {#
+        The lists, as a menu of checkboxes that stays open while lists are
+        ticked. The toggle names the ticked lists (app.js keeps it current).
+      #}
+      {% set chosen = form.listIds.children|filter(choice => choice.vars.checked)|map(choice => choice.vars.label) %}
+      <div class="form-field">
+        <label class="form-label" id="message_listIds_label" for="message_listIds_toggle">{{ form.listIds.vars.label }}</label>
+        <div class="position-relative">
+          <button class="form-control form-control-caret text-start text-truncate{{ form.listIds.vars.valid ? '' : ' is-invalid' }}" type="button" id="message_listIds_toggle"
+                  data-bs-toggle="menu" data-bs-auto-close="outside" data-bs-placement="bottom-start" aria-expanded="false"
+                  aria-labelledby="message_listIds_label message_listIds_summary" aria-describedby="message_listIds_help">
+            <span id="message_listIds_summary" data-checklist-summary>{{ chosen ? chosen|join(', ') : 'No lists selected' }}</span>
+          </button>
+          <div class="menu app-checklist" role="group" aria-labelledby="message_listIds_label" data-checklist data-checklist-empty="No lists selected">
+            {% for choice in form.listIds %}
+              {% set list = lists[choice.vars.value] ?? null %}
+              {{ form_widget(choice, {label_attr: list and list.l_description ? {title: list.l_description} : {}}) }}
+            {% else %}
+              <span class="menu-text">There are no active lists.</span>
+            {% endfor %}
           </div>
         </div>
+        <div class="form-text" id="message_listIds_help">Confirmed members of the selected lists are queued once each. <code>ALL</code> is never selected automatically.</div>
+        {{ form_errors(form.listIds) }}
+        {% do form.listIds.setRendered %}
       </div>
     </div>
+    <div class="col-6 md:col-3">{{ form_row(form.priority, {row_attr: {class: 'mb-0'}}) }}</div>
+    <div class="col-6 md:col-3">{{ form_row(form.maxSend, {row_attr: {class: 'mb-0'}}) }}</div>
   </div>
+
+  {{ form_row(form.subject) }}
+  <div class="row g-5 mb-5">
+    <div class="md:col-6 lg:col-4">{{ form_row(form.templateId, {row_attr: {class: 'mb-0'}}) }}</div>
+  </div>
+  {{ form_row(form.html) }}
+  {{ form_row(form.text) }}
 
   <div class="d-flex flex-wrap gap-3 border-top pt-5 mt-7">
     <button class="btn-solid theme-primary" type="submit"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>Save message</button>

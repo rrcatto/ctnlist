@@ -10,7 +10,7 @@ namespace App\Config;
  */
 final class SiteConfig
 {
-    public const VERSION = '6.0.8';
+    public const VERSION = '6.0.9';
 
     /**
      * @param list<array<string, mixed>> $syncDatabases SYNC_DATABASES_JSON entries
@@ -25,11 +25,8 @@ final class SiteConfig
         public readonly string $whatsAppUrl,
         public readonly string $streetAddress,
         public readonly string $aboutUs,
-        public readonly string $advertiseUrl,
         public readonly string $facebookUrl,
         public readonly string $xUrl,
-        public readonly string $bookingUrl,
-        public readonly string $contactUrl,
         public readonly string $instanceId,
         public readonly string $adminEmail,
         public readonly string $adminName,
@@ -78,11 +75,8 @@ final class SiteConfig
             whatsAppUrl: $string('APP_WHATSAPP_URL'),
             streetAddress: $string('APP_STREET_ADDRESS'),
             aboutUs: $string('APP_ABOUT_US'),
-            advertiseUrl: $string('APP_ADVERTISE_URL'),
             facebookUrl: $string('APP_FACEBOOK_URL'),
             xUrl: $string('APP_X_URL'),
-            bookingUrl: $string('APP_BOOKING_URL'),
-            contactUrl: $string('APP_CONTACT_URL', '{BaseURL}contact-form/{suid}/{muid}'),
             instanceId: $string('APP_INSTANCE_ID'),
             adminEmail: $adminEmail,
             adminName: $string('MAIL_ADMIN_NAME', 'Administrator'),

@@ -30,6 +30,8 @@ final class AuthFlowTest extends SmokeTestCase
             $scan = self::request(self::client(), 'GET', '/auth/verify?token=' . $token);
             self::assertSame(200, $scan['status'], "GET {$n}");
             self::assertStringContainsString('<form name="sign_in"', $scan['body'], "GET {$n}: the Sign in button");
+            self::assertStringContainsString('You are not signed in yet.', $scan['body'], "GET {$n}: says that opening the link signed nobody in");
+            self::assertStringContainsString('One more step: press Sign in', $scan['body']);
             self::assertStringNotContainsString($email, $scan['body'], 'no subscriber details on the page');
             self::assertFalse(self::setsCookie($scan['cookies'], self::AUTH_COOKIE), "GET {$n}: no auth cookie");
         }
@@ -40,7 +42,7 @@ final class AuthFlowTest extends SmokeTestCase
         self::assertDoesNotMatchRegularExpression('/^Set-Cookie: ' . self::AUTH_COOKIE . '=/mi', $headers, 'HEAD: no auth cookie');
         self::assertSame($before, self::authState($token, (int) $subscriber['s_id']), 'GET and HEAD leave the link unused, start no auth session and record no login');
 
-        // The recipient, after the scanner: open the link and choose Sign in.
+        // The recipient, after the scanner: open the link and press Sign in.
         $client = self::client();
         $response = self::signInWithLink($client, $token);
         self::assertSame(302, $response['status']);
@@ -79,7 +81,7 @@ final class AuthFlowTest extends SmokeTestCase
         }
         self::assertFalse(self::authState($token, self::$admin['s_id'])['used'], 'refused attempts leave the link unused');
 
-        // "Choose Sign in again": the refusal page's own form signs in.
+        // "Press Sign in again": the refusal page's own form signs in.
         $retry = self::request($client, 'POST', '/auth/verify', self::formFields($ownRefusal, 'sign_in'));
         self::assertSame(302, $retry['status'], 'signed in on the second try');
     }
@@ -210,7 +212,9 @@ final class AuthFlowTest extends SmokeTestCase
         $client = self::client();
         $page = self::request($client, 'GET', '/auth/verify?token=' . $token);
         self::assertSame(200, $page['status']);
-        self::assertStringContainsString('Sign in to confirm your subscription to <strong>Confirm ' . $shortcode . '</strong>', $page['body']);
+        self::assertStringContainsString('One more step: press Continue', $page['body']);
+        self::assertStringContainsString('You are not signed in yet.', $page['body']);
+        self::assertStringContainsString('confirm your subscription to <strong>Confirm ' . $shortcode . '</strong>', $page['body']);
         self::assertStringContainsString('You are subscribed only once you confirm', $page['body']);
         self::assertStringNotContainsString($email, $page['body']);
         self::assertSame($nothing, $consent(), 'opening the link confirms nothing');
