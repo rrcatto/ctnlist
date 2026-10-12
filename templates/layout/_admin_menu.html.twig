@@ -16,12 +16,11 @@
     {label: 'All templates', route: 'admin_templates', permission: 'templates.manage', counter: 'templates'},
     {label: 'New template', route: 'admin_template', permission: 'templates.manage'},
   ]},
-  {label: 'Sending', icon: 'send', routes: ['admin_queue', 'admin_queue_message', 'admin_queue_rotation', 'admin_queue_process', 'admin_queue_stop', 'admin_delivery', 'admin_delivery_message', 'admin_delivery_job', 'admin_delivery_recipient'], items: [
+  {label: 'Sending', icon: 'send', routes: ['admin_queue', 'admin_queue_message', 'admin_queue_rotation', 'admin_queue_process', 'admin_queue_stop'], items: [
     {label: 'Queue', route: 'admin_queue', permission: 'queue.process', counter: 'queue', badge: true},
     {label: 'Queue multiple messages', route: 'admin_queue_rotation', permission: 'messages.queue'},
     {label: 'Start sending', route: 'admin_queue_process', permission: 'queue.process'},
     {label: 'Stop sending', route: 'admin_queue_stop', permission: 'queue.process'},
-    {label: 'Delivery (catto-mail)', route: 'admin_delivery', permission: 'logs.view'},
   ]},
   {label: 'Subscribers', icon: 'people', routes: ['admin_subscribers', 'admin_subscribers_active', 'admin_subscriber', 'admin_bulk_subscribe', 'admin_bulk_unsubscribe', 'admin_import', 'admin_export', 'admin_sync', 'admin_validation', 'admin_validation_job'], items: [
     {label: 'All subscribers', route: 'admin_subscribers', permission: 'subscribers.view', counter: 'subscribers'},
@@ -43,8 +42,9 @@
   {label: 'Roles & ACL', icon: 'shield-lock', routes: ['admin_roles', 'admin_role'], items: [
     {label: 'Roles & ACL', route: 'admin_roles', permission: 'roles.manage'},
   ]},
-  {label: 'Settings', icon: 'sliders', routes: ['admin_settings'], items: [
+  {label: 'Settings', icon: 'sliders', routes: ['admin_settings', 'admin_delivery', 'admin_delivery_message', 'admin_delivery_job', 'admin_delivery_recipient'], items: [
     {label: 'Settings', route: 'admin_settings', permission: 'settings.manage'},
+    {label: 'Delivery (catto-mail)', route: 'admin_delivery', permission: 'logs.view'},
   ]},
 ] %}
 {% set route = app.request.attributes.get('_route') %}

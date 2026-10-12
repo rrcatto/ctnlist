@@ -99,13 +99,13 @@ cattomail_status() {
     elif [ "$stored" = 3 ]; then
         say "address, API key, webhook secret" "from a connection (stored encrypted)"
     else
-        say "address, API key, webhook secret" "none: Admin > Sending > Delivery > Connect, address https://localhost:8443"; ok=0
+        say "address, API key, webhook secret" "none: Admin > Settings > Delivery > Connect, address https://localhost:8443"; ok=0
     fi
     if grep -q '^APP_BASE_URL=https://' "$env_file" 2>/dev/null; then say "APP_BASE_URL" "https (subscription mail possible)"
     else say "APP_BASE_URL" "not https: subscription mail needs https://localhost:8543/"; fi
     echo "  catto-mail side (not checkable from here): ctnlist-web in APP_WEBHOOK_ALLOWED_PRIVATE_HOSTS, and a client"
     echo "  whose admin approves the connection and whose sending domain is the domain of MAIL_FROM_ADDRESS."
-    echo "  Then: Admin > Sending > Delivery > Check connection, or bin/dev console ctnlist:cattomail:check."
+    echo "  Then: Admin > Settings > Delivery > Check connection, or bin/dev console ctnlist:cattomail:check."
     [ "$ok" = 1 ]
 }
 

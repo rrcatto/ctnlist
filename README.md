@@ -166,7 +166,7 @@ The new server starts from an empty database; there are no upgrade migrations (s
 8. The scheduled commands from `deploy/cron/ctnlist.cron.example` or the systemd timers in `deploy/systemd/` (one of the two).
 9. Preflight: `sudo -u www-data env CTNLIST_INSTANCE_DIR=/var/www/<installation> php bin/console ctnlist:diagnose --production` must report no ERROR (the worker and maintenance warnings clear after their first runs). `https://<host>/health` answers `OK`.
 10. Optional: `sudo -u www-data env CTNLIST_INSTANCE_DIR=/var/www/<installation> php bin/console ctnlist:templates:samples` adds three sample email templates (a newsletter, an announcement and a letter) to adapt under **Admin → Templates**; and Mailpit for proofs ([Proofs to Mailpit](#proofs-to-mailpit)).
-11. Connect the mail service: sign in as the administrator, **Admin → Sending → Delivery**, enter its address and approve there ([catto-mail integration](#catto-mail-integration), *Connecting*). The key and the webhook endpoint are created by that; nothing is copied into `.env`. Then check delivery end to end with the [Release checklist](#release-checklist)'s proof, test campaign and webhook round trip before campaigns are sent. (`bin/dev test-cattomail` is the development stack's end-to-end check against a local catto-mail and refuses any other; see [catto-mail integration](#catto-mail-integration).)
+11. Connect the mail service: sign in as the administrator, **Admin → Settings → Delivery**, enter its address and approve there ([catto-mail integration](#catto-mail-integration), *Connecting*). The key and the webhook endpoint are created by that; nothing is copied into `.env`. Then check delivery end to end with the [Release checklist](#release-checklist)'s proof, test campaign and webhook round trip before campaigns are sent. (`bin/dev test-cattomail` is the development stack's end-to-end check against a local catto-mail and refuses any other; see [catto-mail integration](#catto-mail-integration).)
 
 ### New release
 
@@ -187,7 +187,7 @@ Before a release goes live. The items marked † need the production server and 
 - [ ] † The mail service connected on the Delivery page (or set in `.env`, with `<APP_BASE_URL>cattomail/webhook` registered by hand), and the page shows that the From address's domain can send; `ctnlist:cattomail:check` reports it reachable and authenticated, and `bin/dev test-cattomail` has passed against a development catto-mail.
 - [ ] † `abuse@<APP_DOMAIN>` is a mailbox that is read: the acceptable use policy sends abuse reports and complaints there, and shows no other address.
 - [ ] † If proofs go to Mailpit (`MAIL_PROOF_SMTP`): `ctnlist-mailpit` is running, its SMTP and web ports listen on 127.0.0.1 only, `https://<host>/mailpit/` asks for the password, and a proof sent from the message list appears there.
-- [ ] † A proof to an address you can read, a small campaign to a test list, a webhook round trip (delivery and bounce events on **Admin → Sending → Delivery**) and an address-validation job.
+- [ ] † A proof to an address you can read, a small campaign to a test list, a webhook round trip (delivery and bounce events on **Admin → Settings → Delivery**) and an address-validation job.
 - [ ] † Recovery sanity check: the Delivery page shows no stuck work, and a send job without a final webhook is reconciled after `CATTOMAIL_RECONCILE_AFTER_SECONDS`.
 
 ### Request limits
@@ -202,7 +202,7 @@ Before a release goes live. The items marked † need the production server and 
 
 ### Health check
 
-`GET /health` answers `OK` (`text/plain`, `no-store`) while PHP-FPM and the application run, for an uptime monitor or load balancer. It reveals nothing else, queries no database and is not recorded in the Site Log. Configuration and worker health are in `ctnlist:diagnose` and on **Admin → Sending → Delivery**, never public.
+`GET /health` answers `OK` (`text/plain`, `no-store`) while PHP-FPM and the application run, for an uptime monitor or load balancer. It reveals nothing else, queries no database and is not recorded in the Site Log. Configuration and worker health are in `ctnlist:diagnose` and on **Admin → Settings → Delivery**, never public.
 
 ### Console commands
 
@@ -296,7 +296,7 @@ Port 1025 must stay closed to the outside (it is bound to loopback; do not publi
 
 ctnlist is the first client of the [catto-mail](https://github.com/rrcatto/catto-mail) smarthost. The two applications stay separate: ctnlist talks to catto-mail only through its HTTPS `/v1` API (`App\CattoMail\CattoMailClient`, the only class that does) and receives its signed webhooks. ctnlist never touches catto-mail's database. ctnlist keeps subscribers, lists, consent and ordinary unsubscribes, campaigns, templates, audience selection and the per-recipient rendering. catto-mail does address validation, SMTP delivery, DSNs, complaints, global transport suppression, tracking and metering.
 
-**Connecting.** An administrator connects the mail service on **Admin → Sending → Delivery**, with catto-mail's connect flow (catto-mail's integration guide, section 15: an authorisation-code flow with PKCE):
+**Connecting.** An administrator connects the mail service on **Admin → Settings → Delivery**, with catto-mail's connect flow (catto-mail's integration guide, section 15: an authorisation-code flow with PKCE):
 1. Enter the mail service's address (the address you sign in to it at; the address of any of its pages will do) and press **Connect**. Your browser is sent to the mail service.
 2. Sign in there (or open an account, where the service offers that), choose the client to connect and approve. Only an admin of an active client can approve, and the client needs room for one more API key and webhook endpoint.
 3. Your browser comes back, and ctnlist collects from the mail service, server to server, what it hands over once: the API address, an API key named after this site (`APP_LIST_NAME`) and the signing secret of a webhook endpoint for `<APP_BASE_URL>cattomail/webhook`, subscribed to the six events ctnlist handles. They are stored in the Settings store (`options`), the key and the secret encrypted with `APP_SETTINGS_KEY`. Nothing secret passes through the browser, a log or a page.
@@ -330,11 +330,11 @@ The page then shows what is connected (the service, the catto-mail client, who c
 - Each recipient carries its final subject, HTML and text, `external_recipient_reference` (the ctnlist delivery's UUID) and, for subscription mail, a per-recipient one-click `unsubscribe_url`. That URL is `https://…/unsubscribe-link/…`, signed, without tracking, and unsubscribes from that list only.
 - Proofs, and resends of a draft without lists, are transactional jobs. With `MAIL_PROOF_SMTP` set, proofs do not come here at all: they go to Mailpit ([Proofs to Mailpit](#proofs-to-mailpit)).
 - A message's From domain must be a sending domain registered in catto-mail, and subscription mail needs an https `APP_BASE_URL`.
-- **Admin → Sending → Delivery (catto-mail)** shows each message's send jobs, every recipient's message state, and a recipient's event history read live from catto-mail. `remote_accepted` is acceptance by the receiving server, not inbox delivery; `open_recorded` is not proof of reading.
+- **Admin → Settings → Delivery (catto-mail)** shows each message's send jobs, every recipient's message state, and a recipient's event history read live from catto-mail. `remote_accepted` is acceptance by the receiving server, not inbox delivery; `open_recorded` is not proof of reading.
 - Only one queue run sends at a time per database (a PostgreSQL advisory lock): a second one answers "The queue is already being sent." A run that dies (time limit, PHP-FPM reload, reboot) blocks nothing, because the database frees its lock.
 - A queue row is removed only in the same transaction that stores its staged delivery, and only once: a run that finds the row already taken rolls back. The database also allows only one active campaign delivery of a message to a subscriber.
 
-**Integration status** (**Admin → Sending → Delivery**, permission `logs.view`). The page shows:
+**Integration status** (**Admin → Settings → Delivery**, permission `logs.view`). The page shows:
 - the mail service: connected (with Connect again, Disconnect and Forget for administrators), configured in `.env`, or not connected (with Connect), and whether the From address's domain can send;
 - the configuration (the API key and secrets are never shown, only whether they are set and where they come from);
 - **Check connection**: one read-only authenticated request (`GET /v1/send-jobs/<an id that cannot exist>`; the API has no health endpoint, and 404 proves network, TLS and the key). The result is one of: not configured, host name not found, cannot connect, TLS failure, API key rejected, client not permitted, temporarily unavailable, or reachable and authenticated;
@@ -456,7 +456,7 @@ The development stacks are separate (catto-mail's pod is on an internal network,
    - for subscription mail, `APP_BASE_URL=https://localhost:8543/` (ctnlist's development HTTPS listener).
 
    Then run `bin/dev restart`.
-5. Connect: **Admin → Sending → Delivery**, mail service address `https://localhost:8443`, **Connect**; sign in to catto-mail as an admin of the client (its sign-in mail is in catto-mail's Mailpit, http://localhost:8026) and approve. In another terminal, `bin/dev console ctnlist:cattomail:work --loop 30` (start it after connecting: a looping worker reads the connection when it starts).
+5. Connect: **Admin → Settings → Delivery**, mail service address `https://localhost:8443`, **Connect**; sign in to catto-mail as an admin of the client (its sign-in mail is in catto-mail's Mailpit, http://localhost:8026) and approve. In another terminal, `bin/dev console ctnlist:cattomail:work --loop 30` (start it after connecting: a looping worker reads the connection when it starts).
 6. Check it: **Check connection** on that page, or `bin/dev console ctnlist:cattomail:check`.
 
 Without the Connect button the route works as before: create the API key and the webhook endpoint `http://ctnlist-web/cattomail/webhook` in catto-mail by hand and put `CATTOMAIL_API_BASE_URL=https://localhost:8443`, the key and the secret in `dev/podman/ctnlist.env`.
@@ -489,7 +489,7 @@ The two scheduled commands are kept separate: the worker must run often and be q
 
 Complete templates: `deploy/cron/ctnlist.cron.example` (`/etc/cron.d`) or the systemd timers in `deploy/systemd/` (`ctnlist-worker@<installation>.timer`, `ctnlist-maintenance@<installation>.timer`). Run them as the PHP-FPM user with nothing but `CTNLIST_INSTANCE_DIR`, so they read the same `.env` as the web server: the worker records a fingerprint of its configuration (installation, environment, database, base URL, catto-mail credentials, keys; hashes only), and the Delivery page and `ctnlist:diagnose` warn when it differs from theirs. The PHP-FPM pool template keeps `clear_env = yes` and no `env[…]` overrides for the same reason. PHP sessions are removed by `ctnlist:maintenance` only (PHP's own session garbage collection is off), so `session.gc_maxlifetime` in `php.ini` does not matter.
 
-Output and exit status are the same for both. They print one line of counts when something was done, failed or found (every run with `-v`), never row content. They exit 1 when an item failed, and 0 when there was nothing to do or another run was in progress. Their last runs, and last failures, show on **Admin → Sending → Delivery** and in `ctnlist:diagnose`.
+Output and exit status are the same for both. They print one line of counts when something was done, failed or found (every run with `-v`), never row content. They exit 1 when an item failed, and 0 when there was nothing to do or another run was in progress. Their last runs, and last failures, show on **Admin → Settings → Delivery** and in `ctnlist:diagnose`.
 
 ### Operational data
 
@@ -555,7 +555,7 @@ Recovery:
 4. As `www-data`: clear the installation's cache (`bin/console cache:clear`, or empty `var/cache/`).
 5. As `www-data`: `bin/console asset-map:compile` for the installation.
 6. Restart PHP-FPM and re-enable the two cron entries (or systemd timers).
-7. Run `ctnlist:diagnose --production`, then let the worker reconcile. Pending catto-mail work carries its catto-mail ids and Idempotency-Keys, so the worker polls and finishes it rather than creating replacements. Check **Admin → Sending → Delivery** (Check connection, stuck work).
+7. Run `ctnlist:diagnose --production`, then let the worker reconcile. Pending catto-mail work carries its catto-mail ids and Idempotency-Keys, so the worker polls and finishes it rather than creating replacements. Check **Admin → Settings → Delivery** (Check connection, stuck work).
 
 On a new server, catto-mail is checked end to end with the [Release checklist](#release-checklist)'s proof, test campaign and webhook round trip (`bin/dev test-cattomail` is the development stack's check against a local catto-mail and refuses any other); the automated tests use the fake catto-mail.
 

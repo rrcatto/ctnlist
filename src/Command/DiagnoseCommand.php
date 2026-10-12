@@ -270,7 +270,7 @@ final class DiagnoseCommand extends Command
                     . 'its cron entry must use CTNLIST_INSTANCE_DIR=' . $this->instanceDir . ' and nothing else');
         }
         $stuck = $this->stuck->total();
-        $say($stuck === 0 ? 'OK' : 'WARN', $stuck === 0 ? 'no stuck catto-mail work' : $stuck . ' stuck catto-mail item(s): see Admin > Sending > Delivery');
+        $say($stuck === 0 ? 'OK' : 'WARN', $stuck === 0 ? 'no stuck catto-mail work' : $stuck . ' stuck catto-mail item(s): see Admin > Settings > Delivery');
 
         return $this->errors > 0 ? Command::FAILURE : Command::SUCCESS;
     }

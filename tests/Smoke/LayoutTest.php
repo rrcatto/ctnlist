@@ -151,6 +151,19 @@ final class LayoutTest extends SmokeTestCase
             self::assertStringContainsString('href="' . $href . '"', $body, "admin link {$href}");
         }
         self::assertMatchesRegularExpression('/All subscribers<\/span>\s*<span class="badge[^"]*">\d+</', $body, 'counters');
+        $group = static function (string $icon) use ($body): string {
+            foreach (explode('<li class="nav-item">', $body) as $item) {
+                if (str_contains($item, 'class="bi bi-' . $icon . '"')) {
+                    return explode('</li>', $item)[0];
+                }
+            }
+
+            return '';
+        };
+        self::assertStringContainsString('href="/delivery"', $group('sliders'), 'the Delivery page is in the Settings menu');
+        self::assertStringContainsString('href="/settings"', $group('sliders'));
+        self::assertStringContainsString('href="/queue"', $group('send'));
+        self::assertStringNotContainsString('href="/delivery"', $group('send'), 'and not in the Sending menu');
         self::assertStringContainsString('action="/logout"', $body);
         self::assertStringContainsString('Create a topic list', $body, 'page content inside the layout');
         self::assertStringNotContainsString('btn-toolbar', $body, 'no duplicate admin toolbar');
