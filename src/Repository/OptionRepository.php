@@ -26,4 +26,9 @@ final class OptionRepository
             [$key, $value]
         );
     }
+
+    public function delete(string $key): void
+    {
+        $this->db->executeStatement('DELETE FROM options WHERE o_key = ?', [$key]);
+    }
 }

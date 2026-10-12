@@ -88,6 +88,7 @@ final class DiagnoseCommand extends Command
         #[Autowire('%env(default::SUPPRESSION_PROVIDER)%')] private readonly ?string $suppression = null,
         #[Autowire('%env(default::TRUSTED_PROXIES)%')] private readonly ?string $trustedProxies = null,
         #[Autowire('%env(default::CATTOMAIL_API_CONNECT_HOST)%')] private readonly ?string $connectHost = null,
+        #[Autowire('%env(default::CATTOMAIL_WEBHOOK_URL)%')] private readonly ?string $webhookUrl = null,
         #[Autowire('%env(default::CATTOMAIL_WEBHOOK_SECRET)%')] #[\SensitiveParameter] private readonly ?string $webhookSecret = null,
         #[Autowire('%env(default::CATTOMAIL_WEBHOOK_SECRET_PREVIOUS)%')] #[\SensitiveParameter] private readonly ?string $previousWebhookSecret = null,
         #[Autowire('%env(default::APP_ADMIN_EMAIL)%')] private readonly ?string $adminEmail = null,
@@ -208,8 +209,11 @@ final class DiagnoseCommand extends Command
         $problem = $this->cattoMail->problem();
         // Campaign content is delivered only by catto-mail: in production it must be configured.
         $missingLevel = $production ? 'ERROR' : 'WARN';
-        $say($problem === null ? 'OK' : $missingLevel, $problem === null ? 'catto-mail configured: ' . $this->cattoMail->apiRoot() : $problem);
-        $say($this->cattoMail->hasWebhookSecret() ? 'OK' : $missingLevel, 'CATTOMAIL_WEBHOOK_SECRET ' . ($this->cattoMail->hasWebhookSecret() ? 'set' : 'not set: webhooks are refused'));
+        // Each value comes from .env or from the connection made on the Delivery page (stored encrypted); .env wins.
+        $from = fn(string $value): string => $this->cattoMail->source($value) === CattoMailConfig::SOURCE_CONNECTION ? 'from the connection made on the Delivery page' : 'set in .env';
+        $say($problem === null ? 'OK' : $missingLevel, $problem === null ? 'catto-mail configured: ' . $this->cattoMail->apiRoot() . ' (address ' . $from('base_url') . ', API key ' . $from('api_key') . ')' : $problem);
+        $say($this->cattoMail->hasWebhookSecret() ? 'OK' : $missingLevel, 'catto-mail webhook secret ' . ($this->cattoMail->hasWebhookSecret() ? $from('webhook_secret')
+            : 'not set: webhooks are refused (connect the mail service on the Delivery page, or CATTOMAIL_WEBHOOK_SECRET in .env)'));
         if ($this->cattoMail->hasPreviousWebhookSecret()) {
             $say('WARN', 'CATTOMAIL_WEBHOOK_SECRET_PREVIOUS set: remove it once catto-mail\'s rotation overlap has passed');
         }
@@ -278,6 +282,7 @@ final class DiagnoseCommand extends Command
             'mailer_dsn' => $mailerDsn,
             'suppression' => (string) $this->suppression,
             'connect_host' => (string) $this->connectHost,
+            'webhook_url' => (string) $this->webhookUrl,
             'trusted_proxies' => (string) $this->trustedProxies,
             'cattomail_secrets' => ['CATTOMAIL_API_KEY' => $this->cattoMail->apiKey(), 'CATTOMAIL_WEBHOOK_SECRET' => (string) $this->webhookSecret,
                 'CATTOMAIL_WEBHOOK_SECRET_PREVIOUS' => (string) $this->previousWebhookSecret],

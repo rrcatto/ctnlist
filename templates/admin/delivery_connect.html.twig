@@ -1,0 +1,20 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Connect the mail service{% endblock %}
+
+{% block content %}
+{% embed 'layout/_page_header.html.twig' with {title: 'Connect the mail service', description: 'Enter the address of the mail service. You sign in there and approve the connection; this site then receives its API key and webhook secret by itself and stores them encrypted.'} %}
+  {% block actions %}
+    <a class="btn-outline theme-secondary" href="{{ path('admin_delivery') }}">Back to Delivery</a>
+  {% endblock %}
+{% endembed %}
+
+<div class="card">
+  <div class="card-body">
+    {% if obstacle %}
+      <div class="alert theme-warning small" role="note"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div>{{ obstacle }}</div></div>
+    {% endif %}
+    {% include 'admin/_delivery_connect_form.html.twig' with {form: form, obstacle: obstacle} %}
+  </div>
+</div>
+{% endblock %}

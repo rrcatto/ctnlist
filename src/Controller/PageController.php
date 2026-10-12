@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller;
 
+use App\Config\SiteConfig;
 use App\Util\Markdown;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -40,20 +41,30 @@ final class PageController extends AbstractController
 
     /**
      * The acceptable use policy, built from docs/AUP.md of the release: the
-     * rules of the mail service this site sends its mailing lists through.
-     * App\Util\Markdown escapes all of the document's text, so its HTML is
-     * printed as it is.
+     * rules for this site's subscribers and for whoever writes and sends its
+     * messages. The document names no product and no domain; its placeholders
+     * are filled with this installation's own name, domain, organisation and
+     * contact address (Settings), after rendering and escaped, so a configured
+     * value is shown exactly as written. App\Util\Markdown escapes all of the
+     * document's text, so its HTML is printed as it is.
      */
     #[Route('/acceptable-use-policy', name: 'acceptable_use_policy', methods: ['GET'])]
-    public function acceptableUsePolicy(#[Autowire('%kernel.project_dir%/docs/AUP.md')] string $file): Response
+    public function acceptableUsePolicy(SiteConfig $site, #[Autowire('%kernel.project_dir%/docs/AUP.md')] string $file): Response
     {
         $markdown = is_file($file) ? (string) file_get_contents($file) : '';
         if (trim($markdown) === '') {
             throw $this->createNotFoundException();
         }
+        $names = [
+            '{{site_name}}' => $site->listName,
+            '{{domain}}' => $site->domain,
+            '{{organisation}}' => $site->organisation !== '' ? $site->organisation : 'the operator of ' . $site->listName,
+            '{{contact}}' => $site->contactEmail !== '' ? $site->contactEmail : 'the administrator of this site',
+        ];
+        $escaped = array_map(static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), $names);
         return $this->render('page/policy.html.twig', [
-            'title' => Markdown::title($markdown) ?? 'Acceptable Use Policy',
-            'policy' => new Markup(Markdown::toHtml($markdown), 'UTF-8'),
+            'title' => strtr(Markdown::title($markdown) ?? 'Acceptable Use Policy', $names),
+            'policy' => new Markup(strtr(Markdown::toHtml($markdown), $escaped), 'UTF-8'),
         ]);
     }
 }

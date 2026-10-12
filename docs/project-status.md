@@ -4,11 +4,12 @@
 
 ## Where things are
 
-- **Released:** 6.0.10, tagged `v6.0.10` on `main` (2026-10-11). `bin/dev check` passes on it (555 tests, PHPStan level 8 clean). It adds an acceptable use policy page, `/acceptable-use-policy`, linked from every page's footer and built from `docs/AUP.md`: the policy of catto-mail, the mail service ctnlist sends through.
+- **On `main`, not yet released:** connecting the mail service from the Delivery page (Connect, Disconnect, the connection state and the From-domain warning), with the API key and the webhook secret stored encrypted in the Settings store and `.env` still winning; and `docs/AUP.md` rewritten as ctnlist's own acceptable use policy, naming the installation. `bin/dev check` passes on it (576 tests, PHPStan level 8 clean), and a real run between the two development pods passed (connect with the button, then `bin/dev test-cattomail`).
+- **Released:** 6.0.10, tagged `v6.0.10` on `main` (2026-10-11). It added the acceptable use policy page, `/acceptable-use-policy`, linked from every page's footer and built from `docs/AUP.md`.
 - **Before it:** 6.0.9 (2026-10-11) removed the message link settings, limited the contact form's details to the signed-in subscriber, widened the message editor, required a subject, refused blank messages and made the sign-in link page plainer.
 - **Earlier:** 6.0.8 (2026-10-10) had the fixes from the pre-deployment defect audit, PHP 8.5 as the minimum, the interface moved to Bootstrap 6.0.0-alpha.1, and this `docs/` directory. 6.0.7 (2026-10-09) was the release-candidate hardening called Phase 10; Phase 9 was 6.0.6.
-- **Next:** connecting to catto-mail with one approval. catto-mail 0.2.6 offers an authorisation-code flow (its connect page, `POST /v1/connect/exchange`, `DELETE /v1/connection`, `GET /v1/sending-domains`); ctnlist's side is not built yet, so the API key and webhook secret are still copied into `.env` by hand. Then Phase 11, deployment to the new server. Not started.
-- **Behind catto-mail's contract:** ctnlist was written against OpenAPI 1.0.0-draft.7 and the contract is 1.0.0-draft.10. Besides the connect flow, three things are not handled: the `repermission.responded` webhook, a `429 quota-exceeded` answer (treated like a rate limit), and limits set below 10,000 recipients per job or 500 per batch. `src/CattoMail/CLAUDE.md` has the detail.
+- **Next:** Phase 11, deployment to the new server. Not started. On the server the mail service is connected with the Connect button (both sites on https), not by copying a key into `.env`.
+- **Behind catto-mail's contract:** ctnlist follows OpenAPI 1.0.0-draft.10 except in three places: the `repermission.responded` webhook is recorded and ignored, a `429 quota-exceeded` answer is treated like a rate limit, and limits set below 10,000 recipients per job or 500 per batch are not known to it. `src/CattoMail/CLAUDE.md` has the detail.
 
 ## The defect audit, in brief
 

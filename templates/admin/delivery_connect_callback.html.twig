@@ -1,0 +1,37 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Connect the mail service{% endblock %}
+
+{% block content %}
+{% include 'layout/_page_header.html.twig' with {title: 'Connect the mail service'} %}
+
+{% if failure %}
+  <div class="alert theme-danger" role="alert"><i class="bi bi-exclamation-octagon" aria-hidden="true"></i><div>{{ failure }}</div></div>
+{% endif %}
+
+{% if not expected %}
+  <div class="alert theme-warning" role="note"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div>This answer does not belong to a connection request that waits here: the request was finished already, more than an hour has passed, or another administrator started it. Nothing was changed.</div></div>
+  <a class="btn-solid theme-primary" href="{{ path('admin_delivery') }}">Back to Delivery</a>
+{% elseif declined %}
+  <div class="alert theme-warning" role="note"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div>The connection was not approved at {{ service ?: 'the mail service' }}{% if description %}: {{ description }}{% endif %}. Nothing was changed.</div></div>
+  <a class="btn-solid theme-primary" href="{{ path('admin_delivery') }}">Back to Delivery</a>
+{% elseif code == '' %}
+  <div class="alert theme-warning" role="note"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div>The mail service sent no code back. Nothing was changed; start again from the Delivery page.</div></div>
+  <a class="btn-solid theme-primary" href="{{ path('admin_delivery') }}">Back to Delivery</a>
+{% else %}
+  {# Submitted at once by assets/app.js (data-autosubmit), unless an attempt has just failed: finishing changes state, so it is a POST. #}
+  <form class="card app-narrow ms-0" method="post" action="{{ path('admin_delivery_connect_complete') }}"{{ failure ? '' : ' data-autosubmit' }}>
+    <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+    <input type="hidden" name="state" value="{{ state }}">
+    <input type="hidden" name="code" value="{{ code }}">
+    <div class="card-body">
+      <p>The connection was approved at <strong>{{ service ?: 'the mail service' }}</strong>.</p>
+      <p class="fg-2 small mb-0">Finishing collects the API key and the webhook secret from the mail service and stores them here, encrypted.</p>
+    </div>
+    <div class="card-footer d-flex flex-wrap gap-3">
+      <button class="btn-solid theme-primary" type="submit"><i class="bi bi-plug me-1" aria-hidden="true"></i>Finish connecting</button>
+      <a class="btn-outline theme-secondary" href="{{ path('admin_delivery') }}">Cancel</a>
+    </div>
+  </form>
+{% endif %}
+{% endblock %}

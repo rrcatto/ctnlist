@@ -26,6 +26,12 @@ document.addEventListener('submit', (event) => {
     }
 });
 
+// A form marked data-autosubmit is submitted as soon as the page has loaded: the step that
+// finishes a mail service connection is a POST, and its page arrives by a GET from that service.
+document.querySelectorAll('form[data-autosubmit]').forEach((form) => {
+    form.requestSubmit();
+});
+
 // A menu of checkboxes (data-checklist) names the ticked choices on its toggle:
 // the data-checklist-summary inside the element before the menu. With none
 // ticked it shows data-checklist-empty.

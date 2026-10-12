@@ -47,6 +47,19 @@ final class AdminMessagesTemplatesTest extends SmokeTestCase
         self::assertSame(404, self::request($client, 'GET', '/template/999999')['status']);
     }
 
+    /** A submission without the template field (a script, an older page) is saved with no template; it used to fail with a server error. */
+    public function testAMessageSubmittedWithoutItsTemplateFieldIsSaved(): void
+    {
+        $client = self::client();
+        self::loginAsAdmin($client);
+        $subject = 'Smoke no template field ' . self::$suffix;
+        $fields = self::formFields(self::request($client, 'GET', '/message')['body'], 'message', ['message[subject]' => $subject, 'message[html]' => '<p>Draft</p>', 'message[text]' => 'Draft']);
+        unset($fields['message[templateId]']);
+        $saved = self::request($client, 'POST', '/message', $fields);
+        self::assertSame(302, $saved['status']);
+        self::assertSame(0, (int) self::value('SELECT m_t_id FROM messages WHERE m_subject = ?', [$subject]));
+    }
+
     public function testDraftMessageWithoutListsThenAssigned(): void
     {
         $client = self::client();

@@ -25,7 +25,7 @@ Since 6.0 every route is a Symfony 8.1 controller and the Fat-Free Framework has
 - CSRF protection for state-changing actions
 - separate PostgreSQL global email/domain suppression database
 - production templates (nginx, PHP-FPM, cron, systemd) and a production preflight, `ctnlist:diagnose --production`
-- an acceptable use policy page, `/acceptable-use-policy`, linked from every page's footer and built from `docs/AUP.md`: the policy of catto-mail, the mail service the lists are sent through (replace the file to publish a different policy)
+- an acceptable use policy page, `/acceptable-use-policy`, linked from every page's footer and built from `docs/AUP.md`: the site's own rules for its subscribers and for whoever writes and sends its messages. The document names no product or domain; the page fills in the installation's list name, domain, organisation and contact address from Settings (replace the file to publish a different policy)
 
 ## Restored v5 functionality
 
@@ -158,13 +158,13 @@ The new server starts from an empty database; there are no upgrade migrations (s
 1. Create the PostgreSQL role and database (a generated password, e.g. `openssl rand -base64 24`).
 2. Install the code at `/usr/local/lib/php/ctnlist/<version>/` and run `composer install --no-dev --optimize-autoloader`.
 3. Create the installation directory with the layout above; copy the release's `public_html/` into it.
-4. Write `.env` from `.env.example`. Generate each secret (`APP_SECRET`: `openssl rand -hex 32`; `APP_INSTANCE_ID`: `openssl rand -hex 16`; `APP_SETTINGS_KEY`: `openssl rand -base64 32`), never reuse documentation or another installation's values; `APP_ENV=prod`, `APP_DEBUG=false`, the public `https://` `APP_BASE_URL`, `DB_*`, `GDB_ENV_DIRECTORY`/`GDB_ENV_FILE` (the suppression database's `ban.env`), `MAILER_DSN`, the catto-mail credentials and webhook secret, and the real sender and administrator addresses (`APP_ADMIN_EMAIL` becomes the first administrator at its first sign-in).
+4. Write `.env` from `.env.example`. Generate each secret (`APP_SECRET`: `openssl rand -hex 32`; `APP_INSTANCE_ID`: `openssl rand -hex 16`; `APP_SETTINGS_KEY`: `openssl rand -base64 32`), never reuse documentation or another installation's values; `APP_ENV=prod`, `APP_DEBUG=false`, the public `https://` `APP_BASE_URL`, `DB_*`, `GDB_ENV_DIRECTORY`/`GDB_ENV_FILE` (the suppression database's `ban.env`), `MAILER_DSN`, and the real sender and administrator addresses (`APP_ADMIN_EMAIL` becomes the first administrator at its first sign-in).
 5. Create the schema: `CTNLIST_INSTANCE_DIR=/var/www/<installation> composer migrate-paralegal` (and `GDB_ENV_DIRECTORY=<directory of ban.env> composer migrate-banlist` where this server hosts the suppression database: the banlist configuration does not read the installation `.env`; see Database setup).
 6. As `www-data`: `bin/console cache:clear` (which warms the production cache), then `bin/console asset-map:compile`. Always in this order: in production the cache is not refreshed when code changes, so assets compiled with an older cache are stale.
 7. PHP-FPM pool from `deploy/php-fpm/ctnlist.conf.example`; nginx from `deploy/nginx/` (`nginx -t`, reload); TLS certificate.
 8. The scheduled commands from `deploy/cron/ctnlist.cron.example` or the systemd timers in `deploy/systemd/` (one of the two).
 9. Preflight: `sudo -u www-data env CTNLIST_INSTANCE_DIR=/var/www/<installation> php bin/console ctnlist:diagnose --production` must report no ERROR (the worker and maintenance warnings clear after their first runs). `https://<host>/health` answers `OK`.
-10. Register `<APP_BASE_URL>cattomail/webhook` in catto-mail with the webhook secret, then check delivery end to end with the [Release checklist](#release-checklist)'s proof, test campaign and webhook round trip before campaigns are sent. (`bin/dev test-cattomail` is the development stack's end-to-end check against a local catto-mail and refuses any other; see [catto-mail integration](#catto-mail-integration).)
+10. Connect the mail service: sign in as the administrator, **Admin → Sending → Delivery**, enter its address and approve there ([catto-mail integration](#catto-mail-integration), *Connecting*). The key and the webhook endpoint are created by that; nothing is copied into `.env`. Then check delivery end to end with the [Release checklist](#release-checklist)'s proof, test campaign and webhook round trip before campaigns are sent. (`bin/dev test-cattomail` is the development stack's end-to-end check against a local catto-mail and refuses any other; see [catto-mail integration](#catto-mail-integration).)
 
 ### New release
 
@@ -177,12 +177,12 @@ Before a release goes live. The items marked † need the production server and 
 - [ ] `bin/dev check` passes (lint, PHPStan, every test suite, `composer validate` and `composer audit`) and the release is committed and tagged.
 - [ ] The schema migrates into an empty database (New installation, step 5) and `ctnlist:diagnose` finds it up to date.
 - [ ] As `www-data`, for each installation: `cache:clear`, then `asset-map:compile`.
-- [ ] † `.env` written from `.env.example` with generated secrets, `640` root:`www-data`; `APP_SETTINGS_KEY`, `APP_SECRET` and the catto-mail key and webhook secret kept with the installation's secrets ([Backups and recovery](#backups-and-recovery)).
+- [ ] † `.env` written from `.env.example` with generated secrets, `640` root:`www-data`; `APP_SETTINGS_KEY` (it also decrypts the mail service connection) and `APP_SECRET` kept with the installation's secrets ([Backups and recovery](#backups-and-recovery)).
 - [ ] † A database backup taken before the switch, and the backup routine in place.
 - [ ] † PHP-FPM pool and nginx from `deploy/` validated (`php-fpm8.5 -t` for PHP 8.5, `nginx -t`) and reloaded; the TLS certificate valid and plain HTTP redirected to HTTPS.
 - [ ] † The worker and maintenance scheduled (cron or systemd timers) and each seen running.
 - [ ] † `ctnlist:diagnose --production` as `www-data` reports no ERROR; `https://<host>/health` answers `OK`.
-- [ ] † catto-mail configured (`CATTOMAIL_*`) and `<APP_BASE_URL>cattomail/webhook` registered with the webhook secret; `ctnlist:cattomail:check` reports it reachable and authenticated, and `bin/dev test-cattomail` has passed against a development catto-mail.
+- [ ] † The mail service connected on the Delivery page (or set in `.env`, with `<APP_BASE_URL>cattomail/webhook` registered by hand), and the page shows that the From address's domain can send; `ctnlist:cattomail:check` reports it reachable and authenticated, and `bin/dev test-cattomail` has passed against a development catto-mail.
 - [ ] † A proof to an address you can read, a small campaign to a test list, a webhook round trip (delivery and bounce events on **Admin → Sending → Delivery**) and an address-validation job.
 - [ ] † Recovery sanity check: the Delivery page shows no stuck work, and a send job without a final webhook is reconciled after `CATTOMAIL_RECONCILE_AFTER_SECONDS`.
 
@@ -227,9 +227,10 @@ Administrators, and any role given the `settings.manage` permission, can change 
 
 - Each setting resolves as **database override → `.env` → built-in default**, and the page shows which one is in effect (Database, .env or Default). Overrides are stored in the `options` table; nothing is written to `.env`. Database overrides are optional: an installation without any runs exactly from its `.env`.
 - Saving a value equal to the inherited one, or "Reset override" / "Reset section", removes the override so `.env` (or the default) applies again. Changes apply from the next page or email; a send that is already running keeps the SMTP settings it started with.
-- Secret settings are encrypted in the database with AES-256-GCM using the dedicated `APP_SETTINGS_KEY` from `.env` (32 random bytes, Base64; generate with `openssl rand -base64 32`), and `APP_SETTINGS_KEY` is required to decrypt all of them. Today the only secret setting is the SMTP server (`MAILER_DSN`, which carries its password). The key is needed only once a secret is saved there; without it the SMTP section explains what to add. Secrets are never sent to the browser (leave the field empty to keep the current one) and never logged.
-- **Do not change `APP_SETTINGS_KEY` while encrypted settings exist**: they become unreadable, and mail that needs them fails (the Settings page reports it) until they are entered again or reset. A future key rotation must decrypt with the old key and re-encrypt with the new key before the new key is deployed.
-- Stay in `.env` only: `APP_SECRET`, `APP_SETTINGS_KEY`, `APP_ENV`/`APP_DEBUG`, `APP_INSTANCE_ID`, the catto-mail settings (`CATTOMAIL_*`), the database and suppression-database settings, `TRUSTED_PROXIES`, `APP_BASE_URL`/`APP_DOMAIN`, `APP_TIMEZONE`, file paths (`CONTACT_LOG_FILE`, `APP_LOG_DIR`), the cookie names (`AUTH_SESSION_COOKIE`, `PHP_SESSION_COOKIE`), `APP_ADMIN_EMAIL` and the synchronisation targets.
+- Secret settings are encrypted in the database with AES-256-GCM using the dedicated `APP_SETTINGS_KEY` from `.env` (32 random bytes, Base64; generate with `openssl rand -base64 32`), and `APP_SETTINGS_KEY` is required to decrypt all of them. The secret values are the SMTP server (`MAILER_DSN`, which carries its password) and, for a mail service connected on the Delivery page, its API key and webhook secret. The key is needed only once a secret is saved; without it the SMTP section and the Delivery page explain what to add. Secrets are never sent to the browser (leave the field empty to keep the current one) and never logged.
+- **Do not change `APP_SETTINGS_KEY` while encrypted settings exist**: they become unreadable, and mail that needs them fails (the Settings page and the Delivery page report it) until they are entered again or reset, and the mail service is connected again. A future key rotation must decrypt with the old key and re-encrypt with the new key before the new key is deployed.
+- The mail service's address, API key and webhook secret are not on this page: they come from Connect on the Delivery page or from `.env` (which wins).
+- Stay in `.env` only: `APP_SECRET`, `APP_SETTINGS_KEY`, `APP_ENV`/`APP_DEBUG`, `APP_INSTANCE_ID`, the other catto-mail settings (`CATTOMAIL_*`: opt-out capability, tracking, timeouts, retention), the database and suppression-database settings, `TRUSTED_PROXIES`, `APP_BASE_URL`/`APP_DOMAIN`, `APP_TIMEZONE`, file paths (`CONTACT_LOG_FILE`, `APP_LOG_DIR`), the cookie names (`AUTH_SESSION_COOKIE`, `PHP_SESSION_COOKIE`), `APP_ADMIN_EMAIL` and the synchronisation targets.
 - Web addresses must be `http(s)://`; one-line values (names, subjects) cannot contain line breaks.
 
 ### Security notes
@@ -254,16 +255,31 @@ Placeholders are case-insensitive. For a subscriber: `{firstname}`, `{lastname}`
 
 ctnlist is the first client of the [catto-mail](https://github.com/rrcatto/catto-mail) smarthost. The two applications stay separate: ctnlist talks to catto-mail only through its HTTPS `/v1` API (`App\CattoMail\CattoMailClient`, the only class that does) and receives its signed webhooks. ctnlist never touches catto-mail's database. ctnlist keeps subscribers, lists, consent and ordinary unsubscribes, campaigns, templates, audience selection and the per-recipient rendering. catto-mail does address validation, SMTP delivery, DSNs, complaints, global transport suppression, tracking and metering.
 
-**Configuration** (`.env` only, never Settings, never committed; a changed key applies from the next request):
+**Connecting.** An administrator connects the mail service on **Admin → Sending → Delivery**, with catto-mail's connect flow (catto-mail's integration guide, section 15: an authorisation-code flow with PKCE):
+1. Enter the mail service's address (the address you sign in to it at; the address of any of its pages will do) and press **Connect**. Your browser is sent to the mail service.
+2. Sign in there (or open an account, where the service offers that), choose the client to connect and approve. Only an admin of an active client can approve, and the client needs room for one more API key and webhook endpoint.
+3. Your browser comes back, and ctnlist collects from the mail service, server to server, what it hands over once: the API address, an API key named after this site (`APP_LIST_NAME`) and the signing secret of a webhook endpoint for `<APP_BASE_URL>cattomail/webhook`, subscribed to the six events ctnlist handles. They are stored in the Settings store (`options`), the key and the secret encrypted with `APP_SETTINGS_KEY`. Nothing secret passes through the browser, a log or a page.
+
+The page then shows what is connected (the service, the catto-mail client, who connected it and when), and whether the domain of the site's From address (`MAIL_FROM_ADDRESS`) is one of that client's sending domains and can send (`GET /v1/sending-domains`; read when the connection is made and by **Check connection**). A domain that is missing or not yet verified is a warning: catto-mail refuses mail from it. A message or list with its own sender needs that domain registered in the same way.
+
+- **Disconnect** asks the mail service to end the connection (`DELETE /v1/connection`: it revokes the key and removes the webhook endpoint), then clears the stored values. If the service cannot be reached nothing changes, so it can be tried again. **Forget without revoking** only clears the stored values, for a service that no longer answers or a stored key that can no longer be read; the key then stays valid at the service until the connection is ended in its dashboard (Settings › Connected applications).
+- **Connect again** replaces the connection: catto-mail ends the earlier connection to the same webhook address when the new one is collected.
+- Only administrators can connect or disconnect, whatever else a role's `settings.manage` allows: whoever chooses the mail service receives every campaign and every recipient's address.
+- The approval must be finished within an hour of pressing Connect, and catto-mail's code within 10 minutes of approving. A refusal (declined, expired, the client at its limit, the service unreachable) stores nothing and says why.
+- Outside development both this site and the mail service must be on https.
+- A looping worker (`ctnlist:cattomail:work --loop`) reads the connection when it starts: restart it after connecting or disconnecting. A worker started from cron every minute needs nothing.
+- If `APP_SETTINGS_KEY` is replaced, the stored key can no longer be read: the page says so, and the remedy is to restore the key or to connect again.
+
+**Configuration in `.env`** (instead of a connection, or beside it). The address, the key and the secret can also be set in the installation's `.env`; **a value set there always wins over the connection**, and Connect is refused while one of the three is set, because the connection would not be used. They are never editable Settings and never committed; a changed value applies from the next request.
 
 | Variable | Purpose |
 |---|---|
 | `CATTOMAIL_API_BASE_URL` | catto-mail's HTTPS origin (`/v1` is added). |
-| `CATTOMAIL_API_KEY` | This installation's API key, sent as `Authorization: Bearer`; never rendered or logged (errors and log lines are redacted). |
-| `CATTOMAIL_WEBHOOK_SECRET` | The signing secret catto-mail showed when the webhook endpoint `<APP_BASE_URL>cattomail/webhook` was registered. |
+| `CATTOMAIL_API_KEY` | This installation's API key, sent as `Authorization: Bearer`; never rendered or logged (errors and log lines are redacted). Created by hand in catto-mail's dashboard when it is set here. |
+| `CATTOMAIL_WEBHOOK_SECRET` | The signing secret catto-mail showed when the webhook endpoint `<APP_BASE_URL>cattomail/webhook` was registered there by hand. |
 | `CATTOMAIL_WEBHOOK_SECRET_PREVIOUS` | Only during a secret rotation: the previous secret, for catto-mail's overlap window. After catto-mail rotates, put the new secret in `CATTOMAIL_WEBHOOK_SECRET` and the old one here; remove it when the overlap has passed. |
 | `CATTOMAIL_GLOBAL_OPTOUT_ENABLED` | `true` only when catto-mail's operator granted this client the global-opt-out capability. |
-| `CATTOMAIL_CA_FILE`, `CATTOMAIL_API_CONNECT_HOST` | Development only: trust catto-mail's self-signed certificate; reach its API host through another name (ignored outside `dev`/`test`). |
+| `CATTOMAIL_CA_FILE`, `CATTOMAIL_API_CONNECT_HOST`, `CATTOMAIL_WEBHOOK_URL` | Development only: trust catto-mail's self-signed certificate; reach its API host through another name and, as `name:port`, port; ask a connection to deliver webhooks to an address catto-mail's development pod can reach (the last two are ignored outside `dev`/`test`). |
 | `CATTOMAIL_RECONCILE_AFTER_SECONDS` | Poll jobs that have had no final webhook after this long (default 900; 300 in development). |
 | `CATTOMAIL_TRACK_OPENS`, `CATTOMAIL_TRACK_CLICKS` | catto-mail open/click tracking per send job (default off). |
 
@@ -278,7 +294,8 @@ ctnlist is the first client of the [catto-mail](https://github.com/rrcatto/catto
 - A queue row is removed only in the same transaction that stores its staged delivery, and only once: a run that finds the row already taken rolls back. The database also allows only one active campaign delivery of a message to a subscriber.
 
 **Integration status** (**Admin → Sending → Delivery**, permission `logs.view`). The page shows:
-- the configuration (the API key and secrets are never shown, only whether they are set);
+- the mail service: connected (with Connect again, Disconnect and Forget for administrators), configured in `.env`, or not connected (with Connect), and whether the From address's domain can send;
+- the configuration (the API key and secrets are never shown, only whether they are set and where they come from);
 - **Check connection**: one read-only authenticated request (`GET /v1/send-jobs/<an id that cannot exist>`; the API has no health endpoint, and 404 proves network, TLS and the key). The result is one of: not configured, host name not found, cannot connect, TLS failure, API key rejected, client not permitted, temporarily unavailable, or reachable and authenticated;
 - the last successful call and the last API error;
 - the worker's last run, with a warning when it seems not to run;
@@ -362,6 +379,8 @@ Output and safety:
 
 The status page shows which of the two are set.
 
+With a connection made on the Delivery page there is no secret in `.env` to replace: **Connect again** gives the endpoint a new secret (catto-mail replaces the earlier connection). If the secret of a connected endpoint is rotated by hand in catto-mail's dashboard instead, put the new one in `CATTOMAIL_WEBHOOK_SECRET`, where it wins over the stored one.
+
 **Headers.** catto-mail accepts no arbitrary MIME headers:
 - It sets the envelope (VERP return path), `List-Id` (from the job's `list_id`) and `List-Unsubscribe` with `List-Unsubscribe-Post` (from each recipient's signed `unsubscribe_url`).
 - v5's `Sender`, `List-Owner`, `List-Post`, `List-Subscribe`, `List-Archive` and `X-ctnlist-*` headers are not sent.
@@ -382,23 +401,24 @@ The status page shows which of the two are set.
 
 ### catto-mail development route
 
-The development stacks are separate (catto-mail's pod is on an internal network, its API published on `127.0.0.1:8443`; its webhook worker only delivers to public addresses, or to private hosts listed in its `APP_WEBHOOK_ALLOWED_PRIVATE_HOSTS`). The route is a dedicated internal Podman network, `cattomail-dev`:
+The development stacks are separate (catto-mail's pod is on an internal network, its dashboard and API published on `127.0.0.1:8443`; its webhook worker only delivers to public addresses, or to private hosts listed in its `APP_WEBHOOK_ALLOWED_PRIVATE_HOSTS`). The route is a dedicated internal Podman network, `cattomail-dev`:
 
 1. `bin/dev cattomail-link` creates `cattomail-dev` and attaches ctnlist's web container (alias `ctnlist-web`) and app container. `bin/dev up` re-attaches them by itself whenever the network exists; without it, `up` works as usual and catto-mail stays optional. `bin/dev cattomail-status` lists what the route has and lacks (it never prints secret values).
-2. `bin/dev cattomail-ca` saves catto-mail's self-signed development certificate (read from its public port) to `dev/podman/cattomail-ca.pem` (gitignored).
-3. catto-mail's side, done in the catto-mail repository:
-   - attach its pod to `cattomail-dev` with an alias (e.g. `catto-mail`);
-   - add `ctnlist-web` to `APP_WEBHOOK_ALLOWED_PRIVATE_HOSTS`;
-   - provision a client with its console: an active client, the development sending domain, an API key, optionally the global-opt-out capability, and a webhook endpoint `http://ctnlist-web/cattomail/webhook` for the six event types (plain http is accepted in catto-mail development).
-4. In `dev/podman/ctnlist.env`:
-   - `CATTOMAIL_API_BASE_URL=https://localhost`;
-   - `CATTOMAIL_API_CONNECT_HOST=catto-mail` (TLS is still verified for `localhost`);
+2. catto-mail's side, in the catto-mail repository (its `docs/development-environment.md`, *Client development route*):
+   - add `ctnlist-web` to `APP_WEBHOOK_ALLOWED_PRIVATE_HOSTS` in its `infra/.env`, then `infra/bin/smarthostctl install` and `recreate`: its pod joins `cattomail-dev` as `catto-mail` whenever that network exists;
+   - have a client whose admin can approve the connection, with the domain of ctnlist's `MAIL_FROM_ADDRESS` as a verified sending domain.
+3. `bin/dev cattomail-ca` saves catto-mail's self-signed development certificate (read from its public port) to `dev/podman/cattomail-ca.pem` (gitignored). Repeat it when catto-mail's certificate is regenerated.
+4. In `dev/podman/ctnlist.env` (leave `CATTOMAIL_API_BASE_URL`, `CATTOMAIL_API_KEY` and `CATTOMAIL_WEBHOOK_SECRET` empty):
+   - `CATTOMAIL_API_CONNECT_HOST=catto-mail:443`: catto-mail's address is `https://localhost:8443`, a port that exists only on your machine; from ctnlist's containers the same service answers at `catto-mail`, port 443. TLS is still verified for `localhost`;
    - `CATTOMAIL_CA_FILE=/usr/local/lib/php/ctnlist/6.0.10/dev/podman/cattomail-ca.pem`;
-   - the API key and webhook secret;
+   - `CATTOMAIL_WEBHOOK_URL=http://ctnlist-web/cattomail/webhook`: where catto-mail's pod can reach ctnlist (plain http is accepted by a development catto-mail);
    - for subscription mail, `APP_BASE_URL=https://localhost:8543/` (ctnlist's development HTTPS listener).
 
-   Then run `bin/dev restart` and, in another terminal, `bin/dev console ctnlist:cattomail:work --loop 30`.
-5. Check it: **Admin → Sending → Delivery → Check connection**, or `bin/dev console ctnlist:cattomail:check`.
+   Then run `bin/dev restart`.
+5. Connect: **Admin → Sending → Delivery**, mail service address `https://localhost:8443`, **Connect**; sign in to catto-mail as an admin of the client (its sign-in mail is in catto-mail's Mailpit, http://localhost:8026) and approve. In another terminal, `bin/dev console ctnlist:cattomail:work --loop 30` (start it after connecting: a looping worker reads the connection when it starts).
+6. Check it: **Check connection** on that page, or `bin/dev console ctnlist:cattomail:check`.
+
+Without the Connect button the route works as before: create the API key and the webhook endpoint `http://ctnlist-web/cattomail/webhook` in catto-mail by hand and put `CATTOMAIL_API_BASE_URL=https://localhost:8443`, the key and the secret in `dev/podman/ctnlist.env`.
 
 **Optional real end-to-end check:** `bin/dev test-cattomail [--to=address] [--muid=message] [--wait=120]`. It is never part of the normal test suite, which uses the deterministic fake catto-mail (`tests/Support/FakeCattoMail`).
 - **Safeguards:** it runs only with `APP_ENV` dev or test and a local development catto-mail (`CATTOMAIL_API_CONNECT_HOST` set, or a localhost/.test host). It refuses anything else, so production can't be targeted.
@@ -479,8 +499,8 @@ Back up, per installation:
 - **the main PostgreSQL database**: all of the data above;
 - **the global suppression database** (`GDB_*`) where it is hosted, if this installation hosts it (it is shared by installations);
 - **the installation's `.env`**, which holds secrets that are **not in the database** and cannot be reconstructed from it:
-  - `APP_SETTINGS_KEY` is required to decrypt all encrypted Settings secrets stored in the database (today the SMTP server, `MAILER_DSN`). A database backup without its key restores those settings unreadable; they would have to be entered again. Keep the key with the installation's secrets, not inside database dumps. It protects nothing else: the secrets kept in `.env` are not encrypted with it;
-  - `CATTOMAIL_API_KEY`, `CATTOMAIL_WEBHOOK_SECRET` and, during a rotation overlap, `CATTOMAIL_WEBHOOK_SECRET_PREVIOUS`. If lost, issue a new key and secret in catto-mail;
+  - `APP_SETTINGS_KEY` is required to decrypt all encrypted Settings secrets stored in the database (the SMTP server, `MAILER_DSN`, and the API key and webhook secret of a mail service connected on the Delivery page). A database backup without its key restores them unreadable: the SMTP server would have to be entered again and the mail service connected again. Keep the key with the installation's secrets, not inside database dumps. It protects nothing else: the secrets kept in `.env` are not encrypted with it;
+  - `CATTOMAIL_API_KEY`, `CATTOMAIL_WEBHOOK_SECRET` and, during a rotation overlap, `CATTOMAIL_WEBHOOK_SECRET_PREVIOUS`, where the mail service is set in `.env` and not connected on the Delivery page. If lost, issue a new key and secret in catto-mail, or connect instead;
   - `APP_SECRET`: it signs one-click unsubscribe links already in mailboxes; a new one invalidates them.
 
   Never commit `.env` or keep backups in the repository.

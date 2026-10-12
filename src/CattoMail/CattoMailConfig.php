@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace App\CattoMail;
 
 /**
- * Infrastructure configuration of the catto-mail integration, from the
- * installation's .env only (never from Settings, never rendered, never
- * logged). Changing CATTOMAIL_API_KEY in .env takes effect on the next
- * request or worker run.
+ * Infrastructure configuration of the catto-mail integration (never an
+ * editable Setting, never rendered, never logged). The address, the API key
+ * and the webhook signing secret come from the installation's .env, or, for
+ * each one .env leaves empty, from the connection an administrator made on
+ * the Delivery page (ConnectionStore: the encrypted Settings store). A value
+ * in .env always wins. A change takes effect on the next request or worker
+ * run.
  *
  * - CATTOMAIL_API_BASE_URL: the catto-mail HTTPS origin (the /v1 prefix is added here).
  * - CATTOMAIL_API_KEY: the client API key (Authorization: Bearer).
@@ -18,8 +21,12 @@ namespace App\CattoMail;
  *   client the global-opt-out capability.
  * - CATTOMAIL_CA_FILE: optional CA bundle for a development certificate.
  * - CATTOMAIL_API_CONNECT_HOST: development and test only: connect to this
- *   host (e.g. catto-mail's alias on the cattomail-dev network) for the base
- *   URL's host name; TLS is still verified for the base URL's host name.
+ *   host (e.g. catto-mail's alias on the cattomail-dev network), optionally
+ *   host:port, for the base URL's host name; TLS is still verified for the
+ *   base URL's host name.
+ * - CATTOMAIL_WEBHOOK_URL: development and test only: the webhook address a
+ *   connection asks catto-mail to deliver to, when catto-mail cannot reach
+ *   APP_BASE_URL (e.g. http://ctnlist-web/cattomail/webhook on that network).
  * - CATTOMAIL_WEBHOOK_BODY_RETENTION_DAYS (90): raw bodies of processed
  *   webhook events are removed after this; the event rows stay.
  * - CATTOMAIL_DETAIL_RETENTION_DAYS (365): rendered content of refused jobs
@@ -27,7 +34,7 @@ namespace App\CattoMail;
  */
 final class CattoMailConfig
 {
-    /** catto-mail contract limits (OpenAPI 1.0.0-draft.7). */
+    /** catto-mail contract limits (OpenAPI 1.0.0-draft.10). */
     public const MAX_BATCH_RECIPIENTS = 500;
     public const MAX_JOB_RECIPIENTS = 10000;
     public const MAX_VALIDATION_ADDRESSES = 10000;
@@ -35,6 +42,10 @@ final class CattoMailConfig
     public const MAX_REQUEST_BYTES = 10 * 1024 * 1024;
     /** A recipient batch is uploaded before its JSON would pass this (headroom below MAX_REQUEST_BYTES). */
     public const MAX_BATCH_BYTES = 8 * 1024 * 1024;
+
+    /** Where a value comes from: the installation's .env, or the connection made on the Delivery page. */
+    public const SOURCE_ENV = 'env';
+    public const SOURCE_CONNECTION = 'connection';
 
     /** @var list<string> */
     private readonly array $webhookSecrets;
@@ -55,6 +66,11 @@ final class CattoMailConfig
         public readonly string $connectHost = '',
         public readonly int $webhookBodyRetentionDays = 90,
         public readonly int $detailRetentionDays = 365,
+        /** @var array{base_url?: string, api_key?: string, webhook_secret?: string} where each value comes from (SOURCE_*) */
+        private readonly array $sources = [],
+        /** Why the stored connection cannot be read (APP_SETTINGS_KEY), '' when it can or there is none. */
+        public readonly string $connectionProblem = '',
+        public readonly string $webhookUrl = '',
     ) {
         $this->webhookSecrets = array_values(array_filter([trim($webhookSecret), trim($previousWebhookSecret)], static fn(string $s): bool => $s !== ''));
         $this->currentSecret = trim($webhookSecret) !== '';
@@ -71,18 +87,48 @@ final class CattoMailConfig
     public function problem(): ?string
     {
         if (trim($this->baseUrl) === '' || trim($this->apiKey) === '') {
-            return 'catto-mail is not configured (CATTOMAIL_API_BASE_URL and CATTOMAIL_API_KEY in .env).';
+            return $this->connectionProblem !== ''
+                ? 'catto-mail is not configured: the stored connection cannot be read (' . $this->connectionProblem . '). Restore the APP_SETTINGS_KEY it was saved with, or connect again on the Delivery page.'
+                : 'catto-mail is not configured: connect the mail service on the Delivery page, or set CATTOMAIL_API_BASE_URL and CATTOMAIL_API_KEY in .env.';
         }
         if (!str_starts_with(strtolower($this->baseUrl), 'https://')) {
-            return 'CATTOMAIL_API_BASE_URL must be an https:// URL.';
+            return 'The catto-mail address must be an https:// URL' . ($this->source('base_url') === self::SOURCE_ENV ? ' (CATTOMAIL_API_BASE_URL).' : '.');
         }
         return null;
+    }
+
+    /**
+     * Where the address ('base_url'), the key ('api_key') or the signing secret ('webhook_secret') comes
+     * from: SOURCE_ENV, SOURCE_CONNECTION, or '' when it is not set at all.
+     */
+    public function source(string $value): string
+    {
+        return $this->sources[$value] ?? '';
+    }
+
+    /** The API is used with the address and key of the connection made on the Delivery page. */
+    public function usesConnection(): bool
+    {
+        return $this->source('base_url') === self::SOURCE_CONNECTION && $this->source('api_key') === self::SOURCE_CONNECTION;
+    }
+
+    /** @return list<string> the .env settings that take precedence over a connection (names only) */
+    public function envSettings(): array
+    {
+        $names = ['base_url' => 'CATTOMAIL_API_BASE_URL', 'api_key' => 'CATTOMAIL_API_KEY', 'webhook_secret' => 'CATTOMAIL_WEBHOOK_SECRET'];
+        return array_values(array_filter($names, fn(string $name, string $value): bool => $this->source($value) === self::SOURCE_ENV, ARRAY_FILTER_USE_BOTH));
     }
 
     /** The /v1 API root, without a trailing slash. */
     public function apiRoot(): string
     {
-        $base = rtrim(trim($this->baseUrl), '/');
+        return self::rootOf($this->baseUrl);
+    }
+
+    /** The /v1 API root of a catto-mail address (its origin, or its API base URL). */
+    public static function rootOf(string $baseUrl): string
+    {
+        $base = rtrim(trim($baseUrl), '/');
         return str_ends_with($base, '/v1') ? $base : $base . '/v1';
     }
 
@@ -112,7 +158,7 @@ final class CattoMailConfig
     public function __debugInfo(): array
     {
         return ['baseUrl' => $this->baseUrl, 'apiKey' => $this->apiKey === '' ? '' : '[redacted]', 'webhookSecrets' => count($this->webhookSecrets) . ' configured',
-            'globalOptOutEnabled' => $this->globalOptOutEnabled];
+            'globalOptOutEnabled' => $this->globalOptOutEnabled, 'sources' => $this->sources];
     }
 
     public function __serialize(): array

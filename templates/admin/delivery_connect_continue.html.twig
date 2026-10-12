@@ -1,0 +1,22 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Connect the mail service{% endblock %}
+
+{# The browser goes on to the mail service by itself. A redirect would not do: this page was the
+   answer to a form, and the Content-Security-Policy keeps forms on this site. #}
+{% block head %}<meta http-equiv="refresh" content="0;url={{ address }}">{% endblock %}
+
+{% block content %}
+{% include 'layout/_page_header.html.twig' with {title: 'Connect the mail service', description: 'Sign in at the mail service and approve the connection there. You are then sent back here, and this site stores what it receives.'} %}
+
+<div class="card app-narrow ms-0">
+  <div class="card-body">
+    <p>You are being sent to <strong>{{ service }}</strong>.</p>
+    <p class="fg-2 small mb-0">Approve within the hour. The approval carries no key or secret through your browser: this site collects them from the mail service directly.</p>
+  </div>
+  <div class="card-footer d-flex flex-wrap gap-3">
+    <a class="btn-solid theme-primary" href="{{ address }}" rel="noreferrer"><i class="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i>Continue to {{ service }}</a>
+    <a class="btn-outline theme-secondary" href="{{ path('admin_delivery') }}">Cancel</a>
+  </div>
+</div>
+{% endblock %}

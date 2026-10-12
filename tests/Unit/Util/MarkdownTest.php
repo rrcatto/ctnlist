@@ -70,5 +70,14 @@ final class MarkdownTest extends TestCase
         self::assertStringContainsString('<table class="table align-middle">', $html);
         self::assertStringNotContainsString('| ---', $html, 'no Markdown is left over');
         self::assertDoesNotMatchRegularExpression('/^#{1,6} /m', $html);
+        // It is this application's policy and names the installation, never a product, domain or repository.
+        foreach (['catto-mail', 'cattomail', 'catto mail', 'ctnlist', 'github'] as $name) {
+            self::assertStringNotContainsStringIgnoringCase($name, $markdown);
+        }
+        preg_match_all('/\{\{[^}]*\}\}/', $markdown, $placeholders);
+        self::assertEqualsCanonicalizing(['{{site_name}}', '{{domain}}', '{{organisation}}', '{{contact}}'], array_values(array_unique($placeholders[0])));
+        // The placeholders survive rendering untouched, so the page can fill them in.
+        self::assertStringContainsString('<h1>{{site_name}} Acceptable Use Policy</h1>', $html);
+        self::assertMatchesRegularExpression('/^Version [A-Za-z0-9][A-Za-z0-9._-]*/m', $markdown);
     }
 }

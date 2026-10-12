@@ -2,6 +2,21 @@
 
 The release history of ctnlist. Versions 5.0.x and 6.0.x are an incremental modernisation of the working v5.0 application; the v5 behaviour they keep, and the deliberate changes from it, are listed in [RESTORED-FUNCTIONALITY.md](docs/RESTORED-FUNCTIONALITY.md).
 
+## Unreleased
+
+Connecting the mail service from the Delivery page, an acceptable use policy of the site's own, and two fixes:
+- **Connect:** an administrator connects the mail service on **Admin → Sending → Delivery** instead of copying an API key and a webhook secret into `.env`. Enter the service's address and press Connect; sign in at the mail service and approve; ctnlist then collects, server to server, what the service hands over once: the API address, an API key and the signing secret of a webhook endpoint for this site. It is catto-mail's connect flow (an authorisation-code flow with PKCE, catto-mail 0.2.6, OpenAPI 1.0.0-draft.10): the browser carries only a single-use code and a state, never a key or secret.
+- **Stored encrypted:** the address, the key and the secret go into the Settings store (`options`), the key and the secret encrypted with `APP_SETTINGS_KEY`. They are never shown, logged or listed on the Settings page. If `APP_SETTINGS_KEY` is replaced, the page says the stored key cannot be read.
+- **`.env` still wins:** `CATTOMAIL_API_BASE_URL`, `CATTOMAIL_API_KEY` and `CATTOMAIL_WEBHOOK_SECRET` in `.env` take precedence over a connection, each by itself, and Connect is refused while one of them is set. The Delivery page and `ctnlist:diagnose` say where each value comes from.
+- **Connection state:** the Delivery page shows what is connected (the service, the catto-mail client, who connected it and when) and warns when the domain of the site's From address is not one of that client's sending domains, or cannot send yet (`GET /v1/sending-domains`, read when connecting and by **Check connection**).
+- **Disconnect:** asks the mail service to end the connection (`DELETE /v1/connection`: the key is revoked and the webhook endpoint removed), then clears the stored values. If the service cannot be reached, nothing changes. **Forget without revoking** only clears what is stored, for a service that no longer answers. **Connect again** replaces the connection.
+- **Administrators only:** connecting and disconnecting need an administrator, whatever else a role's `settings.manage` allows, because the mail service receives every campaign and every recipient's address.
+- **Refusals store nothing:** a declined request, a code that is wrong, used or older than 10 minutes, a client at its key or endpoint limit, and a mail service that cannot be reached each say why. Where the approval is still valid, Finish can be pressed again.
+- **Acceptable use policy:** `docs/AUP.md` is now ctnlist's own policy, for the people who subscribe and for those who write and send messages (subscribing, forwarding, the contact form and profile pictures; permission to send, what may not be sent, sending properly, limits and enforcement, data and law). It names no product: the page fills in this installation's list name, domain, organisation and contact address from Settings.
+- **Development route:** `CATTOMAIL_API_CONNECT_HOST` may name a port (`catto-mail:443`), and the new `CATTOMAIL_WEBHOOK_URL` gives a connection a webhook address catto-mail's development pod can reach; both are ignored outside `dev`/`test`. catto-mail's pod now joins the `cattomail-dev` network by itself. README "catto-mail development route" describes connecting with the button.
+- **Fixed:** the message form answered with a server error when a submission lacked its template field; it now saves with no template. `bin/dev cattomail-status` failed on Podman 4.9 once the `cattomail-dev` network existed.
+- **Tests:** `FakeCattoMail` covers catto-mail's connect page, `POST /v1/connect/exchange`, `DELETE /v1/connection` and `GET /v1/sending-domains` by the contract's rules. `ConnectFlowTest` proves the whole connection, every refusal, disconnecting and the precedence of `.env`; `MailServiceConnectionTest` the pages over HTTP. A real run between the two development pods passed: connect with the button, `bin/dev test-cattomail`, the signed webhooks, disconnect.
+
 ## 6.0.10 (2026-10-11)
 
 An acceptable use policy page:

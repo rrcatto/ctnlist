@@ -39,4 +39,12 @@ final class DevelopmentOnlyTest extends TestCase
         $config = (new CattoMailConfigFactory('https://mail.example.com/v1', 'key', '', '', '', '', '', '', '', '', 'catto-dev', $environment))();
         self::assertSame($allowed ? 'catto-dev' : '', $config->connectHost);
     }
+
+    /** The webhook address a connection asks for instead of APP_BASE_URL's: a development route only. */
+    #[DataProvider('environments')]
+    public function testCattoMailWebhookUrlOnlyInDevelopment(string $environment, bool $allowed): void
+    {
+        $config = (new CattoMailConfigFactory('', '', '', '', '', '', '', '', '', '', '', $environment, null, null, 'http://ctnlist-web/cattomail/webhook'))();
+        self::assertSame($allowed ? 'http://ctnlist-web/cattomail/webhook' : '', $config->webhookUrl);
+    }
 }

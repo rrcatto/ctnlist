@@ -8,20 +8,33 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 
 /**
  * A stateful stand-in for catto-mail's public /v1 API (OpenAPI
- * 1.0.0-draft.7) at the HTTP boundary, for Symfony's MockHttpClient. It
+ * 1.0.0-draft.10) at the HTTP boundary, for Symfony's MockHttpClient. It
  * enforces what ctnlist relies on: Bearer authentication, Idempotency-Key
  * semantics (same key + same body replays with Idempotent-Replayed, same key
  * + different body is 422), batch, job and request-size (413) limits, duplicate addresses,
  * subscription/transactional unsubscribe rules, submit sealing and the
  * global-opt-out capability. Faults can be injected, including "processed
  * but the response was lost", to prove that retries never duplicate work.
+ *
+ * The connect flow (draft.10): approve() and decline() stand in for
+ * catto-mail's connect page and the person at it, with that page's parameter
+ * rules; POST /v1/connect/exchange (the one operation without an API key)
+ * checks the single-use code, its 10 minutes, the redirect URI and the PKCE
+ * verifier, and answers every code it does not accept with the same
+ * invalid-connect-code; DELETE /v1/connection ends the connection of the key
+ * that asks; GET /v1/sending-domains lists the client's domains with
+ * can_send. A key issued by a connection works on every operation until its
+ * connection ends.
  */
 final class FakeCattoMail
 {
     public const BASE = 'https://cattomail.test/v1';
+    /** The installation's address: what an administrator types, and where its connect page is. */
+    public const ORIGIN = 'https://cattomail.test';
     public const KEY = 'shk_test_key_0123456789';
+    public const CONNECT_EVENTS = ['message.complained', 'message.hard_bounced', 'send.completed', 'send.failed', 'validation.completed', 'validation.failed'];
 
-    /** @var list<array{method: string, path: string, headers: array<string, string>, body: mixed}> */
+    /** @var list<array{method: string, path: string, url: string, headers: array<string, string>, body: mixed}> */
     public array $requests = [];
     /** @var array<string, array<string, mixed>> */
     public array $validationJobs = [];
@@ -42,6 +55,14 @@ final class FakeCattoMail
     public bool $finishOnRead = false;
     /** @var list<string> registered sender domains */
     public array $senderDomains = ['ctnlist.test', 'smarthost-dev.test'];
+    /** @var array<string, array{status?: string, dkim_status?: string, can_send?: bool}> a registered domain that is not (yet) verified and able to send */
+    public array $domainStates = [];
+    /** @var array<string, array<string, mixed>> connection id => the connection (its code, key and secret included) */
+    public array $connections = [];
+    /** The client approving a connection, as the exchange names it. */
+    public string $clientName = 'Example Ltd';
+    /** Why the next exchange is refused with 409 connect-refused (the client's limits or status); null: accepted. */
+    public ?string $refuseExchange = null;
     /** @var array<string, array{hash: string, status: int, location: string, id: string, result: array<string, mixed>}> */
     private array $idempotency = [];
     /** @var list<array{match: string, kind: string, after: bool}> */
@@ -58,7 +79,7 @@ final class FakeCattoMail
             $headers[strtolower(trim($name))] = trim($value);
         }
         $body = isset($options['body']) && is_string($options['body']) && $options['body'] !== '' ? json_decode($options['body'], true) : null;
-        $this->requests[] = ['method' => $method, 'path' => $path, 'headers' => $headers, 'body' => $body];
+        $this->requests[] = ['method' => $method, 'path' => $path, 'url' => $url, 'headers' => $headers, 'body' => $body];
 
         $fault = $this->takeFault($method . ' ' . $path);
         if ($fault !== null && !$fault['after']) {
@@ -68,7 +89,13 @@ final class FakeCattoMail
         if (isset($options['body']) && is_string($options['body']) && strlen($options['body']) > \App\CattoMail\CattoMailConfig::MAX_REQUEST_BYTES) {
             return self::problem(413, 'payload-too-large', sprintf('Request bodies are limited to %d bytes.', \App\CattoMail\CattoMailConfig::MAX_REQUEST_BYTES));
         }
-        if (($headers['authorization'] ?? '') !== 'Bearer ' . self::KEY) {
+        // The one operation without an API key: the code and its verifier authorise it.
+        if ($method === 'POST' && $path === '/connect/exchange') {
+            $response = $this->exchange(is_array($body) ? $body : []);
+            return $fault !== null ? $this->faultResponse($fault['kind']) : $response;
+        }
+        $this->key = str_starts_with($headers['authorization'] ?? '', 'Bearer ') ? substr($headers['authorization'], 7) : '';
+        if ($this->key !== self::KEY && $this->connectionOf($this->key) === null) {
             return self::problem(401, 'unauthorized', 'Missing or invalid API key.');
         }
         $response = $this->route($method, $path, $headers, is_array($body) ? $body : []);
@@ -88,7 +115,7 @@ final class FakeCattoMail
         }
     }
 
-    /** @return list<array{method: string, path: string, headers: array<string, string>, body: mixed}> */
+    /** @return list<array{method: string, path: string, url: string, headers: array<string, string>, body: mixed}> */
     public function requestsTo(string $method, string $pathPattern): array
     {
         return array_values(array_filter($this->requests, static fn(array $r): bool => $r['method'] === $method && preg_match('#^' . $pathPattern . '$#', $r['path']) === 1));
@@ -187,8 +214,178 @@ final class FakeCattoMail
                 : self::problem(403, 'forbidden', 'This client is not permitted to report recipient global opt-outs (an operator grants this capability).'),
             $method === 'GET' && preg_match("#^/global-suppressions/$id$#", $path, $m) === 1 => $this->found($this->optOuts[$m[1]] ?? null),
             $method === 'POST' && preg_match("#^/global-suppressions/$id/lift$#", $path, $m) === 1 => $this->lift($m[1]),
+            $method === 'DELETE' && $path === '/connection' => $this->endOwnConnection(),
+            $method === 'GET' && $path === '/sending-domains' => new MockResponse((string) json_encode(['data' => $this->sendingDomains()]), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]),
             default => self::problem(404, 'not-found', 'No such endpoint.'),
         };
+    }
+
+    // ---- connect flow ----------------------------------------------------------
+
+    /** The API key of the current request (after authentication). */
+    private string $key = '';
+
+    /**
+     * What catto-mail's connect page does when a client admin presses Connect
+     * for the request in $connectUrl (the address ctnlist sent the browser
+     * to): the parameters are checked as that page checks them, and the
+     * browser is sent back to the redirect URI with a single-use code and the
+     * state. Returns that address.
+     */
+    public function approve(string $connectUrl): string
+    {
+        $request = $this->connectRequest($connectUrl);
+        $id = $this->uuid();
+        $code = rtrim(strtr(base64_encode(hash('sha256', 'code|' . $id, true)), '+/', '-_'), '=');
+        $this->connections[$id] = ['id' => $id, 'status' => 'pending', 'code' => $code, 'expired' => false, 'api_key' => null, 'signing_secret' => null,
+            'endpoint_id' => null] + $request;
+        return $request['redirect_uri'] . (str_contains($request['redirect_uri'], '?') ? '&' : '?') . http_build_query(['code' => $code, 'state' => $request['state']], '', '&', PHP_QUERY_RFC3986);
+    }
+
+    /** The person pressed Decline: back to the redirect URI with error=access_denied and the state. */
+    public function decline(string $connectUrl): string
+    {
+        $request = $this->connectRequest($connectUrl);
+        return $request['redirect_uri'] . (str_contains($request['redirect_uri'], '?') ? '&' : '?') . http_build_query(['error' => 'access_denied',
+            'error_description' => 'The request was declined.', 'state' => $request['state']], '', '&', PHP_QUERY_RFC3986);
+    }
+
+    /** Every code issued so far is now older than its 10 minutes. */
+    public function expireCodes(): void
+    {
+        foreach ($this->connections as &$connection) {
+            $connection['expired'] = true;
+        }
+    }
+
+    /** A client admin (or an operator) ends the connection in catto-mail's dashboard. */
+    public function revokeConnection(string $id): void
+    {
+        $this->connections[$id]['status'] = 'revoked';
+    }
+
+    public function lastConnectionId(): string
+    {
+        return (string) array_key_last($this->connections);
+    }
+
+    /**
+     * The connect page's parameter rules (integration guide, section 15). A
+     * request the page would answer with 400 is a defect in ctnlist, so it
+     * fails the test instead of sending the browser anywhere.
+     *
+     * @return array{application_name: string, redirect_uri: string, webhook_url: string, state: string, code_challenge: string}
+     */
+    private function connectRequest(string $connectUrl): array
+    {
+        $refuse = static fn(string $why): never => throw new \LogicException('catto-mail\'s connect page would refuse this request (400): ' . $why);
+        if (!str_starts_with($connectUrl, self::ORIGIN . '/dashboard/connect?')) {
+            $refuse('it is not the connect page of ' . self::ORIGIN . ': ' . $connectUrl);
+        }
+        parse_str((string) parse_url($connectUrl, PHP_URL_QUERY), $query);
+        $text = static fn(string $name): string => is_string($query[$name] ?? null) ? $query[$name] : '';
+        if (array_diff(array_keys($query), ['application_name', 'redirect_uri', 'webhook_url', 'state', 'code_challenge', 'code_challenge_method']) !== []) {
+            $refuse('unknown parameters');
+        }
+        if (mb_strlen(trim($text('application_name'))) < 1 || mb_strlen($text('application_name')) > 100) {
+            $refuse('application_name must be 1 to 100 characters');
+        }
+        foreach (['redirect_uri', 'webhook_url'] as $name) {
+            $parts = parse_url($text($name));
+            if (!is_array($parts) || ($parts['scheme'] ?? '') !== 'https' || !isset($parts['host']) || isset($parts['user']) || isset($parts['fragment']) || strlen($text($name)) > 2000) {
+                $refuse($name . ' must be an absolute https URL without credentials or a fragment, at most 2000 characters');
+            }
+        }
+        if (preg_match('/^[\x21-\x7E]{1,512}$/', $text('state')) !== 1) {
+            $refuse('state must be 1 to 512 printable ASCII characters without spaces');
+        }
+        if (preg_match('/^[A-Za-z0-9_-]{43}$/', $text('code_challenge')) !== 1 || $text('code_challenge_method') !== 'S256') {
+            $refuse('code_challenge must be 43 base64url characters with code_challenge_method=S256');
+        }
+        return ['application_name' => trim($text('application_name')), 'redirect_uri' => $text('redirect_uri'), 'webhook_url' => $text('webhook_url'),
+            'state' => $text('state'), 'code_challenge' => $text('code_challenge')];
+    }
+
+    /** @param array<string, mixed> $body */
+    private function exchange(array $body): MockResponse
+    {
+        foreach (['code', 'code_verifier', 'redirect_uri'] as $name) {
+            if (!is_string($body[$name] ?? null) || $body[$name] === '') {
+                return new MockResponse((string) json_encode(self::problemBody(422, 'validation-error', 'The request body is invalid.', [['pointer' => '/' . $name, 'message' => 'Required.']])),
+                    ['http_code' => 422, 'response_headers' => ['Content-Type' => 'application/problem+json']]);
+            }
+        }
+        $refused = self::problem(400, 'invalid-connect-code', 'The code is not valid: it is unknown, used, expired or was not issued for this request.');
+        $id = null;
+        foreach ($this->connections as $connection) {
+            if (hash_equals((string) $connection['code'], $body['code'])) {
+                $id = (string) $connection['id'];
+            }
+        }
+        if ($id === null) {
+            return $refused;
+        }
+        $connection = $this->connections[$id];
+        $challenge = rtrim(strtr(base64_encode(hash('sha256', $body['code_verifier'], true)), '+/', '-_'), '=');
+        if ($connection['status'] !== 'pending' || $connection['expired'] || $connection['redirect_uri'] !== $body['redirect_uri'] || !hash_equals((string) $connection['code_challenge'], $challenge)) {
+            return $refused;
+        }
+        if ($this->refuseExchange !== null) {
+            // Nothing is created, and the code stays usable until it expires.
+            return self::problem(409, 'connect-refused', $this->refuseExchange);
+        }
+        // An earlier connection of this client to the same webhook URL is replaced.
+        foreach ($this->connections as $other => $earlier) {
+            if ($earlier['status'] === 'active' && $earlier['webhook_url'] === $connection['webhook_url']) {
+                $this->connections[$other]['status'] = 'revoked';
+            }
+        }
+        $n = count($this->connections);
+        $this->connections[$id] = ['status' => 'active', 'api_key' => 'shk_connect_' . $n . '_' . substr(hash('sha256', $id), 0, 24),
+            'signing_secret' => 'whsec_connect_' . $n . '_' . substr(hash('sha256', 'secret|' . $id), 0, 24), 'endpoint_id' => $this->uuid()] + $connection;
+        $connection = $this->connections[$id];
+        return new MockResponse((string) json_encode([
+            'connection_id' => $id, 'application_name' => $connection['application_name'], 'client_name' => $this->clientName, 'api_base_url' => self::BASE,
+            'api_key' => $connection['api_key'],
+            'webhook' => ['endpoint_id' => $connection['endpoint_id'], 'url' => $connection['webhook_url'], 'signing_secret' => $connection['signing_secret'], 'events' => self::CONNECT_EVENTS],
+            'sending_domains' => $this->sendingDomains(),
+        ]), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json', 'Cache-Control' => 'no-store']]);
+    }
+
+    /** DELETE /v1/connection: the connection of the key that asks; 404 for a key that no connection issued. */
+    private function endOwnConnection(): MockResponse
+    {
+        $id = $this->connectionOf($this->key);
+        if ($id === null) {
+            return self::problem(404, 'not-found', 'This API key was not issued by an application connection.');
+        }
+        $this->connections[$id]['status'] = 'revoked';
+        return new MockResponse('', ['http_code' => 204]);
+    }
+
+    /** The active connection that issued $key, if any. */
+    private function connectionOf(string $key): ?string
+    {
+        foreach ($this->connections as $id => $connection) {
+            if ($key !== '' && $connection['status'] === 'active' && $connection['api_key'] === $key) {
+                return (string) $id;
+            }
+        }
+        return null;
+    }
+
+    /** @return list<array<string, mixed>> the client's SendingDomain objects */
+    private function sendingDomains(): array
+    {
+        $domains = [];
+        foreach (array_values(array_unique([...$this->senderDomains, ...array_keys($this->domainStates)])) as $n => $domain) {
+            $state = $this->domainStates[$domain] ?? [];
+            $verified = ($state['status'] ?? 'verified') === 'verified';
+            $domains[] = ['id' => sprintf('0199b000-0000-7000-8000-%012x', $n + 1), 'domain' => $domain, 'status' => $state['status'] ?? 'verified',
+                'dkim_status' => $state['dkim_status'] ?? 'active', 'verified_at' => $verified ? '2026-10-06T09:00:00.000000+02:00' : null,
+                'can_send' => $state['can_send'] ?? $verified];
+        }
+        return $domains;
     }
 
     /**

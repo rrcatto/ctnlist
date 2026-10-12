@@ -77,7 +77,7 @@ final class CattoMailCheckCommand extends Command
         if ($this->config->connectHost !== '') {
             $output->writeln('Connects via: ' . $this->config->connectHost . ' (development)');
         }
-        $output->writeln('Webhook:      ' . $this->site->baseUrl . 'cattomail/webhook, secret ' . ($this->config->hasWebhookSecret() ? 'set' : 'NOT set')
+        $output->writeln('Webhook:      ' . ($this->config->webhookUrl !== '' ? $this->config->webhookUrl . ' (development)' : $this->site->baseUrl . 'cattomail/webhook') . ', secret ' . ($this->config->hasWebhookSecret() ? 'set' : 'NOT set')
             . ($this->config->hasPreviousWebhookSecret() ? ', previous secret set' : ''));
         $health = $this->health->check();
         [, $label, $advice] = CattoMailHealth::STATES[$health['state']];

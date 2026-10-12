@@ -43,7 +43,8 @@ final class MessageType extends AbstractType
             ->add('text', TextareaType::class, $text + ['label' => 'Text part', 'help' => 'Plain-text alternative for mail clients that do not show HTML.', 'attr' => ['rows' => 12, 'class' => 'font-monospace']])
             ->add('listIds', ChoiceType::class, ['label' => 'To lists', 'choices' => $lists, 'multiple' => true, 'expanded' => true, 'required' => false,
                 'invalid_message' => 'Choose lists from the list.'])
-            ->add('templateId', ChoiceType::class, ['label' => 'Template', 'choices' => $templates, 'placeholder' => false, 'required' => false,
+            // empty_data: a submission without the field means "none", as an empty number means 0 (never a null for the model).
+            ->add('templateId', ChoiceType::class, ['label' => 'Template', 'choices' => $templates, 'placeholder' => false, 'required' => false, 'empty_data' => '0',
                 'invalid_message' => 'Choose a template from the list.'])
             ->add('fromName', TextType::class, $text + ['label' => 'From name', 'attr' => ['maxlength' => 100]])
             ->add('fromAddress', TextType::class, $text + ['label' => 'From address', 'attr' => ['maxlength' => 254, 'inputmode' => 'email']])

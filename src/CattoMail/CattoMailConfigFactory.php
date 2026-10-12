@@ -6,7 +6,11 @@ namespace App\CattoMail;
 
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
-/** Builds CattoMailConfig from the installation's .env (infrastructure, not Settings). */
+/**
+ * Builds CattoMailConfig from the installation's .env and, for the address, the API key and the
+ * webhook secret that .env leaves empty, from the connection made on the Delivery page
+ * (ConnectionStore). Infrastructure, not editable Settings.
+ */
 final class CattoMailConfigFactory
 {
     public function __construct(
@@ -24,15 +28,29 @@ final class CattoMailConfigFactory
         #[Autowire('%kernel.environment%')] private readonly string $environment,
         #[Autowire('%env(default::CATTOMAIL_WEBHOOK_BODY_RETENTION_DAYS)%')] private readonly ?string $webhookRetention = null,
         #[Autowire('%env(default::CATTOMAIL_DETAIL_RETENTION_DAYS)%')] private readonly ?string $detailRetention = null,
+        #[Autowire('%env(default::CATTOMAIL_WEBHOOK_URL)%')] private readonly ?string $webhookUrl = null,
+        private readonly ?ConnectionStore $connection = null,
     ) {
     }
 
     public function __invoke(): CattoMailConfig
     {
+        $development = in_array($this->environment, ['dev', 'test'], true);
+        $stored = $this->connection?->credentials();
+        $values = [];
+        $sources = [];
+        // .env wins for each value it sets; the connection supplies the rest.
+        foreach (['base_url' => $this->baseUrl, 'api_key' => $this->apiKey, 'webhook_secret' => $this->webhookSecret] as $name => $env) {
+            $env = trim((string) $env);
+            $values[$name] = $env !== '' ? $env : trim($stored[$name] ?? '');
+            if ($values[$name] !== '') {
+                $sources[$name] = $env !== '' ? CattoMailConfig::SOURCE_ENV : CattoMailConfig::SOURCE_CONNECTION;
+            }
+        }
         return new CattoMailConfig(
-            trim((string) $this->baseUrl),
-            trim((string) $this->apiKey),
-            trim((string) $this->webhookSecret),
+            $values['base_url'],
+            $values['api_key'],
+            $values['webhook_secret'],
             trim((string) $this->previousWebhookSecret),
             filter_var($this->globalOptOut, FILTER_VALIDATE_BOOLEAN),
             trim((string) $this->caFile),
@@ -41,10 +59,14 @@ final class CattoMailConfigFactory
             filter_var($this->trackOpens, FILTER_VALIDATE_BOOLEAN),
             filter_var($this->trackClicks, FILTER_VALIDATE_BOOLEAN),
             // A development routing aid only; production always connects to the base URL's own host.
-            in_array($this->environment, ['dev', 'test'], true) ? trim((string) $this->connectHost) : '',
+            $development ? trim((string) $this->connectHost) : '',
             // At least a week: a body may be needed to diagnose or reprocess a recent event.
             is_numeric($this->webhookRetention) ? max(7, (int) $this->webhookRetention) : 90,
             is_numeric($this->detailRetention) ? max(30, (int) $this->detailRetention) : 365,
+            $sources,
+            (string) ($stored['problem'] ?? ''),
+            // A development routing aid too; production always asks for webhooks at APP_BASE_URL.
+            $development ? trim((string) $this->webhookUrl) : '',
         );
     }
 }

@@ -271,28 +271,51 @@ final class LayoutTest extends SmokeTestCase
         return $client;
     }
 
-    /** The acceptable use policy is a page built from docs/AUP.md of the release. */
+    /**
+     * The acceptable use policy is a page built from docs/AUP.md of the release
+     * that names this installation: its list name, domain, organisation and
+     * contact address, never a product.
+     */
     public function testTheAcceptableUsePolicyPage(): void
     {
-        $page = self::request(self::client(), 'GET', '/acceptable-use-policy');
-        self::assertSame(200, $page['status']);
         $source = (string) file_get_contents(dirname(__DIR__, 2) . '/docs/AUP.md');
         $title = self::match('/^#\s+(.+)$/m', $source, 'the document has a title')[1];
-        self::assertStringContainsString('<h1>' . htmlspecialchars(trim($title)) . '</h1>', $page['body']);
-        self::assertStringContainsString(htmlspecialchars(trim($title)) . '</title>', $page['body']);
         preg_match_all('/^##\s+(.+)$/m', $source, $sections);
         self::assertGreaterThanOrEqual(3, count($sections[1]));
-        foreach ($sections[1] as $section) {
-            self::assertStringContainsString('<h2>' . htmlspecialchars(trim($section)) . '</h2>', $page['body']);
-        }
-        self::assertStringContainsString('<table class="table align-middle">', $page['body']);
-        self::assertStringContainsString('<th scope="col">Measure</th>', $page['body']);
-        self::assertMatchesRegularExpression('#<ol><li>[^<]+<ul><li>#', $page['body'], 'numbered rules with nested points');
-        self::assertStringNotContainsString('| ---', $page['body'], 'no Markdown is left over');
-        // It is a page of the site like any other: the layout, the footer, and a policy the browser enforces.
-        self::assertStringContainsString('<footer class="app-footer', $page['body']);
-        self::assertStringContainsString("script-src 'self' 'nonce-", $page['headers']['content-security-policy'] ?? '');
-        self::assertStringNotContainsString(' style="', $page['body']);
+        self::withSetting('APP_LIST_NAME', 'Example & Co News', static function () use ($title, $sections): void {
+            self::withSetting('APP_ORGANISATION', 'Example <Org> (Pty) Ltd', static function () use ($title, $sections): void {
+                self::withSetting('CONTACT_MAIL_ADDRESS', 'abuse_desk@lists.example.org', static function () use ($title, $sections): void {
+                    $page = self::request(self::client(), 'GET', '/acceptable-use-policy');
+                    self::assertSame(200, $page['status']);
+                    $shown = htmlspecialchars(str_replace('{{site_name}}', 'Example & Co News', trim($title)));
+                    self::assertStringContainsString('<h1>' . $shown . '</h1>', $page['body']);
+                    self::assertStringContainsString($shown . '</title>', $page['body']);
+                    foreach ($sections[1] as $section) {
+                        self::assertStringContainsString('<h2>' . htmlspecialchars(trim($section)) . '</h2>', $page['body']);
+                    }
+                    $policy = self::match('#<article class="card app-policy">(.*?)</article>#s', $page['body'], 'the policy article')[1];
+                    self::assertStringContainsString('the mailing lists run by Example &lt;Org&gt; (Pty) Ltd:', $policy, 'configured values are escaped');
+                    self::assertStringContainsString('You may not use Example &amp; Co News to send:', $policy);
+                    self::assertStringContainsString('to abuse_desk@lists.example.org.', $policy);
+                    self::assertStringNotContainsString('{{', $policy, 'every placeholder is filled');
+                    self::assertDoesNotMatchRegularExpression('/catto|ctnlist/i', $policy, 'the policy names the installation, never a product');
+                    self::assertStringContainsString('<table class="table align-middle">', $policy);
+                    self::assertStringContainsString('<th scope="col">Measure</th>', $policy);
+                    self::assertMatchesRegularExpression('#<ol><li>[^<]+<ul><li>#', $policy, 'numbered rules with nested points');
+                    self::assertStringNotContainsString('| ---', $policy, 'no Markdown is left over');
+                    // It is a page of the site like any other: the layout, the footer, and a policy the browser enforces.
+                    self::assertStringContainsString('<footer class="app-footer', $page['body']);
+                    self::assertStringContainsString("script-src 'self' 'nonce-", $page['headers']['content-security-policy'] ?? '');
+                    self::assertStringNotContainsString(' style="', $page['body']);
+                });
+            });
+        });
+        // Without an organisation the policy still says who runs the lists.
+        self::withSetting('APP_LIST_NAME', 'Example News', static function (): void {
+            self::withSetting('APP_ORGANISATION', '', static function (): void {
+                self::assertStringContainsString('the mailing lists run by the operator of Example News:', self::request(self::client(), 'GET', '/acceptable-use-policy')['body']);
+            });
+        });
         self::assertSame(405, self::request(self::client(), 'POST', '/acceptable-use-policy')['status']);
     }
 }

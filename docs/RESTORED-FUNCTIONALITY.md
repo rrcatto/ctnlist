@@ -95,7 +95,8 @@ These are part of the v5 baseline and are preserved deliberately; change them on
 Made while porting to Symfony, where the v5 behaviour was a defect rather than a workflow:
 
 - Contact-form values are HTML-escaped in the contact-form mail (v5 inserted them raw).
-- The footer links to an acceptable use policy page (`/acceptable-use-policy`, built from `docs/AUP.md`), added in 6.0.10 at the owner's request; v5 had no such page.
+- The footer links to an acceptable use policy page (`/acceptable-use-policy`, built from `docs/AUP.md`), added in 6.0.10 at the owner's request; v5 had no such page. The policy is ctnlist's own (for subscribers and for senders) and names the installation from its Settings.
+- The mail service is connected from the Delivery page (Connect, Disconnect): its API key and webhook secret are handed over by the service and stored encrypted, instead of being copied into `.env`. `.env` still works and takes precedence. v5 sent through SMTP servers and had nothing of the kind.
 - The profile form's country list has a blank choice (v5 silently stored the first country, Afghanistan, when none was chosen).
 - A sign-in link is claimed atomically, so two simultaneous sign-ins with it cannot both succeed.
 - Opening a sign-in link shows a page with a Sign in button (Continue for a link to confirm a list), and only that button signs in and uses the link up. In v5 opening the link signed in, so a mail scanner or link preview that opened it first used it up.

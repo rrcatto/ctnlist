@@ -1,9 +1,10 @@
 {% extends 'base.html.twig' %}
 
 {% block title %}{{ title }}{% endblock %}
-{% block description %}The rules for mail sent through the mail service of {{ site.listName }}.{% endblock %}
+{% block description %}The rules for the subscribers of {{ site.listName }} and for whoever writes and sends its messages.{% endblock %}
 
-{# The acceptable use policy, built from docs/AUP.md by App\Util\Markdown, which escapes all of the document's text. #}
+{# The acceptable use policy, built from docs/AUP.md by App\Util\Markdown, which escapes all of the document's text;
+   PageController fills in the installation's name, domain, organisation and contact address. #}
 {% block content %}
 <article class="card app-policy">
   <div class="card-body d-block">

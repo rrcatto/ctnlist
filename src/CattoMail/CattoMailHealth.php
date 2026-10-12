@@ -22,11 +22,11 @@ final class CattoMailHealth
     /** state => [Bootstrap colour, short label, what to do] */
     public const STATES = [
         'ok' => ['success', 'Reachable and authenticated', 'catto-mail answered with this client\'s API key.'],
-        'not_configured' => ['secondary', 'Not configured', 'Set CATTOMAIL_API_BASE_URL and CATTOMAIL_API_KEY in the installation\'s .env.'],
-        'dns' => ['danger', 'Host name not found', 'The API host does not resolve from this server (check CATTOMAIL_API_BASE_URL, or in development CATTOMAIL_API_CONNECT_HOST and the shared network).'],
+        'not_configured' => ['secondary', 'Not configured', 'Connect the mail service on this page, or set CATTOMAIL_API_BASE_URL and CATTOMAIL_API_KEY in the installation\'s .env.'],
+        'dns' => ['danger', 'Host name not found', 'The API host does not resolve from this server (check the mail service\'s address, or in development CATTOMAIL_API_CONNECT_HOST and the shared network).'],
         'connection' => ['danger', 'Cannot connect', 'Nothing answered on the API address (catto-mail down, firewall, or the development network not attached).'],
         'tls' => ['danger', 'TLS failure', 'The certificate was not trusted or the TLS handshake failed (in development check CATTOMAIL_CA_FILE).'],
-        'auth_rejected' => ['danger', 'API key rejected', 'catto-mail refused the API key: check CATTOMAIL_API_KEY (revoked, mistyped or for another installation).'],
+        'auth_rejected' => ['danger', 'API key rejected', 'catto-mail refused the API key. A connection made on this page was probably ended at the mail service: connect again. With .env, check CATTOMAIL_API_KEY (revoked, mistyped or for another installation).'],
         'forbidden' => ['warning', 'Client not permitted', 'The key is valid but the client may not use the API (ask the catto-mail operator).'],
         'unavailable' => ['warning', 'Temporarily unavailable', 'catto-mail answered with a temporary error or rate limit; try again shortly.'],
         'unexpected' => ['warning', 'Unexpected answer', 'catto-mail answered, but not as the API contract describes; see the detail.'],
@@ -36,6 +36,7 @@ final class CattoMailHealth
         private readonly CattoMailClient $client,
         private readonly OptionRepository $options,
         private readonly ClockInterface $clock,
+        private readonly ?SendingDomainCheck $domains = null,
     ) {
     }
 
@@ -58,6 +59,14 @@ final class CattoMailHealth
             'checked_at' => $this->clock->now()->format('Y-m-d H:i:s'),
         ];
         $this->options->set(self::KEY, (string) json_encode($result));
+        if ($state === self::OK) {
+            try {
+                // Whether the site's From domain can send is part of what the Delivery page says about the connection.
+                $this->domains?->refresh();
+            } catch (CattoMailException) {
+                // The connection itself answered; the last known sending domains stay.
+            }
+        }
         return $result;
     }
 

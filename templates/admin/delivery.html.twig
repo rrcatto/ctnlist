@@ -15,9 +15,13 @@
 {% endembed %}
 
 <div class="row g-7">
+  <div class="col-12">
+    {% include 'admin/_delivery_connection.html.twig' %}
+  </div>
+
   <div class="lg:col-6">
     <div class="card h-100">
-      <div class="card-header fw-semibold">Connection</div>
+      <div class="card-header fw-semibold">Connection check</div>
       <div class="card-body small">
         {% if problem %}
           <div class="alert theme-warning" role="note"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div>{{ problem }}</div></div>
@@ -33,7 +37,7 @@
         <dl class="row mb-0">
           <dt class="sm:col-5">API</dt><dd class="sm:col-7 text-break"><code>{{ api_root ?: '—' }}</code></dd>
           {% if connect_host %}<dt class="sm:col-5">Connects through</dt><dd class="sm:col-7"><code>{{ connect_host }}</code> <span class="badge badge-subtle theme-secondary">development</span></dd>{% endif %}
-          <dt class="sm:col-5">API key</dt><dd class="sm:col-7">{{ problem ? 'not set' : 'set in .env (never shown)' }}</dd>
+          <dt class="sm:col-5">API key</dt><dd class="sm:col-7">{{ sources.api_key == 'connection' ? 'from the connection, stored encrypted (never shown)' : (sources.api_key == 'env' ? 'set in .env (never shown)' : 'not set') }}</dd>
           <dt class="sm:col-5">Custom CA file</dt><dd class="sm:col-7">{{ ca_file ? 'yes' : 'no' }}</dd>
           <dt class="sm:col-5">Last successful call</dt><dd class="sm:col-7">{{ activity.last_ok ? activity.last_ok|slice(0, 16) : '—' }}</dd>
           <dt class="sm:col-5">Last API error</dt><dd class="sm:col-7 text-break">{% if activity.last_error %}<span class="fg-2">{{ activity.last_error_at|slice(0, 16) }}</span> {{ activity.last_error|slice(0, 300) }}{% else %}—{% endif %}</dd>
@@ -49,8 +53,8 @@
       <div class="card-header fw-semibold">Webhooks and worker</div>
       <div class="card-body small">
         <dl class="row">
-          <dt class="sm:col-5">Endpoint to register</dt><dd class="sm:col-7"><code class="text-break">{{ url('cattomail_webhook') }}</code></dd>
-          <dt class="sm:col-5">Signing secret</dt><dd class="sm:col-7">{% if secrets.current %}set{% else %}<span class="fg-danger">not set: webhooks are refused (CATTOMAIL_WEBHOOK_SECRET)</span>{% endif %}</dd>
+          <dt class="sm:col-5">Endpoint</dt><dd class="sm:col-7"><code class="text-break">{{ webhook_url }}</code>{% if sources.webhook_secret != 'connection' %}<br><span class="fg-2">A connection registers it by itself; with .env, register it at the mail service by hand.</span>{% endif %}</dd>
+          <dt class="sm:col-5">Signing secret</dt><dd class="sm:col-7">{% if sources.webhook_secret == 'connection' %}from the connection, stored encrypted{% elseif secrets.current %}set in .env{% else %}<span class="fg-danger">not set: webhooks are refused (connect the mail service, or CATTOMAIL_WEBHOOK_SECRET in .env)</span>{% endif %}</dd>
           <dt class="sm:col-5">Previous secret</dt><dd class="sm:col-7 mb-0">{{ secrets.previous ? 'set: the rotated-out secret is still accepted (remove it once catto-mail stops signing with it)' : 'not set' }}</dd>
         </dl>
         <hr>

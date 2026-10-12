@@ -9,11 +9,15 @@ use App\CattoMail\CattoMailClient;
 use App\CattoMail\CattoMailConfig;
 use App\CattoMail\CattoMailException;
 use App\CattoMail\CattoMailHealth;
+use App\CattoMail\ConnectFlow;
+use App\CattoMail\ConnectionStore;
 use App\CattoMail\GlobalOptOut;
+use App\CattoMail\SendingDomainCheck;
 use App\CattoMail\SendJobAdmin;
 use App\CattoMail\SendJobSync;
 use App\CattoMail\WebhookProcessor;
 use App\Config\ConfigFingerprint;
+use App\Form\Type\MailServiceType;
 use App\Http\Pagination;
 use App\Maintenance\MaintenanceActivity;
 use App\Maintenance\StuckWork;
@@ -66,7 +70,7 @@ final class DeliveryController extends AbstractController
     #[IsGranted('logs.view')]
     public function index(CattoMailConfig $config, CattoMailHealth $health, CattoMailActivity $activity, CattoMailStatusRepository $status,
         CattoMailWebhookRepository $webhooks, Request $request, StuckWork $stuck, MaintenanceActivity $maintenance, CattoMailOptOutRepository $optOuts,
-        ConfigFingerprint $fingerprint): Response
+        ConfigFingerprint $fingerprint, ConnectFlow $connect, ConnectionStore $connection, SendingDomainCheck $domains, #[CurrentUser] SubscriberUser $user): Response
     {
         $muid = trim($request->query->getString('m'));
         if ($muid !== '') {
@@ -74,8 +78,23 @@ final class DeliveryController extends AbstractController
         }
         $activityNow = $activity->snapshot();
         $workerAge = $activityNow['worker_run'] !== null ? time() - (int) strtotime($activityNow['worker_run']) : null;
+        $stored = $connection->details();
+        // The connection changed after the worker's last run: its fingerprint is of the earlier configuration, not of another one.
+        $changedSinceWorkerRun = $connect->changedAt() !== null && ($activityNow['worker_run'] === null || $activityNow['worker_run'] <= $connect->changedAt());
         return $this->render('admin/delivery.html.twig', [
             'problem' => $config->problem(),
+            'configured' => $config->isConfigured(),
+            'uses_connection' => $config->usesConnection(),
+            'connection' => $stored,
+            'connection_problem' => $config->connectionProblem,
+            'env_settings' => $config->envSettings(),
+            'sources' => ['api_key' => $config->source('api_key'), 'webhook_secret' => $config->source('webhook_secret')],
+            'webhook_url' => $connect->webhookUrl(),
+            'from_domain' => $domains->fromAddress(),
+            // Connecting and disconnecting are for administrators only (DeliveryConnectionController).
+            'is_administrator' => $user->isAdministrator(),
+            'connect_obstacle' => $connect->obstacle(),
+            'connect_form' => $user->isAdministrator() ? $this->createForm(MailServiceType::class, ['service' => $stored['service'] ?? ''])->createView() : null,
             'api_root' => trim($config->baseUrl) === '' ? '' : self::withoutCredentials($config->apiRoot()),
             'connect_host' => $config->connectHost,
             'ca_file' => $config->caFile !== '',
@@ -89,7 +108,7 @@ final class DeliveryController extends AbstractController
             // The worker should run every minute or so; well past the reconciliation interval it is not running.
             'worker_stale' => $config->isConfigured() && ($workerAge === null || $workerAge > max(600, 2 * $config->reconcileAfterSeconds)),
             // The worker ran with another .env, database or credentials than this web server.
-            'worker_config_differs' => $activityNow['worker_config'] !== null && $activityNow['worker_config'] !== $fingerprint->value(),
+            'worker_config_differs' => $activityNow['worker_config'] !== null && $activityNow['worker_config'] !== $fingerprint->value() && !$changedSinceWorkerRun,
             'counts' => $status->counts(),
             'stuck' => $stuck->counts(),
             'stuck_minutes' => intdiv($stuck->threshold(), 60),

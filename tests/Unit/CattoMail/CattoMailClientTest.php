@@ -187,6 +187,76 @@ final class CattoMailClientTest extends TestCase
         }
     }
 
+    /** The connect operations use their own API root and key: never the configured client's, and none for the exchange. */
+    public function testConnectOperationsCarryTheirOwnKeyOrNone(): void
+    {
+        [$client, $fake] = $this->client();
+        $back = $fake->approve(FakeCattoMail::ORIGIN . '/dashboard/connect?' . http_build_query(['application_name' => 'Lists', 'redirect_uri' => 'https://ctnlist.test/cb',
+            'webhook_url' => 'https://ctnlist.test/cattomail/webhook', 'state' => 'abc', 'code_challenge' => rtrim(strtr(base64_encode(hash('sha256', str_repeat('v', 43), true)), '+/', '-_'), '='),
+            'code_challenge_method' => 'S256']));
+        parse_str((string) parse_url($back, PHP_URL_QUERY), $answer);
+        $code = is_string($answer['code'] ?? null) ? $answer['code'] : '';
+
+        $credentials = $client->exchangeConnectCode(FakeCattoMail::ORIGIN, $code, str_repeat('v', 43), 'https://ctnlist.test/cb');
+        self::assertSame(FakeCattoMail::BASE, $credentials['api_base_url']);
+        self::assertSame(FakeCattoMail::CONNECT_EVENTS, $credentials['webhook']['events']);
+        self::assertArrayNotHasKey('authorization', $fake->requests[0]['headers'], 'the exchange is the one request without an API key');
+
+        // The same code again: refused, and neither the code nor the verifier is in the message.
+        try {
+            $client->exchangeConnectCode(FakeCattoMail::ORIGIN, $code, str_repeat('v', 43), 'https://ctnlist.test/cb');
+            self::fail('a code worked twice');
+        } catch (CattoMailRejected $e) {
+            self::assertSame(400, $e->status);
+            self::assertStringEndsWith('/invalid-connect-code', $e->problemType);
+            self::assertStringNotContainsString($code, $e->getMessage());
+            self::assertStringNotContainsString('rejected the API key', $e->getMessage(), 'no advice about the configured key');
+        }
+
+        // The key works like any other, lists the sending domains, and ends its own connection.
+        $connected = new CattoMailClient(new MockHttpClient($fake->handler(), FakeCattoMail::BASE), new CattoMailConfig('https://cattomail.test', $credentials['api_key'], ''), $this->logger());
+        self::assertSame(['domain' => 'ctnlist.test', 'status' => 'verified', 'dkim_status' => 'active', 'can_send' => true], $connected->listSendingDomains()[0]);
+        $client->deleteConnection(FakeCattoMail::BASE, $credentials['api_key']);
+        self::assertSame('Bearer ' . $credentials['api_key'], $fake->requests[3]['headers']['authorization'], 'the connection\'s key, not the configured one');
+        self::assertSame(401, $connected->probe()['status'], 'the key ended with its connection');
+        try {
+            $client->deleteConnection(FakeCattoMail::BASE, FakeCattoMail::KEY);
+            self::fail('ended a connection that does not exist');
+        } catch (CattoMailRejected $e) {
+            self::assertSame(404, $e->status, 'a key that no connection issued');
+        }
+        self::assertSame([], array_filter($this->logged, static fn(string $line): bool => str_contains($line, $credentials['api_key']) || str_contains($line, $code)), 'no key and no code in the log');
+    }
+
+    /** The development route: another host name and, with host:port, another port; the request still names the API host. */
+    public function testTheDevelopmentRouteMapsHostAndPort(): void
+    {
+        self::assertSame(['catto-mail', 443], CattoMailClient::connectTarget('catto-mail:443'));
+        self::assertSame(['catto-mail', null], CattoMailClient::connectTarget(' catto-mail '));
+        self::assertSame(['127.0.0.1', 8443], CattoMailClient::connectTarget('127.0.0.1:8443'));
+        self::assertSame(['', null], CattoMailClient::connectTarget(''));
+
+        /** @var \ArrayObject<int, array{url: string, resolve: mixed, headers: mixed}> $seen */
+        $seen = new \ArrayObject();
+        $http = new MockHttpClient(static function (string $method, string $url, array $options) use ($seen): MockResponse {
+            $seen->append(['url' => $url, 'resolve' => $options['resolve'] ?? [], 'headers' => $options['headers'] ?? []]);
+            return new MockResponse('{"type":"x/not-found","status":404}', ['http_code' => 404]);
+        });
+        $client = new CattoMailClient($http, new CattoMailConfig('https://localhost:8443', 'shk_x', '', connectHost: '127.0.0.9:443'), $this->logger());
+        self::assertSame(404, $client->probe()['status']);
+        $first = $seen->getArrayCopy()[0];
+        self::assertStringStartsWith('https://localhost/v1/send-jobs/', $first['url'], 'port 443, where the service answers inside the development network, not 8443');
+        self::assertSame(['localhost' => '127.0.0.9'], $first['resolve']);
+        self::assertContains('Host: localhost:8443', $first['headers'], 'the API host as the base URL names it');
+
+        // Without a port only the host is mapped, as before.
+        $client = new CattoMailClient($http, new CattoMailConfig('https://localhost:8443', 'shk_x', '', connectHost: '127.0.0.9'), $this->logger());
+        $client->probe();
+        $second = $seen->getArrayCopy()[1];
+        self::assertStringStartsWith('https://localhost:8443/v1/send-jobs/', $second['url']);
+        self::assertSame(['localhost' => '127.0.0.9'], $second['resolve']);
+    }
+
     public function testConfigurationAndInputGuards(): void
     {
         $client = new CattoMailClient(new MockHttpClient(), new CattoMailConfig('', '', ''), $this->logger());

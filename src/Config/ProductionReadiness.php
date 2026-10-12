@@ -13,7 +13,7 @@ namespace App\Config;
  *
  * @phpstan-type Finding array{0: 'OK'|'WARN'|'ERROR', 1: string}
  * @phpstan-type Values array{environment: string, debug: bool, app_secret: string, base_url: string, mailer_dsn: string,
- *     suppression: string, connect_host: string, trusted_proxies: string, cattomail_secrets: array<string, string>, addresses: array<string, string>}
+ *     suppression: string, connect_host: string, webhook_url?: string, trusted_proxies: string, cattomail_secrets: array<string, string>, addresses: array<string, string>}
  */
 final class ProductionReadiness
 {
@@ -59,6 +59,9 @@ final class ProductionReadiness
             'SUPPRESSION_PROVIDER=none is for development only (refused outside APP_ENV dev/test)');
         if (trim($values['connect_host']) !== '') {
             $findings[] = ['WARN', 'CATTOMAIL_API_CONNECT_HOST is set: it is a development aid and is ignored outside APP_ENV dev/test; remove it'];
+        }
+        if (trim($values['webhook_url'] ?? '') !== '') {
+            $findings[] = ['WARN', 'CATTOMAIL_WEBHOOK_URL is set: it is a development aid and is ignored outside APP_ENV dev/test; remove it'];
         }
 
         $proxies = array_filter(array_map('trim', explode(',', $values['trusted_proxies'])));

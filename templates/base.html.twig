@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="{{ asset('lib/bootstrap-icons/bootstrap-icons.min.css') }}">
   <link rel="stylesheet" href="{{ asset('styles/app.css') }}">
   {% block stylesheets %}{% endblock %}
+  {% block head %}{% endblock %}
   {{ importmap('app', {nonce: csp_nonce()}) }}
 </head>
 <body class="d-flex flex-column min-vh-100">
