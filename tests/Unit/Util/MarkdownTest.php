@@ -75,16 +75,15 @@ final class MarkdownTest extends TestCase
             self::assertStringNotContainsStringIgnoringCase($name, $markdown);
         }
         preg_match_all('/\{\{[^}]*\}\}/', $markdown, $placeholders);
-        self::assertEqualsCanonicalizing(['{{site_name}}', '{{domain}}', '{{organisation}}', '{{contact}}'], array_values(array_unique($placeholders[0])));
+        self::assertEqualsCanonicalizing(['{{site_name}}', '{{domain}}', '{{organisation}}'], array_values(array_unique($placeholders[0])));
         // The placeholders survive rendering untouched, so the page can fill them in.
         self::assertStringContainsString('<h1>{{site_name}} Acceptable Use Policy</h1>', $html);
         self::assertMatchesRegularExpression('/^Version [A-Za-z0-9][A-Za-z0-9._-]*/m', $markdown);
-        // Abuse reports and complaints go to the abuse mailbox of the installation's domain, never to the contact address.
+        // One address in the whole policy: abuse@ the installation's domain, for abuse reports and complaints.
+        // Never the administrator's or the contact address, in any form.
         self::assertStringContainsString('to abuse@{{domain}}.', $markdown);
-        foreach (preg_split('/\R/', $markdown) ?: [] as $line) {
-            if (preg_match('/\babuse\b/i', $line) === 1 && preg_match('/\breport|\bcomplain/i', $line) === 1) {
-                self::assertStringNotContainsString('{{contact}}', $line);
-            }
-        }
+        self::assertSame(1, substr_count($markdown, '@'), 'no other address');
+        self::assertStringNotContainsString('{{contact}}', $markdown);
+        self::assertDoesNotMatchRegularExpression('/\badmin(istrator)?\b.*@|questions about this policy/i', $markdown);
     }
 }

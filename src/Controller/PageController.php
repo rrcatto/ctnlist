@@ -43,11 +43,12 @@ final class PageController extends AbstractController
      * The acceptable use policy, built from docs/AUP.md of the release: the
      * rules for this site's subscribers and for whoever writes and sends its
      * messages. The document names no product and no domain; its placeholders
-     * are filled with this installation's own name, domain, organisation and
-     * contact address (Settings), after rendering and escaped, so a configured
-     * value is shown exactly as written. Abuse reports and complaints go to
-     * abuse@<domain> (the document writes abuse@{{domain}}), never to the
-     * contact address, which is named for questions about the policy. App\Util\Markdown escapes all of the
+     * are filled with this installation's own name, domain and organisation
+     * (Settings), after rendering and escaped, so a configured value is shown
+     * exactly as written. The page carries one address only: abuse@<domain>,
+     * where abuse reports and complaints go (the document writes
+     * abuse@{{domain}}). The administrator's and contact addresses are never
+     * on it, not even in the footer. App\Util\Markdown escapes all of the
      * document's text, so its HTML is printed as it is.
      */
     #[Route('/acceptable-use-policy', name: 'acceptable_use_policy', methods: ['GET'])]
@@ -61,12 +62,13 @@ final class PageController extends AbstractController
             '{{site_name}}' => $site->listName,
             '{{domain}}' => $site->domain,
             '{{organisation}}' => $site->organisation !== '' ? $site->organisation : 'the operator of ' . $site->listName,
-            '{{contact}}' => $site->contactEmail !== '' ? $site->contactEmail : 'the administrator of this site',
         ];
         $escaped = array_map(static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), $names);
         return $this->render('page/policy.html.twig', [
             'title' => strtr(Markdown::title($markdown) ?? 'Acceptable Use Policy', $names),
             'policy' => new Markup(strtr(Markdown::toHtml($markdown), $escaped), 'UTF-8'),
+            // One address on this page, the policy's abuse address: the footer leaves the administrator's out.
+            'footer_without_administrator' => true,
         ]);
     }
 }

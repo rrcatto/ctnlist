@@ -7,7 +7,7 @@ Project documentation lives here. Three kinds of file stay where their tools exp
 | [claude-project-instructions.md](claude-project-instructions.md) | Instructions for a Claude project (the Claude web or desktop app) about ctnlist. |
 | [project-status.md](project-status.md) | Where the project stands: what is released, what is waiting for a decision, what to check at deployment. Dated; update it with each release. |
 | [RESTORED-FUNCTIONALITY.md](RESTORED-FUNCTIONALITY.md) | The v5 workflows that are the behavioural baseline, and the deliberate changes from v5. |
-| [AUP.md](AUP.md) | ctnlist's acceptable use policy, for subscribers and for whoever writes and sends messages. The site's `/acceptable-use-policy` page is built from this file, so it is read at run time; its placeholders (`{{site_name}}`, `{{domain}}`, `{{organisation}}`, `{{contact}}`) are filled with the installation's own Settings, and the file itself names no product or domain. Abuse reports and complaints go to `abuse@{{domain}}`, never to `{{contact}}`. |
+| [AUP.md](AUP.md) | ctnlist's acceptable use policy, for subscribers and for whoever writes and sends messages. The site's `/acceptable-use-policy` page is built from this file, so it is read at run time; its placeholders (`{{site_name}}`, `{{domain}}`, `{{organisation}}`) are filled with the installation's own Settings, and the file itself names no product or domain. Abuse reports and complaints go to `abuse@{{domain}}`, the only address in it: never the administrator's or contact address. |
 
 ## Setting up the Claude project
 

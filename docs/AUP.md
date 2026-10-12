@@ -76,4 +76,3 @@ Senders are the administrators, and anyone else whose role lets them add subscri
 4. This policy is governed by the law of South Africa.
 5. This policy may change. A new version gets a new version number.
 6. Report abuse, and send complaints about mail from {{site_name}}, to abuse@{{domain}}.
-7. Questions about this policy go to {{contact}}.

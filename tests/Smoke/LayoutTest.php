@@ -273,8 +273,8 @@ final class LayoutTest extends SmokeTestCase
 
     /**
      * The acceptable use policy is a page built from docs/AUP.md of the release
-     * that names this installation: its list name, domain, organisation and
-     * contact address, never a product.
+     * that names this installation: its list name, domain and organisation,
+     * never a product. It shows one address only, abuse@ the domain.
      */
     public function testTheAcceptableUsePolicyPage(): void
     {
@@ -296,11 +296,17 @@ final class LayoutTest extends SmokeTestCase
                     $policy = self::match('#<article class="card app-policy">(.*?)</article>#s', $page['body'], 'the policy article')[1];
                     self::assertStringContainsString('the mailing lists run by Example &lt;Org&gt; (Pty) Ltd:', $policy, 'configured values are escaped');
                     self::assertStringContainsString('You may not use Example &amp; Co News to send:', $policy);
-                    // Abuse reports and complaints go to the abuse mailbox of the installation's domain, never to the contact address.
+                    // Abuse reports and complaints go to the abuse mailbox of the installation's domain.
                     $domain = self::match('#who uses Example &amp; Co News \(([a-z0-9.-]+)\)#', $policy, 'the installation\'s domain')[1];
                     self::assertStringContainsString('Report abuse, and send complaints about mail from Example &amp; Co News, to abuse@' . $domain . '.', $policy);
-                    self::assertStringContainsString('Questions about this policy go to front_desk@lists.example.org.', $policy);
-                    self::assertSame(1, substr_count($policy, 'front_desk@lists.example.org'), 'the contact address is named for questions only');
+                    // That is the only address on the whole page: neither the contact nor the administrator's address
+                    // is in the policy or in this page's footer, which shows it everywhere else.
+                    self::assertStringNotContainsString('front_desk@lists.example.org', $page['body']);
+                    self::assertStringNotContainsString('admin@ctnlist.test', $page['body']);
+                    self::assertStringNotContainsString('mailto:', $page['body']);
+                    self::assertSame(1, preg_match_all('/[\w.+-]+@[\w.-]+\w/', strip_tags($page['body']), $addresses), 'one address on the page');
+                    self::assertSame('abuse@' . $domain, $addresses[0][0]);
+                    self::assertStringContainsString('mailto:admin@ctnlist.test', self::request(self::client(), 'GET', '/privacy')['body'], 'other pages keep the administrator in the footer');
                     self::assertStringNotContainsString('{{', $policy, 'every placeholder is filled');
                     self::assertDoesNotMatchRegularExpression('/catto|ctnlist/i', $policy, 'the policy names the installation, never a product');
                     self::assertStringContainsString('<table class="table align-middle">', $policy);
