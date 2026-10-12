@@ -9,6 +9,7 @@ use App\CattoMail\OutgoingMessageFactory;
 use App\CattoMail\OutgoingRecipient;
 use App\CattoMail\SendOutcome;
 use App\Log\MessageLog;
+use App\Mail\ProofMailer;
 use App\Repository\MessageRepository;
 use App\Repository\SubscriberRepository;
 use App\Validator\InvalidField;
@@ -34,6 +35,7 @@ final class MessageService
         private readonly OutgoingMessageFactory $outgoing,
         private readonly MessageLog $messageLog,
         private readonly ClockInterface $clock,
+        private readonly ProofMailer $proofs,
     ) {
     }
 
@@ -80,18 +82,24 @@ final class MessageService
     }
 
     /**
-     * A proof copy to any valid address chosen by the administrator, sent as
-     * a one-recipient transactional catto-mail job. The address needs no
-     * subscriber record and none is created or looked up: the message is
-     * rendered for TemplateRenderer::PROOF_RECIPIENT and logged only in the
-     * Send Log (type PROOF, no subscriber); queue, smlog, consent and list
-     * memberships are untouched.
+     * A proof copy to any valid address chosen by the administrator: the
+     * message merged with its template, rendered for
+     * TemplateRenderer::PROOF_RECIPIENT. The address needs no subscriber
+     * record and none is created or looked up; the proof is logged only in
+     * the Send Log (type PROOF, no subscriber), and queue, smlog, consent and
+     * list memberships are untouched.
+     *
+     * Where it goes: straight to Mailpit when MAIL_PROOF_SMTP is set
+     * (ProofMailer; it is then read on Mailpit's page and never reaches the
+     * address), otherwise through the mail service as a one-recipient
+     * transactional catto-mail job. $throughMailService forces the second
+     * route (the end-to-end check of the mail service).
      *
      * @throws InvalidField for an invalid address
      * @throws \InvalidArgumentException for a blank message
      * @throws MessageNotFound
      */
-    public function sendProof(string $muid, string $email): SendOutcome
+    public function sendProof(string $muid, string $email, bool $throughMailService = false): SendOutcome
     {
         $email = trim($email);
         if (filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
@@ -103,6 +111,10 @@ final class MessageService
         }
         $list = $this->messages->lists($message['m_id'])[0]['l_shortcode'] ?? '';
         $rendered = $this->renderer->renderProof($message, $list);
+        if (!$throughMailService && $this->proofs->enabled()) {
+            $problem = $this->proofs->send($this->outgoing->transactional($message, $list), $email, (string) $message['m_subject'], $rendered->html, $rendered->text);
+            return SendOutcome::of($problem === null ? 1 : 0, $problem === null ? 1 : 0, $problem, false);
+        }
         return $this->sender->sendOne('proof', $this->outgoing->transactional($message, $list),
             new OutgoingRecipient($email, null, 'PROOF', (string) $message['m_subject'], $rendered->html, $rendered->text));
     }

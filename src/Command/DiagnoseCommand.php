@@ -11,6 +11,7 @@ use App\Config\ProductionReadiness;
 use App\Config\RuntimeSettings;
 use App\Config\SettingsCipher;
 use App\Config\SiteConfig;
+use App\Mail\ProofMailer;
 use App\Maintenance\MaintenanceActivity;
 use App\Maintenance\StuckWork;
 use App\Repository\SettingRepository;
@@ -76,6 +77,7 @@ final class DiagnoseCommand extends Command
         #[AutowireServiceClosure(SuppressionChecker::class)] private readonly \Closure $suppressionChecker,
         private readonly ConfigFingerprint $fingerprint,
         private readonly AssetMapperInterface $assets,
+        private readonly ProofMailer $proofs,
         #[Autowire('%kernel.environment%')] private readonly string $environment,
         #[Autowire('%kernel.debug%')] private readonly bool $debug,
         #[Autowire('%kernel.project_dir%')] private readonly string $projectDir,
@@ -216,6 +218,17 @@ final class DiagnoseCommand extends Command
             : 'not set: webhooks are refused (connect the mail service on the Delivery page, or CATTOMAIL_WEBHOOK_SECRET in .env)'));
         if ($this->cattoMail->hasPreviousWebhookSecret()) {
             $say('WARN', 'CATTOMAIL_WEBHOOK_SECRET_PREVIOUS set: remove it once catto-mail\'s rotation overlap has passed');
+        }
+        // Proofs can bypass the mail service and go to a Mailpit instance (MAIL_PROOF_SMTP).
+        if ($this->proofs->enabled()) {
+            if ($this->proofs->problem() !== null) {
+                $say('ERROR', $this->proofs->problem() . ' Proofs cannot be sent.');
+            } else {
+                $say('OK', 'proofs go to Mailpit at ' . $this->proofs->target() . ' (MAIL_PROOF_SMTP), not through the mail service');
+                if ($production && !$this->proofs->local()) {
+                    $say('WARN', 'MAIL_PROOF_SMTP is not an address of this server: proofs travel to it unencrypted and unauthenticated (run Mailpit here with its SMTP on 127.0.0.1)');
+                }
+            }
         }
         if (!$production) {
             $say('OK', 'suppression provider: ' . ($this->suppression ?: 'banlist'));

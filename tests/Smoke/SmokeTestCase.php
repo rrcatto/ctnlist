@@ -295,6 +295,33 @@ abstract class SmokeTestCase extends TestCase
     }
 
     /**
+     * What the stack's Mailpit holds for a search (its API, e.g. subject:"…"),
+     * newest first. The smoke installation hands proofs straight to it.
+     *
+     * @return list<array{ID: string, Subject: string, To: list<array{Address: string, Name: string}>, From: array{Address: string, Name: string}}>
+     */
+    protected static function mailpit(string $query): array
+    {
+        $found = json_decode((string) file_get_contents(self::mailpitUrl() . '/api/v1/search?query=' . rawurlencode($query)), true);
+        /** @var list<array{ID: string, Subject: string, To: list<array{Address: string, Name: string}>, From: array{Address: string, Name: string}}> $messages */
+        $messages = is_array($found) && is_array($found['messages'] ?? null) ? $found['messages'] : [];
+        return $messages;
+    }
+
+    /** @return array{HTML: string, Text: string, Subject: string} one message as Mailpit stores it */
+    protected static function mailpitMessage(string $id): array
+    {
+        $message = json_decode((string) file_get_contents(self::mailpitUrl() . '/api/v1/message/' . rawurlencode($id)), true);
+        $message = is_array($message) ? $message : [];
+        return ['HTML' => (string) ($message['HTML'] ?? ''), 'Text' => (string) ($message['Text'] ?? ''), 'Subject' => (string) ($message['Subject'] ?? '')];
+    }
+
+    private static function mailpitUrl(): string
+    {
+        return rtrim((string) (getenv('SMOKE_MAILPIT_URL') ?: 'http://mailpit:8025'), '/');
+    }
+
+    /**
      * The first column of the first row (false when there is none).
      *
      * @param list<mixed> $params

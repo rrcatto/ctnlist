@@ -10,6 +10,11 @@
     {% if not test_email_valid %}
       <div class="alert theme-warning small" role="note"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div>{{ test_email is empty ? 'MAIL_TEST_ADDRESS is not set' : 'MAIL_TEST_ADDRESS (' ~ test_email ~ ') is not a valid email address' }}; enter the address to send the proof to.</div></div>
     {% endif %}
+    {% if mailpit_problem %}
+      <div class="alert theme-danger small" role="alert"><i class="bi bi-exclamation-octagon" aria-hidden="true"></i><div>{{ mailpit_problem }} Proofs cannot be sent until it is corrected.</div></div>
+    {% elseif mailpit %}
+      <div class="alert theme-info small" role="note"><i class="bi bi-inbox" aria-hidden="true"></i><div>Proofs go to <strong>Mailpit</strong> ({{ mailpit }}), not through the mail service: read the proof on Mailpit's page. It is <strong>not delivered</strong> to the address below, which only appears as its recipient.</div></div>
+    {% endif %}
     {{ form_errors(form) }}
     {{ form_row(form.email, {row_attr: {class: 'mb-0'}}) }}
   </div>

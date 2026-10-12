@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace App\Mail;
 
-/** The transactional SMTP transport (MAILER_DSN). */
+/** An SMTP transport: the transactional one (MAILER_DSN), or Mailpit for proofs (ProofMailer, MAIL_PROOF_SMTP). */
 final class SmtpServer
 {
     public function __construct(

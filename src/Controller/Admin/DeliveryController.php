@@ -19,6 +19,7 @@ use App\CattoMail\WebhookProcessor;
 use App\Config\ConfigFingerprint;
 use App\Form\Type\MailServiceType;
 use App\Http\Pagination;
+use App\Mail\ProofMailer;
 use App\Maintenance\MaintenanceActivity;
 use App\Maintenance\StuckWork;
 use App\Repository\CattoMailOptOutRepository;
@@ -70,7 +71,8 @@ final class DeliveryController extends AbstractController
     #[IsGranted('logs.view')]
     public function index(CattoMailConfig $config, CattoMailHealth $health, CattoMailActivity $activity, CattoMailStatusRepository $status,
         CattoMailWebhookRepository $webhooks, Request $request, StuckWork $stuck, MaintenanceActivity $maintenance, CattoMailOptOutRepository $optOuts,
-        ConfigFingerprint $fingerprint, ConnectFlow $connect, ConnectionStore $connection, SendingDomainCheck $domains, #[CurrentUser] SubscriberUser $user): Response
+        ConfigFingerprint $fingerprint, ConnectFlow $connect, ConnectionStore $connection, SendingDomainCheck $domains, #[CurrentUser] SubscriberUser $user,
+        ProofMailer $proofs): Response
     {
         $muid = trim($request->query->getString('m'));
         if ($muid !== '') {
@@ -90,6 +92,8 @@ final class DeliveryController extends AbstractController
             'env_settings' => $config->envSettings(),
             'sources' => ['api_key' => $config->source('api_key'), 'webhook_secret' => $config->source('webhook_secret')],
             'webhook_url' => $connect->webhookUrl(),
+            // Proofs may bypass the mail service (MAIL_PROOF_SMTP): Mailpit's address, or ''.
+            'proof_mailpit' => $proofs->enabled() ? $proofs->target() : '',
             'from_domain' => $domains->fromAddress(),
             // Connecting and disconnecting are for administrators only (DeliveryConnectionController).
             'is_administrator' => $user->isAdministrator(),

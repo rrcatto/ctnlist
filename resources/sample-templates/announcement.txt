@@ -1,0 +1,14 @@
+ANNOUNCEMENT · {listname}
+========================================
+
+{content}
+
+========================================
+Was this useful to you?
+  Yes: {like}
+  No:  {dislike}
+Questions or a reply? Use the contact form: {contact}
+
+{organisation} · {domain}
+{subscription}
+To stop receiving {listname}: {unsubscribe}

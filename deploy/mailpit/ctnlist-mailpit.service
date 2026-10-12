@@ -1,0 +1,56 @@
+# Mailpit for ctnlist proofs: systemctl enable --now ctnlist-mailpit
+# (install as /etc/systemd/system/ctnlist-mailpit.service; README "Proofs to Mailpit").
+#
+# ctnlist hands proofs ("Send to me") to this Mailpit when an installation's .env has
+# MAIL_PROOF_SMTP=127.0.0.1:1025. Mailpit keeps what it is given and delivers nothing.
+# One Mailpit serves every installation on the server.
+#
+# - SMTP listens on 127.0.0.1 only: nothing outside this server can hand it mail.
+# - The web page and API listen on 127.0.0.1 only, behind nginx
+#   (deploy/nginx/mailpit.location.conf.example), and ask for a name and password from
+#   Mailpit's own password file (--ui-auth-file, htpasswd format).
+# - Messages are kept in /var/lib/ctnlist-mailpit: the newest 500, for at most 30 days.
+#
+# Before the first start:
+#   useradd --system --no-create-home --shell /usr/sbin/nologin mailpit
+#   install -d -m 750 -o root -g mailpit /etc/ctnlist
+#   htpasswd -B -c /etc/ctnlist/mailpit-users <name>      # apache2-utils; asks for the password
+#   chown root:mailpit /etc/ctnlist/mailpit-users && chmod 640 /etc/ctnlist/mailpit-users
+
+[Unit]
+Description=Mailpit for ctnlist proofs (SMTP 127.0.0.1:1025, web page 127.0.0.1:8025)
+Documentation=https://mailpit.axllent.org/docs/
+After=network.target
+
+[Service]
+Type=simple
+User=mailpit
+Group=mailpit
+ExecStart=/usr/local/bin/mailpit \
+    --smtp 127.0.0.1:1025 \
+    --listen 127.0.0.1:8025 \
+    --webroot /mailpit/ \
+    --ui-auth-file /etc/ctnlist/mailpit-users \
+    --database /var/lib/ctnlist-mailpit/mailpit.db \
+    --max 500 \
+    --max-age 30d \
+    --smtp-disable-rdns \
+    --disable-version-check \
+    --label "ctnlist proofs"
+Restart=on-failure
+RestartSec=5
+# /var/lib/ctnlist-mailpit, created and owned by the service user.
+StateDirectory=ctnlist-mailpit
+StateDirectoryMode=0750
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectHome=yes
+ProtectSystem=strict
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

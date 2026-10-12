@@ -1,0 +1,36 @@
+# Mailpit's web page for ctnlist proofs (template). Put this location inside the HTTPS
+# server block of the installation (deploy/nginx/ctnlist.conf.example), for example as
+# /etc/nginx/snippets/ctnlist-mailpit.conf with
+#     include snippets/ctnlist-mailpit.conf;
+# before its "location /" block. Check with: nginx -t
+#
+# Proofs are then read at https://lists.example.org/mailpit/ . Mailpit asks for the name
+# and password itself (its own basic auth, deploy/mailpit/ctnlist-mailpit.service), so
+# nginx adds no auth_basic here; the password crosses the network only inside TLS.
+# Mailpit is started with --webroot /mailpit/, so the path is passed on unchanged.
+
+location = /mailpit {
+    return 301 /mailpit/;
+}
+
+# ^~: no regular-expression location of the server block (*.php, dot files) applies here.
+location ^~ /mailpit/ {
+    proxy_pass http://127.0.0.1:8025;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    # The page follows new mail over a WebSocket (/mailpit/api/events).
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_read_timeout 1h;
+    # A proof with images can be several megabytes; nothing is uploaded here.
+    client_max_body_size 1m;
+    # Proofs are not for search engines or anyone's cache.
+    add_header X-Robots-Tag "noindex, nofollow" always;
+    add_header Cache-Control "no-store" always;
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    # The installation's access log format (no query strings) applies; Mailpit's
+    # addresses carry message ids only.
+}

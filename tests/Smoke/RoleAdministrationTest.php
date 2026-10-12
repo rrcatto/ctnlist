@@ -143,14 +143,25 @@ final class RoleAdministrationTest extends SmokeTestCase
         $admin = self::client();
         self::loginAsAdmin($admin);
         $muid = bin2hex(random_bytes(16));
-        self::$db->prepare("INSERT INTO messages (m_uniqid, m_subject, m_html, m_text) VALUES (?, 'Proof fixture', '<p>Hi {firstname}</p>', 'Hi')")->execute([$muid]);
+        $subject = 'Proof fixture ' . $muid;
+        $template = (int) self::value("INSERT INTO templates (t_name, t_html, t_text) VALUES (?, '<div><h1>{listname}</h1>{content}<p>{unsubscribe}</p></div>', 'From {listname}: {content}') RETURNING t_id", ['Smoke proof ' . $muid]);
+        self::$db->prepare("INSERT INTO messages (m_uniqid, m_subject, m_html, m_text, m_t_id) VALUES (?, ?, '<p>Hi {firstname}</p>', 'Hi {firstname}', ?)")->execute([$muid, $subject, $template]);
         try {
             $subscribers = self::scalar('SELECT COUNT(*) FROM subscribers');
             $sent = self::submitForm($admin, '/sendtome/' . $muid, 'proof', ['proof[email]' => 'outside-tester@example.org']);
             self::assertSame(200, $sent['status']);
             $page = $sent['body'];
-            // Proofs go through catto-mail, which the development stack does not configure (see the integration tests).
-            self::assertStringContainsString('Proof message could not be sent: catto-mail is not configured', $page);
+            // Proofs go straight to the stack's Mailpit (MAIL_PROOF_SMTP), so no mail service is needed: the
+            // proof really arrives there, merged with its template for the test recipient, and nowhere else.
+            self::assertStringContainsString('Proof message for outside-tester@example.org sent to Mailpit (mailpit:1025)', $page);
+            $arrived = self::mailpit('subject:"' . $subject . '"');
+            self::assertCount(1, $arrived, 'one proof in Mailpit');
+            self::assertSame('outside-tester@example.org', $arrived[0]['To'][0]['Address']);
+            $proof = self::mailpitMessage($arrived[0]['ID']);
+            self::assertMatchesRegularExpression('#<h1>[^<{]+</h1><p>Hi Test</p><p>.*UNSUBSCRIBE.*</p>#', $proof['HTML'], 'the template around the message, with test values');
+            self::assertStringNotContainsString('{', $proof['HTML'], 'no placeholder left');
+            self::assertMatchesRegularExpression('/^From [^{]+: Hi Test\s*$/', $proof['Text']);
+            self::assertSame('1', self::scalar("SELECT COUNT(*) FROM sendlog WHERE sl_muid = ? AND sl_type = 'PROOF' AND sl_email = 'outside-tester@example.org'", [$muid]));
             self::assertSame($subscribers, self::scalar('SELECT COUNT(*) FROM subscribers'), 'no subscriber created');
             self::assertSame('0', self::scalar('SELECT COUNT(*) FROM smlog WHERE sml_muid = ?', [$muid]));
 
@@ -160,6 +171,7 @@ final class RoleAdministrationTest extends SmokeTestCase
             self::assertStringContainsString('value="not-an-address"', $invalid['body'], 'the address is kept');
         } finally {
             self::$db->prepare('DELETE FROM messages WHERE m_uniqid = ?')->execute([$muid]);
+            self::$db->prepare('DELETE FROM templates WHERE t_id = ?')->execute([$template]);
         }
     }
 

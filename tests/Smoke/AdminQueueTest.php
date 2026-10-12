@@ -51,9 +51,14 @@ final class AdminQueueTest extends SmokeTestCase
         self::assertSame(0, (int) self::value("SELECT COUNT(*) FROM sendlog WHERE sl_muid = '{$muid}' AND sl_type = 'MESSAGE'"));
         self::assertNotSame('Y', self::value("SELECT o_value FROM options WHERE o_key = 'CurrentlySending'"), 'not left marked as sending');
 
+        // A proof does not need the mail service here: the stack sends proofs straight to its Mailpit (MAIL_PROOF_SMTP).
+        $form = self::request($client, 'GET', '/sendtome/' . $muid)['body'];
+        self::assertStringContainsString('Proofs go to <strong>Mailpit</strong> (mailpit:1025), not through the mail service', $form);
         $sent = self::submitForm($client, '/sendtome/' . $muid, 'proof', ['proof[email]' => '']);
         self::assertSame(200, $sent['status']);
-        self::assertStringContainsString('Proof message could not be sent: catto-mail is not configured', $sent['body']);
+        self::assertStringContainsString('sent to Mailpit (mailpit:1025). Read it in Mailpit: it is not delivered to that address.', $sent['body']);
+        self::assertSame(1, (int) self::value("SELECT COUNT(*) FROM sendlog WHERE sl_muid = '{$muid}' AND sl_type = 'PROOF'"), 'logged as a proof');
+        self::assertSame($rows, (int) self::value("SELECT COUNT(*) FROM queue WHERE q_muid = '{$muid}'"), 'a proof leaves the queue alone');
         self::$db->prepare('DELETE FROM queue WHERE q_muid = ?')->execute([$muid]);
 
         self::assertStringContainsString('The stop request has been recorded.', self::submit($client, '/stop-send', '/stop-send', []));

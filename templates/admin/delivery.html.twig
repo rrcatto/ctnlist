@@ -4,7 +4,7 @@
 {% block title %}Delivery{% endblock %}
 
 {% block content %}
-{% embed 'layout/_page_header.html.twig' with {title: 'catto-mail integration', description: 'Campaign content (queue sends, proofs, resends and forwards) is rendered here and delivered by catto-mail. Transactional mail (sign-in links, invitations, notifications) goes through ctnlist\'s own SMTP server.'} %}
+{% embed 'layout/_page_header.html.twig' with {title: 'catto-mail integration', description: 'Campaign content (queue sends, resends and forwards, and proofs unless they are sent to Mailpit) is rendered here and delivered by catto-mail. Transactional mail (sign-in links, invitations, notifications) goes through ctnlist\'s own SMTP server.'} %}
   {% block actions %}
     <form method="post" action="{{ path('admin_delivery_check') }}">
       <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
@@ -41,6 +41,7 @@
           <dt class="sm:col-5">Custom CA file</dt><dd class="sm:col-7">{{ ca_file ? 'yes' : 'no' }}</dd>
           <dt class="sm:col-5">Last successful call</dt><dd class="sm:col-7">{{ activity.last_ok ? activity.last_ok|slice(0, 16) : '—' }}</dd>
           <dt class="sm:col-5">Last API error</dt><dd class="sm:col-7 text-break">{% if activity.last_error %}<span class="fg-2">{{ activity.last_error_at|slice(0, 16) }}</span> {{ activity.last_error|slice(0, 300) }}{% else %}—{% endif %}</dd>
+          <dt class="sm:col-5">Proofs</dt><dd class="sm:col-7">{% if proof_mailpit %}to Mailpit at <code>{{ proof_mailpit }}</code>, not through the mail service{% else %}through the mail service{% endif %}</dd>
           <dt class="sm:col-5">Open and click tracking</dt><dd class="sm:col-7">{{ tracking.opens ? 'opens' : 'no opens' }}, {{ tracking.clicks ? 'clicks' : 'no clicks' }}</dd>
           <dt class="sm:col-5">Global opt-out</dt><dd class="sm:col-7 mb-0">{{ global_optout ? 'offered to subscribers' : 'not offered' }}</dd>
         </dl>

@@ -104,7 +104,8 @@ final class CattoMailCheckCommand extends Command
 
         $output->writeln("Proof of {$muid} to {$to} ...");
         try {
-            $outcome = $this->messageService->sendProof($muid, $to);
+            // This check is of the mail service: its proof goes there even when proofs are otherwise sent to Mailpit (MAIL_PROOF_SMTP).
+            $outcome = $this->messageService->sendProof($muid, $to, throughMailService: true);
         } catch (\InvalidArgumentException $e) {
             $output->writeln('<error>' . $e->getMessage() . '</error>');
             return Command::FAILURE;

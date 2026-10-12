@@ -93,6 +93,10 @@ server {
         include snippets/ctnlist-<installation>-fastcgi.conf;
     }
 
+    # Optional: Mailpit's web page for proofs at /mailpit/ (README "Proofs to Mailpit";
+    # install deploy/nginx/mailpit.location.conf.example as the snippet).
+    #include snippets/ctnlist-mailpit.conf;
+
     # Existing files are served directly; everything else goes to the front controller.
     location / {
         try_files $uri /index.php$is_args$args;

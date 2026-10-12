@@ -22,6 +22,8 @@
         <env name="CATTOMAIL_WEBHOOK_SECRET_PREVIOUS" value="whsec_test_previous" force="true"/>
         <env name="CATTOMAIL_GLOBAL_OPTOUT_ENABLED" value="true" force="true"/>
         <env name="APP_BASE_URL" value="https://ctnlist.test/" force="true"/>
+        <!-- Proofs go through the (fake) mail service unless a test routes them to Mailpit itself. -->
+        <env name="MAIL_PROOF_SMTP" value="" force="true"/>
         <env name="APP_ADMIN_EMAIL" value="owner@ctnlist.test" force="true"/>
         <env name="AUTH_MAGIC_LINK_MAX_PER_EMAIL" value="5" force="true"/>
         <env name="AUTH_MAGIC_LINK_MAX_PER_IP" value="20" force="true"/>

@@ -65,7 +65,7 @@ final class SettingsCatalogue
         'smtp' => [
             'tab' => 'SMTP',
             'label' => 'Transactional mail',
-            'description' => 'The SMTP server for transactional mail (sign-in links, invitations, notifications, contact-form mail). Campaign content (queue sends, proofs, resends, forwards) is delivered by catto-mail, configured in .env.',
+            'description' => 'The SMTP server for transactional mail (sign-in links, invitations, notifications, contact-form mail). Campaign content (queue sends, resends, forwards, and proofs unless MAIL_PROOF_SMTP sends them to Mailpit) is delivered by catto-mail, connected on the Delivery page or configured in .env.',
             'settings' => [
                 'MAILER_DSN' => ['width' => 'full', 'label' => 'SMTP server', 'type' => 'dsn', 'secret' => true, 'optional' => true, 'help' => 'Used for transactional mail only.'],
             ],

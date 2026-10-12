@@ -1,0 +1,12 @@
+Dear {firstname} {lastname},
+
+{content}
+
+Kind regards,
+{organisation}
+
+--
+This letter was sent to you as a subscriber of {listname}.
+To pass it on: {forward}
+To change your details: {preferences}
+To stop these letters: {unsubscribe}

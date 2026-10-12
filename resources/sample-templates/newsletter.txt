@@ -1,0 +1,12 @@
+{listname}
+{organisation}
+
+Dear {firstname},
+
+{content}
+
+--
+Know someone who would like to read this? Forward it: {forward}
+{subscription}
+You are receiving this because you subscribed to {listname}.
+To stop: {unsubscribe}

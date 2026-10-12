@@ -13,6 +13,7 @@ use App\Form\Model\QueueRotation;
 use App\Form\Type\ProofType;
 use App\Form\Type\QueueRotationType;
 use App\Http\Pagination;
+use App\Mail\ProofMailer;
 use App\Queue\QueueBuilder;
 use App\Queue\QueueOutcome;
 use App\Queue\QueueProcessor;
@@ -172,14 +173,14 @@ final class QueueController extends AbstractController
     /** Proof copy to any address, by default MAIL_TEST_ADDRESS (no subscriber record needed). */
     #[Route('/sendtome/{muid}', name: 'admin_proof', methods: ['GET'])]
     #[IsGranted('messages.manage')]
-    public function proofForm(string $muid, SiteConfig $site): Response
+    public function proofForm(string $muid, SiteConfig $site, ProofMailer $proofs): Response
     {
-        return $this->proofPage($muid, $site, $this->proofFormFor($muid, $site));
+        return $this->proofPage($muid, $site, $this->proofFormFor($muid, $site), $proofs);
     }
 
     #[Route('/sendtome/{muid}', name: 'admin_proof_submit', methods: ['POST'])]
     #[IsGranted('messages.manage')]
-    public function proof(string $muid, Request $request, SiteConfig $site, MessageService $messages): Response
+    public function proof(string $muid, Request $request, SiteConfig $site, MessageService $messages, ProofMailer $proofs): Response
     {
         $form = $this->proofFormFor($muid, $site);
         $form->handleRequest($request);
@@ -190,7 +191,10 @@ final class QueueController extends AbstractController
             try {
                 $outcome = $messages->sendProof($muid, $email);
                 return $this->result('Proof send', match ($outcome->status) {
-                    SendOutcome::SUBMITTED => 'Proof message sent to ' . $email . ' (handed to catto-mail).',
+                    // Mailpit keeps the proof: it is read there and never reaches the address.
+                    SendOutcome::SUBMITTED => $proofs->enabled()
+                        ? 'Proof message for ' . $email . ' sent to Mailpit (' . $proofs->target() . '). Read it in Mailpit: it is not delivered to that address.'
+                        : 'Proof message sent to ' . $email . ' (handed to catto-mail).',
                     SendOutcome::DEFERRED => 'catto-mail could not be reached; the proof to ' . $email . ' is kept and will be retried automatically.',
                     default => 'Proof message could not be sent: ' . $outcome->problem,
                 }, [self::MESSAGES_LINK]);
@@ -200,7 +204,7 @@ final class QueueController extends AbstractController
                 FormErrors::attach($form, $e);
             }
         }
-        return $this->proofPage($muid, $site, $form, Response::HTTP_UNPROCESSABLE_ENTITY);
+        return $this->proofPage($muid, $site, $form, $proofs, Response::HTTP_UNPROCESSABLE_ENTITY);
     }
 
     private function proofFormFor(string $muid, SiteConfig $site): FormInterface
@@ -210,9 +214,12 @@ final class QueueController extends AbstractController
         ]);
     }
 
-    private function proofPage(string $muid, SiteConfig $site, FormInterface $form, int $status = Response::HTTP_OK): Response
+    private function proofPage(string $muid, SiteConfig $site, FormInterface $form, ProofMailer $proofs, int $status = Response::HTTP_OK): Response
     {
         return $this->render('admin/proof.html.twig', [
+            // Where proofs go: Mailpit's SMTP address (MAIL_PROOF_SMTP), or '' for the mail service.
+            'mailpit' => $proofs->enabled() ? $proofs->target() : '',
+            'mailpit_problem' => $proofs->problem(),
             'muid' => $muid,
             'form' => $form,
             'test_email' => $site->testEmail,

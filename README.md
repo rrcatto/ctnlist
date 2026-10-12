@@ -9,7 +9,7 @@ Since 6.0 every route is a Symfony 8.1 controller and the Fat-Free Framework has
 - PHP 8.5+, Composer
 - Symfony 8.1 (including Symfony Security, Twig and Mailer) with Doctrine DBAL 4
 - PostgreSQL with versioned Phinx migrations
-- Symfony Mailer for transactional mail only (`src/Mail/`: sign-in links, invitations, notifications, contact-form mail); campaign content (queue sends, proofs, resends, forwards) is delivered by the catto-mail smarthost through its HTTPS API (`src/CattoMail/`)
+- Symfony Mailer for transactional mail only (`src/Mail/`: sign-in links, invitations, notifications, contact-form mail); campaign content (queue sends, proofs, resends, forwards) is delivered by the catto-mail smarthost through its HTTPS API (`src/CattoMail/`), except proofs when `MAIL_PROOF_SMTP` hands them to a Mailpit instance ([Proofs to Mailpit](#proofs-to-mailpit))
 - Symfony Forms and Validator for every input form; symfony/html-sanitizer (archive pages) and symfony/rate-limiter (contact form, forwards and resends, global opt-out changes)
 - Bootstrap 6 (6.0.0-alpha.1) and Bootstrap Icons served by the site through Symfony AssetMapper (no CDN, no Node or npm), under a strict Content-Security-Policy; Bootstrap 6 needs a recent browser (Chrome or Edge 130, Firefox 132, Safari 18 or later)
 - PHP `gd` (with JPEG and WebP) and `exif` for profile pictures
@@ -59,7 +59,7 @@ The delivery system restores:
 
 The ordinary campaign workflow sends a message once to a subscriber. The unique `(subscriber UUID, message MUID)` record in `smlog` is used as the delivery guard.
 
-All campaign-content paths—including queue delivery, forwarding, proof copies and deliberate resends—are delivered by catto-mail and update `sendlog` when catto-mail has accepted them (the send job is sealed); deliveries to subscribers also update `smlog`. A proof can go to any valid address (by default `MAIL_TEST_ADDRESS`), which needs no subscriber record: it is logged as PROOF in `sendlog` only and does not affect the queue, consent, memberships or the once-only guard.
+All campaign-content paths—including queue delivery, forwarding, proof copies and deliberate resends—are delivered by catto-mail and update `sendlog` when catto-mail has accepted them (the send job is sealed); deliveries to subscribers also update `smlog`. The one exception is a proof when `MAIL_PROOF_SMTP` is set: it is handed to Mailpit instead and logged when Mailpit takes it ([Proofs to Mailpit](#proofs-to-mailpit)). A proof can go to any valid address (by default `MAIL_TEST_ADDRESS`), which needs no subscriber record: it is logged as PROOF in `sendlog` only and does not affect the queue, consent, memberships or the once-only guard.
 
 `smlog` again records list context, sent/read activity, likes, dislikes, forwards, profile updates, confirmations, subscriptions, unsubscriptions and contact forms sent from a message (`sml_bookings`, shown in the message's activity report).
 
@@ -121,7 +121,8 @@ database/       Phinx migrations (domain/, banlist/), destructive development re
 assets/         application CSS and JavaScript for Symfony AssetMapper (app.js, styles/app.css, ckeditor/ editor configuration, images/, lib/ vendored Bootstrap and Bootstrap Icons)
 importmap.php   AssetMapper import map (entry point: assets/app.js)
 public_html/    per-installation web root: front controller (index.php) and vendor/ckeditor5/ (prebuilt CKEditor 5 bundle and its emoji list)
-deploy/         production templates: nginx server block and FastCGI snippet, PHP-FPM pool, cron entries, systemd units
+deploy/         production templates: nginx server block and FastCGI snippet, PHP-FPM pool, cron entries, systemd units, Mailpit for proofs (mailpit/, nginx/mailpit.location.conf.example)
+resources/      sample-templates/: the three sample email templates (HTML and text parts) that ctnlist:templates:samples installs
 src/            application code, namespace App\ (Controller/, Repository/ and domain folders: Campaign/, Queue/, Mail/, CattoMail/, Log/, Subscriber/, Security/, Suppression/, Maintenance/; Config/ (settings, production rules), Http/ (headers, CSP, rate limits, pagination), Session/, Twig/, Util/; Form/ and Validator/; Command/ for console commands)
 templates/      Twig templates: base.html.twig and layout/ (navbar, admin bar, flash messages, footer) form the site layout
 tests/          PHPUnit: Unit/, Integration/ (application against the ctnlist_test database), Smoke/ (HTTP against the stack's smoke installation), Support/ (FakeCattoMail)
@@ -164,7 +165,8 @@ The new server starts from an empty database; there are no upgrade migrations (s
 7. PHP-FPM pool from `deploy/php-fpm/ctnlist.conf.example`; nginx from `deploy/nginx/` (`nginx -t`, reload); TLS certificate.
 8. The scheduled commands from `deploy/cron/ctnlist.cron.example` or the systemd timers in `deploy/systemd/` (one of the two).
 9. Preflight: `sudo -u www-data env CTNLIST_INSTANCE_DIR=/var/www/<installation> php bin/console ctnlist:diagnose --production` must report no ERROR (the worker and maintenance warnings clear after their first runs). `https://<host>/health` answers `OK`.
-10. Connect the mail service: sign in as the administrator, **Admin → Sending → Delivery**, enter its address and approve there ([catto-mail integration](#catto-mail-integration), *Connecting*). The key and the webhook endpoint are created by that; nothing is copied into `.env`. Then check delivery end to end with the [Release checklist](#release-checklist)'s proof, test campaign and webhook round trip before campaigns are sent. (`bin/dev test-cattomail` is the development stack's end-to-end check against a local catto-mail and refuses any other; see [catto-mail integration](#catto-mail-integration).)
+10. Optional: `sudo -u www-data env CTNLIST_INSTANCE_DIR=/var/www/<installation> php bin/console ctnlist:templates:samples` adds three sample email templates (a newsletter, an announcement and a letter) to adapt under **Admin → Templates**; and Mailpit for proofs ([Proofs to Mailpit](#proofs-to-mailpit)).
+11. Connect the mail service: sign in as the administrator, **Admin → Sending → Delivery**, enter its address and approve there ([catto-mail integration](#catto-mail-integration), *Connecting*). The key and the webhook endpoint are created by that; nothing is copied into `.env`. Then check delivery end to end with the [Release checklist](#release-checklist)'s proof, test campaign and webhook round trip before campaigns are sent. (`bin/dev test-cattomail` is the development stack's end-to-end check against a local catto-mail and refuses any other; see [catto-mail integration](#catto-mail-integration).)
 
 ### New release
 
@@ -184,6 +186,7 @@ Before a release goes live. The items marked † need the production server and 
 - [ ] † `ctnlist:diagnose --production` as `www-data` reports no ERROR; `https://<host>/health` answers `OK`.
 - [ ] † The mail service connected on the Delivery page (or set in `.env`, with `<APP_BASE_URL>cattomail/webhook` registered by hand), and the page shows that the From address's domain can send; `ctnlist:cattomail:check` reports it reachable and authenticated, and `bin/dev test-cattomail` has passed against a development catto-mail.
 - [ ] † `abuse@<APP_DOMAIN>` is a mailbox that is read: the acceptable use policy sends abuse reports and complaints there, not to the administrator.
+- [ ] † If proofs go to Mailpit (`MAIL_PROOF_SMTP`): `ctnlist-mailpit` is running, its SMTP and web ports listen on 127.0.0.1 only, `https://<host>/mailpit/` asks for the password, and a proof sent from the message list appears there.
 - [ ] † A proof to an address you can read, a small campaign to a test list, a webhook round trip (delivery and bounce events on **Admin → Sending → Delivery**) and an address-validation job.
 - [ ] † Recovery sanity check: the Delivery page shows no stuck work, and a send job without a final webhook is reconciled after `CATTOMAIL_RECONCILE_AFTER_SECONDS`.
 
@@ -210,6 +213,7 @@ CTNLIST_INSTANCE_DIR=/var/www/example bin/console cache:clear
 CTNLIST_INSTANCE_DIR=/var/www/example bin/console asset-map:compile
 CTNLIST_INSTANCE_DIR=/var/www/example composer migrate-paralegal
 CTNLIST_INSTANCE_DIR=/var/www/example bin/console ctnlist:diagnose --production
+CTNLIST_INSTANCE_DIR=/var/www/example bin/console ctnlist:templates:samples
 ```
 
 ## Configuration
@@ -250,7 +254,43 @@ Administrators, and any role given the `settings.manage` permission, can change 
 
 ### Message placeholders
 
+A template wraps a message: `{content}` in the template's HTML and text parts is where the message's own HTML and text go, and every other placeholder works in both. Three samples to use and adapt (a newsletter, an announcement and a letter; `resources/sample-templates/`) are added by `bin/console ctnlist:templates:samples`; development has them from `bin/dev up`. They are ordinary templates afterwards: edit, rename or delete them under **Admin → Templates**.
+
 Placeholders are case-insensitive. For a subscriber: `{firstname}`, `{lastname}`, `{emailsleft}`, `{subscription}` (the subscription message, itself filled), `{unsubscribe}`, `{confirm}`, `{forward}`, `{preferences}`, `{like}`, `{dislike}`, `{contact}` (the contact form, recording the subscriber and the message), `{usertrack}` (open-tracking pixel, HTML only), `{suid}`, `{muid}`, `{baseurl}`, `{listshortcode}`; for everyone: `{subscribe}`, `{archive}`, `{listname}`, `{domain}`, `{organisation}`, `{facebook}` (`APP_FACEBOOK_URL`), `{twitter}` (`APP_X_URL`). In archives subscriber links become plain labels (UNSUBSCRIBE, FORWARD, UPDATE, OPT IN, YES, NO, CONTACT FORM), names and identifiers are empty. Site links whose URL is not configured render nothing. `{STORE}`, `{lms-booking}`, `{booking}` and `{advertise}` are retired and render nothing: write such a link in the message or template instead, where `{suid}` and `{muid}` identify the recipient and the message (`https://example.com/book?s={suid}&m={muid}`). Proofs fill names with test values and point subscriber links at a page explaining that a proof has no subscriber.
+
+### Proofs to Mailpit
+
+A proof ("Send to me" on the message list, **Send proof**) is the message merged with its template for a test recipient. By default it goes through the mail service like all campaign mail and arrives in the mailbox of the address given. Setting `MAIL_PROOF_SMTP` in the installation's `.env` to the host and port of a [Mailpit](https://mailpit.axllent.org/) instance's SMTP listener sends proofs straight there instead, bypassing the mail service:
+
+```dotenv
+MAIL_PROOF_SMTP=127.0.0.1:1025
+```
+
+- Mailpit keeps what it is given and delivers nothing. The proof is read on Mailpit's web page; **it does not reach the address it is made out to**, which only appears as its recipient. The proof page and its result say so.
+- Proofs only. Queue sends, resends and forwards always go through the mail service.
+- A proof handed to Mailpit is logged in the Send Log as PROOF, like any proof. It needs no mail service: proofs work before one is connected, and do not count against its quota.
+- If Mailpit cannot be reached the proof is refused with the reason; it does not fall back to the mail service and nothing is kept for a retry.
+- The setting is `.env` only (not on the Settings page), plain SMTP without credentials or TLS, so use an address on the same server. `ctnlist:diagnose` reports where proofs go, an unusable value as an ERROR and, in production, an address that is not on this server as a WARN.
+- Empty (the default): proofs go through the mail service.
+
+**Development.** `dev/podman/ctnlist.env.dist` sets `MAIL_PROOF_SMTP=mailpit:1025`, the stack's own Mailpit (http://localhost:8125), so proofs work without a mail service. An environment file from an earlier checkout is not edited: add the line yourself (`bin/dev up` says when it is missing). `bin/dev test-cattomail` still sends its proof through the mail service.
+
+**Production**, with Mailpit on the ctnlist server (one Mailpit serves every installation on it):
+
+1. Install the Mailpit binary as `/usr/local/bin/mailpit` (a single file from its [releases](https://github.com/axllent/mailpit/releases); check the published checksum).
+2. Create its user and password file. The password protects the web page and the API; Mailpit checks it itself (basic auth, an htpasswd file):
+   ```bash
+   useradd --system --no-create-home --shell /usr/sbin/nologin mailpit
+   install -d -m 750 -o root -g mailpit /etc/ctnlist
+   htpasswd -B -c /etc/ctnlist/mailpit-users <name>          # from apache2-utils; asks for the password
+   chown root:mailpit /etc/ctnlist/mailpit-users && chmod 640 /etc/ctnlist/mailpit-users
+   ```
+3. Install `deploy/mailpit/ctnlist-mailpit.service` as `/etc/systemd/system/ctnlist-mailpit.service`, then `systemctl daemon-reload && systemctl enable --now ctnlist-mailpit`. It listens for SMTP on `127.0.0.1:1025` and serves its page on `127.0.0.1:8025` under `/mailpit/`; neither is reachable from outside the server. It keeps the newest 500 messages for at most 30 days in `/var/lib/ctnlist-mailpit`.
+4. Publish the page through nginx: put `deploy/nginx/mailpit.location.conf.example` into the installation's HTTPS server block (`nginx -t`, reload). Proofs are then read at `https://<host>/mailpit/`, after Mailpit's own name and password prompt; the password only ever travels inside TLS.
+5. Set `MAIL_PROOF_SMTP=127.0.0.1:1025` in each installation's `.env`. It applies from the next request.
+6. Check: `ctnlist:diagnose` says "proofs go to Mailpit at 127.0.0.1:1025"; send a proof and find it at `https://<host>/mailpit/`; `curl -I https://<host>/mailpit/` without a password answers 401.
+
+Port 1025 must stay closed to the outside (it is bound to loopback; do not publish or forward it): anything that can connect to it can put mail into Mailpit. A proof holds the message's content with test values ("Test Recipient"), never a subscriber's details, but it is unpublished content: give the password only to the people who write messages.
 
 ## catto-mail integration
 
@@ -288,7 +328,7 @@ The page then shows what is connected (the service, the catto-mail client, who c
 - A sending run (one queue run, proof, resend or forward) gets send jobs, one per message and list, of at most 10,000 recipients each: a bigger run gets several jobs, numbered `<run uuid>/<n>` (their `external_reference`).
 - Recipients are uploaded in batches of at most 500, and smaller ones when the message is large (each recipient carries its own rendered copy, and catto-mail accepts at most 10 MiB per request); then the job is submitted. A message too large for one upload is refused before anything is staged, and its queue rows stay.
 - Each recipient carries its final subject, HTML and text, `external_recipient_reference` (the ctnlist delivery's UUID) and, for subscription mail, a per-recipient one-click `unsubscribe_url`. That URL is `https://…/unsubscribe-link/…`, signed, without tracking, and unsubscribes from that list only.
-- Proofs, and resends of a draft without lists, are transactional jobs.
+- Proofs, and resends of a draft without lists, are transactional jobs. With `MAIL_PROOF_SMTP` set, proofs do not come here at all: they go to Mailpit ([Proofs to Mailpit](#proofs-to-mailpit)).
 - A message's From domain must be a sending domain registered in catto-mail, and subscription mail needs an https `APP_BASE_URL`.
 - **Admin → Sending → Delivery (catto-mail)** shows each message's send jobs, every recipient's message state, and a recipient's event history read live from catto-mail. `remote_accepted` is acceptance by the receiving server, not inbox delivery; `open_recorded` is not proof of reading.
 - Only one queue run sends at a time per database (a PostgreSQL advisory lock): a second one answers "The queue is already being sent." A run that dies (time limit, PHP-FPM reload, reboot) blocks nothing, because the database frees its lock.
@@ -437,7 +477,8 @@ All development mail then ends up in catto-mail's Mailpit (catto-mail's own capt
 | `ctnlist:cattomail:work` | every minute | Moves catto-mail work on: stored webhook events, unsent jobs, opt-outs, validation submissions, polling of jobs without a final state. Webhooks are the primary path; this is the safety net. |
 | `ctnlist:maintenance` | hourly | Housekeeping (below) and a count of stuck work. `--dry-run` only counts. |
 | `ctnlist:diagnose` | by hand | Configuration and health: required settings, secrets set or not (never their values), PHP extensions, database (PostgreSQL 16 or later) and suppression database, schema, obsolete settings, writable directories, worker and maintenance heartbeats, whether the worker runs with the web server's configuration, stuck work. With `--production` (automatic under `APP_ENV=prod`) also the production rules: `APP_ENV`/`APP_DEBUG`, secret strength and placeholders, a public https `APP_BASE_URL`, a real mail transport, catto-mail configured, suppression provider, `TRUSTED_PROXIES`, example addresses, the installation's front controller and CKEditor copy, compiled assets, code and `.env` permissions. ERROR lines make the exit status 1. It sends no mail and calls no external service. |
-| `ctnlist:cattomail:check` | by hand | The catto-mail connection check (`--e2e` only in development). |
+| `ctnlist:cattomail:check` | by hand | The catto-mail connection check (`--e2e` only in development; its proof always goes through the mail service, whatever `MAIL_PROOF_SMTP` says). |
+| `ctnlist:templates:samples` | by hand | Adds the three sample email templates that are not there yet (by name). It never replaces a template, so it can be run again. |
 
 The two scheduled commands are kept separate: the worker must run often and be quick, and housekeeping need not. Each runs one at a time per database (PostgreSQL advisory locks), so overlapping cron runs skip.
 
@@ -538,7 +579,7 @@ bin/dev up          # build and start, composer install, migrations (including t
 bin/dev help        # all commands
 ```
 
-The application is at http://localhost:8180 (and https://localhost:8543 with a generated development certificate). Transactional mail is captured by Mailpit at http://localhost:8125: sign in as `admin@ctnlist.test`: open the link it receives, then press Sign in on the page it opens (opening the link alone signs nobody in). The development instance runs without a banlist database (`SUPPRESSION_PROVIDER=none`) and, until catto-mail is connected ([development route](#catto-mail-development-route)), sends no campaign content: the queue, proofs and resends report that catto-mail is not configured and keep their work.
+The application is at http://localhost:8180 (and https://localhost:8543 with a generated development certificate). Transactional mail, and every proof (`MAIL_PROOF_SMTP=mailpit:1025`), is captured by Mailpit at http://localhost:8125, and the three sample templates are loaded: sign in as `admin@ctnlist.test`: open the link it receives, then press Sign in on the page it opens (opening the link alone signs nobody in). The development instance runs without a banlist database (`SUPPRESSION_PROVIDER=none`) and, until catto-mail is connected ([development route](#catto-mail-development-route)), sends no campaign content: the queue, proofs and resends report that catto-mail is not configured and keep their work.
 
 ## Testing and validation
 
