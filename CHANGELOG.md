@@ -2,7 +2,7 @@
 
 The release history of ctnlist. Versions 5.0.x and 6.0.x are an incremental modernisation of the working v5.0 application; the v5 behaviour they keep, and the deliberate changes from it, are listed in [RESTORED-FUNCTIONALITY.md](docs/RESTORED-FUNCTIONALITY.md).
 
-## Unreleased
+## 6.0.11 (2026-10-12)
 
 An installer, connecting the mail service from the Delivery page, proofs to Mailpit, three sample templates, an acceptable use policy of the site's own, and two fixes:
 - **Installer:** `install-ctnlist`, at the root of the release, installs ctnlist on a server or moves an installation to another release, as root, in one command: `sudo bash install-ctnlist --installation <name> --version vX.Y.Z` (without `--version`, the newest release). It needs a Debian or Ubuntu server with PHP 8.5 and PHP-FPM, Composer, Git, PostgreSQL 16 or later and nginx; it checks them and installs no packages. Each of its 14 steps says PASS, WARN or FAIL, and running it again is safe.

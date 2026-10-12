@@ -1,4 +1,4 @@
-# ctnlist 6.0.10
+# ctnlist 6.0.11
 
 ctnlist is a web-based mailing-list application created by Richard Royston Catto in 2009. Versions 5.0.x and 6.0.x are an incremental modernisation of the working v5.0 application, not a replacement of its established workflows.
 
@@ -142,7 +142,7 @@ dev/installer-test/  the stand-in server and the test of install-ctnlist (bin/de
 
 ### Layout and permissions
 
-The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.0.10/` (the path is set in `public_html/index.php`): owned by root, read-only to the PHP-FPM user (`www-data`), with `composer install --no-dev --optimize-autoloader` run there. Each installation has its own directory, e.g. `/var/www/<installation>`:
+The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.0.11/` (the path is set in `public_html/index.php`): owned by root, read-only to the PHP-FPM user (`www-data`), with `composer install --no-dev --optimize-autoloader` run there. Each installation has its own directory, e.g. `/var/www/<installation>`:
 
 | Path | Owner, mode | What |
 |---|---|---|
@@ -156,7 +156,7 @@ Nothing else is writable by PHP. Only `public_html/` is web-accessible; `.env`, 
 
 ### The installer
 
-`install-ctnlist`, at the root of every release after 6.0.10, does the steps of the two sections below in one command, as root, on a Debian or Ubuntu server that meets the requirements above (it checks them and names what is missing; it installs no packages):
+`install-ctnlist`, at the root of every release from 6.0.11 on, does the steps of the two sections below in one command, as root, on a Debian or Ubuntu server that meets the requirements above (it checks them and names what is missing; it installs no packages):
 
 ```bash
 curl -fsSLO https://raw.githubusercontent.com/rrcatto/ctnlist/vX.Y.Z/install-ctnlist
@@ -473,7 +473,7 @@ The development stacks are separate (catto-mail's pod is on an internal network,
 3. `bin/dev cattomail-ca` saves catto-mail's self-signed development certificate (read from its public port) to `dev/podman/cattomail-ca.pem` (gitignored). Repeat it when catto-mail's certificate is regenerated.
 4. In `dev/podman/ctnlist.env` (leave `CATTOMAIL_API_BASE_URL`, `CATTOMAIL_API_KEY` and `CATTOMAIL_WEBHOOK_SECRET` empty):
    - `CATTOMAIL_API_CONNECT_HOST=catto-mail:443`: catto-mail's address is `https://localhost:8443`, a port that exists only on your machine; from ctnlist's containers the same service answers at `catto-mail`, port 443. TLS is still verified for `localhost`;
-   - `CATTOMAIL_CA_FILE=/usr/local/lib/php/ctnlist/6.0.10/dev/podman/cattomail-ca.pem`;
+   - `CATTOMAIL_CA_FILE=/usr/local/lib/php/ctnlist/6.0.11/dev/podman/cattomail-ca.pem`;
    - `CATTOMAIL_WEBHOOK_URL=http://ctnlist-web/cattomail/webhook`: where catto-mail's pod can reach ctnlist (plain http is accepted by a development catto-mail);
    - for subscription mail, `APP_BASE_URL=https://localhost:8543/` (ctnlist's development HTTPS listener).
 
