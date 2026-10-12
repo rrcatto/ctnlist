@@ -45,7 +45,9 @@ final class PageController extends AbstractController
      * messages. The document names no product and no domain; its placeholders
      * are filled with this installation's own name, domain, organisation and
      * contact address (Settings), after rendering and escaped, so a configured
-     * value is shown exactly as written. App\Util\Markdown escapes all of the
+     * value is shown exactly as written. Abuse reports and complaints go to
+     * abuse@<domain> (the document writes abuse@{{domain}}), never to the
+     * contact address, which is named for questions about the policy. App\Util\Markdown escapes all of the
      * document's text, so its HTML is printed as it is.
      */
     #[Route('/acceptable-use-policy', name: 'acceptable_use_policy', methods: ['GET'])]

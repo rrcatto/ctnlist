@@ -75,4 +75,5 @@ Senders are the administrators, and anyone else whose role lets them add subscri
 3. Senders must also obey the direct-marketing rules of POPIA section 69, the Electronic Communications and Transactions Act and the Consumer Protection Act, and the laws of every country they send to.
 4. This policy is governed by the law of South Africa.
 5. This policy may change. A new version gets a new version number.
-6. Report abuse, and send questions about this policy, to {{contact}}.
+6. Report abuse, and send complaints about mail from {{site_name}}, to abuse@{{domain}}.
+7. Questions about this policy go to {{contact}}.

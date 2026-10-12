@@ -284,7 +284,7 @@ final class LayoutTest extends SmokeTestCase
         self::assertGreaterThanOrEqual(3, count($sections[1]));
         self::withSetting('APP_LIST_NAME', 'Example & Co News', static function () use ($title, $sections): void {
             self::withSetting('APP_ORGANISATION', 'Example <Org> (Pty) Ltd', static function () use ($title, $sections): void {
-                self::withSetting('CONTACT_MAIL_ADDRESS', 'abuse_desk@lists.example.org', static function () use ($title, $sections): void {
+                self::withSetting('CONTACT_MAIL_ADDRESS', 'front_desk@lists.example.org', static function () use ($title, $sections): void {
                     $page = self::request(self::client(), 'GET', '/acceptable-use-policy');
                     self::assertSame(200, $page['status']);
                     $shown = htmlspecialchars(str_replace('{{site_name}}', 'Example & Co News', trim($title)));
@@ -296,7 +296,11 @@ final class LayoutTest extends SmokeTestCase
                     $policy = self::match('#<article class="card app-policy">(.*?)</article>#s', $page['body'], 'the policy article')[1];
                     self::assertStringContainsString('the mailing lists run by Example &lt;Org&gt; (Pty) Ltd:', $policy, 'configured values are escaped');
                     self::assertStringContainsString('You may not use Example &amp; Co News to send:', $policy);
-                    self::assertStringContainsString('to abuse_desk@lists.example.org.', $policy);
+                    // Abuse reports and complaints go to the abuse mailbox of the installation's domain, never to the contact address.
+                    $domain = self::match('#who uses Example &amp; Co News \(([a-z0-9.-]+)\)#', $policy, 'the installation\'s domain')[1];
+                    self::assertStringContainsString('Report abuse, and send complaints about mail from Example &amp; Co News, to abuse@' . $domain . '.', $policy);
+                    self::assertStringContainsString('Questions about this policy go to front_desk@lists.example.org.', $policy);
+                    self::assertSame(1, substr_count($policy, 'front_desk@lists.example.org'), 'the contact address is named for questions only');
                     self::assertStringNotContainsString('{{', $policy, 'every placeholder is filled');
                     self::assertDoesNotMatchRegularExpression('/catto|ctnlist/i', $policy, 'the policy names the installation, never a product');
                     self::assertStringContainsString('<table class="table align-middle">', $policy);

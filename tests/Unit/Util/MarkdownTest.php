@@ -79,5 +79,12 @@ final class MarkdownTest extends TestCase
         // The placeholders survive rendering untouched, so the page can fill them in.
         self::assertStringContainsString('<h1>{{site_name}} Acceptable Use Policy</h1>', $html);
         self::assertMatchesRegularExpression('/^Version [A-Za-z0-9][A-Za-z0-9._-]*/m', $markdown);
+        // Abuse reports and complaints go to the abuse mailbox of the installation's domain, never to the contact address.
+        self::assertStringContainsString('to abuse@{{domain}}.', $markdown);
+        foreach (preg_split('/\R/', $markdown) ?: [] as $line) {
+            if (preg_match('/\babuse\b/i', $line) === 1 && preg_match('/\breport|\bcomplain/i', $line) === 1) {
+                self::assertStringNotContainsString('{{contact}}', $line);
+            }
+        }
     }
 }

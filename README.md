@@ -25,7 +25,7 @@ Since 6.0 every route is a Symfony 8.1 controller and the Fat-Free Framework has
 - CSRF protection for state-changing actions
 - separate PostgreSQL global email/domain suppression database
 - production templates (nginx, PHP-FPM, cron, systemd) and a production preflight, `ctnlist:diagnose --production`
-- an acceptable use policy page, `/acceptable-use-policy`, linked from every page's footer and built from `docs/AUP.md`: the site's own rules for its subscribers and for whoever writes and sends its messages. The document names no product or domain; the page fills in the installation's list name, domain, organisation and contact address from Settings (replace the file to publish a different policy)
+- an acceptable use policy page, `/acceptable-use-policy`, linked from every page's footer and built from `docs/AUP.md`: the site's own rules for its subscribers and for whoever writes and sends its messages. The document names no product or domain; the page fills in the installation's list name, domain, organisation and contact address from Settings, and sends abuse reports and complaints to `abuse@<APP_DOMAIN>`, which must be a mailbox that is read (replace the file to publish a different policy)
 
 ## Restored v5 functionality
 
@@ -183,6 +183,7 @@ Before a release goes live. The items marked † need the production server and 
 - [ ] † The worker and maintenance scheduled (cron or systemd timers) and each seen running.
 - [ ] † `ctnlist:diagnose --production` as `www-data` reports no ERROR; `https://<host>/health` answers `OK`.
 - [ ] † The mail service connected on the Delivery page (or set in `.env`, with `<APP_BASE_URL>cattomail/webhook` registered by hand), and the page shows that the From address's domain can send; `ctnlist:cattomail:check` reports it reachable and authenticated, and `bin/dev test-cattomail` has passed against a development catto-mail.
+- [ ] † `abuse@<APP_DOMAIN>` is a mailbox that is read: the acceptable use policy sends abuse reports and complaints there, not to the administrator.
 - [ ] † A proof to an address you can read, a small campaign to a test list, a webhook round trip (delivery and bounce events on **Admin → Sending → Delivery**) and an address-validation job.
 - [ ] † Recovery sanity check: the Delivery page shows no stuck work, and a send job without a final webhook is reconciled after `CATTOMAIL_RECONCILE_AFTER_SECONDS`.
 
