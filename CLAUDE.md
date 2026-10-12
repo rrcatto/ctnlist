@@ -34,6 +34,7 @@ bin/dev analyse                 # PHPStan level 8 over src/, public_html/index.p
 bin/dev console <args>          # bin/console as www-data, e.g. ctnlist:maintenance --dry-run, ctnlist:cattomail:work, ctnlist:diagnose
 bin/dev migrate                 # Phinx migrations of the main database (composer migrate-paralegal)
 echo reset | bin/dev reset-db   # delete the dev database volume and re-run up
+bin/dev test-installer          # optional, never part of check: install-ctnlist in a stand-in server (several minutes, needs the Internet)
 bin/dev help                    # everything else: composer, php, psql, shell, logs, seed-admin, cattomail-*
 ```
 
@@ -49,6 +50,8 @@ bin/dev help                    # everything else: composer, php, psql, shell, l
 The repository is a shared code tree installed per version at `/usr/local/lib/php/ctnlist/<version>/` (`$sharedDirectory` in `public_html/index.php`; the dev container mounts the repository there). Each installation directory has its own copy of `public_html/` as the web root, `.env` one level above it, a writable `var/` (Symfony cache and logs) and `logs/` (contact and import logs, export files). `App\Kernel` takes the installation directory as its third constructor argument: `getProjectDir()` is the shared tree, while the cache and log directories and `%kernel.instance_dir%` belong to the installation.
 
 `bin/console` needs `CTNLIST_INSTANCE_DIR`. Cron runs commands with only that variable, so CLI code must get its configuration the same way the web does (`App\Config\ConfigFingerprint` reports drift). Production compiles assets per installation (`asset-map:compile` into `public_html/assets/`); the server templates are in `deploy/` and the preflight is `ctnlist:diagnose --production` (README "Deployment"). The dev stack has a second installation, `/var/www/ctnlist-smoke` (internal port 8081, database `ctnlist_smoke`), used only by the smoke tests.
+
+`install-ctnlist` (repository root, run as root on the server) automates README "New installation" and "New release" and must stay in step with them, with `deploy/` (it fills those templates) and with `.env.example` (it sets values by name). It never replaces an `.env`, database, pool or nginx site that exists, never logs or prints a secret, and refuses a release whose migrations differ from the installed one's unless `--recreate-database`. Its list of PHP extensions is `DiagnoseCommand::REQUIRED_EXTENSIONS` (`PhpExtensionsTest`). After changing it, the templates or the deployment steps, run `bin/dev test-installer` (`dev/installer-test/`: a systemd container standing in for the server).
 
 ## Architecture
 

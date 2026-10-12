@@ -115,6 +115,7 @@ A message can be saved without any audience. `ALL` is available for general camp
 ## Directory layout
 
 ```text
+install-ctnlist the installer, run as root on a server: a new installation, or an installation moved to another release (Deployment)
 bin/            console (Symfony), dev (podman development environment)
 config/         Symfony configuration; phinx/ (migration configs, default ban.env location)
 database/       Phinx migrations (domain/, banlist/), destructive development reset scripts
@@ -128,6 +129,7 @@ templates/      Twig templates: base.html.twig and layout/ (navbar, admin bar, f
 tests/          PHPUnit: Unit/, Integration/ (application against the ctnlist_test database), Smoke/ (HTTP against the stack's smoke installation), Support/ (FakeCattoMail)
 docs/           project documentation; AUP.md is also the source of the site's acceptable use policy page, so docs/ is part of an installed release
 dev/podman/     development container files
+dev/installer-test/  the stand-in server and the test of install-ctnlist (bin/dev test-installer)
 ```
 
 ## Deployment
@@ -152,9 +154,29 @@ The repository is a shared code tree installed once per version at `/usr/local/l
 
 Nothing else is writable by PHP. Only `public_html/` is web-accessible; `.env`, the code tree, `vendor/`, `var/` and `logs/` are never served. Run every console command for the installation as `www-data` (`sudo -u www-data env CTNLIST_INSTANCE_DIR=… php bin/console …`) so the cache it builds stays writable by PHP-FPM.
 
+### The installer
+
+`install-ctnlist`, at the root of every release after 6.0.10, does the steps of the two sections below in one command, as root, on a Debian or Ubuntu server that meets the requirements above (it checks them and names what is missing; it installs no packages):
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/rrcatto/ctnlist/vX.Y.Z/install-ctnlist
+sudo bash install-ctnlist --installation <installation> --version vX.Y.Z
+```
+
+`<installation>` is the directory name under `/var/www`. Without `--version` it takes the newest release. Each of its 14 steps says PASS, WARN or FAIL; a FAIL says what failed, why and how to fix it, and running it again is safe. Its log is `/var/log/ctnlist-install.log`, and it holds no secret.
+
+- **A new installation** (no `/var/www/<installation>/.env` yet). It asks for the host name, the administrator's address, the list's name, the sender, the SMTP server and the suppression database (`--help` lists them as options, for an unattended run). It then installs the code, writes `.env` with generated secrets, creates the database (`ctnlist_<installation>`, on this server's PostgreSQL) and the schema, builds the cache and the assets, adds a PHP-FPM pool and an nginx site, and schedules the worker and maintenance as systemd timers. The suppression database is the one whose `ban.env` you name (`--banlist-env`), or a new one on this server (`--create-banlist`, kept in `/etc/ctnlist/ban.env` and found there by later installations).
+- **An existing installation.** It installs the new release beside the old one, dumps the database to `/var/backups/ctnlist/` and asks before it switches: front controller and editor files, cache, assets, the scheduled commands and a PHP-FPM reload. `.env` and the data are kept; settings the new release adds are named. Naming an earlier release with `--version` switches back in the same way.
+- **It never replaces what is there:** an `.env`, a database, a role, a PHP-FPM pool or an nginx site that exists is kept. Where nginx already serves the host name (an older site, for one), the new site is written beside it as `/etc/nginx/conf.d/ctnlist-<installation>.conf.new` and you switch over when ready. Scheduled commands in `/etc/cron.d` are moved to the new release; a user's crontab is named for you to change.
+- **The certificate.** The site uses `/etc/ctnlist/tls/<installation>/`, which links to Let's Encrypt's certificate for the host when there is one (or to `--certificate` and `--certificate-key`), and otherwise to a temporary self-signed certificate. Get the real one (`certbot certonly --webroot -w /var/www/<installation>/public_html -d <host>`), then run the installer again: it moves the links and reloads nginx.
+- **A release with another database schema.** ctnlist has no upgrade migrations before go-live, so the installer compares the two releases' migrations and stops, with nothing changed, when they differ. `--recreate-database` then dumps the database, empties it and creates the schema again: every subscriber, list and message is lost, so it is only for an installation with nothing to keep. To restore a dump: `pg_restore --clean --if-exists -d <database> <dump>`, with the release it was taken from.
+- At the end it runs `ctnlist:diagnose --production` and shows its errors and warnings; a new installation has some until the mail service is connected. `--sample-templates` adds the three sample templates, and `--no-web-server` leaves nginx and PHP-FPM to you.
+
+It does not install Mailpit ([Proofs to Mailpit](#proofs-to-mailpit)) and does not connect the mail service (step 11 below). `bin/dev test-installer` runs it in a stand-in server ([Testing and validation](#testing-and-validation)).
+
 ### New installation
 
-The new server starts from an empty database; there are no upgrade migrations (see Database setup).
+The steps by hand, which the installer automates. The new server starts from an empty database; there are no upgrade migrations (see Database setup).
 
 1. Create the PostgreSQL role and database (a generated password, e.g. `openssl rand -base64 24`).
 2. Install the code at `/usr/local/lib/php/ctnlist/<version>/` and run `composer install --no-dev --optimize-autoloader`.
@@ -170,7 +192,7 @@ The new server starts from an empty database; there are no upgrade migrations (s
 
 ### New release
 
-Install the new version beside the old one (`/usr/local/lib/php/ctnlist/<new version>/`, `composer install --no-dev --optimize-autoloader`), then per installation: copy the release's `public_html/index.php` and `public_html/vendor/`, run `cache:clear` and then `asset-map:compile` as `www-data` (the installation's cache still belongs to the old release), point the cron entries or systemd units at the new path, reload PHP-FPM, and run `ctnlist:diagnose --production`, which reports a front controller that still loads the old tree, a missing CKEditor copy and stale compiled assets. Compiled assets are written to the installation's own `public_html/assets/`; installations never share them.
+By hand (the installer does the same): install the new version beside the old one (`/usr/local/lib/php/ctnlist/<new version>/`, `composer install --no-dev --optimize-autoloader`), then per installation: copy the release's `public_html/index.php` and `public_html/vendor/`, run `cache:clear` and then `asset-map:compile` as `www-data` (the installation's cache still belongs to the old release), point the cron entries or systemd units at the new path, reload PHP-FPM, and run `ctnlist:diagnose --production`, which reports a front controller that still loads the old tree, a missing CKEditor copy and stale compiled assets. Compiled assets are written to the installation's own `public_html/assets/`; installations never share them.
 
 ### Release checklist
 
@@ -595,6 +617,8 @@ bin/dev test        # PHPUnit: unit, integration and smoke suites
 Smoke tests never touch the development installation or its database. They drive a second installation in the same stack, `/var/www/ctnlist-smoke` (served internally at `http://web:8081`, generated `dev/podman/smoke.env`), whose database `ctnlist_smoke` is dropped, migrated and seeded before every `bin/dev test`. Integration tests use `ctnlist_test`, each test in a rolled-back transaction. `SmokeTestCase` refuses any other database and a `SMOKE_BASE_URL` that is not the installation using it, `IntegrationTestCase` refuses any database but `ctnlist_test`, the generated `smoke.env` never carries catto-mail credentials, and `bin/dev check` compares row counts of the development database before and after the tests and fails if anything changed.
 
 `tests/Smoke/RouteSmokeTest` requests every GET route of the running stack over HTTP, anonymously and as the development administrator, and checks status codes, login redirects, access control and PHP error output. Every new GET route must be added to it. `tests/Smoke/AuthFlowTest` covers sign-in links (opening them changes nothing, the Sign in POST and its CSRF token, parallel, used, expired and malformed links, a link to confirm a list), auth cookies, session rotation, logout and CSRF, `tests/Smoke/LayoutTest` the site layout, assets, the Content-Security-Policy and error pages, `AdminScreensTest` the administration screens, `AdminListsRolesTest` and `RoleAdministrationTest` list and role administration, `AdminMessagesTemplatesTest`, `AdminQueueTest`, `AdminSubscribersTest`, `SettingsPageTest` and `ReportsTest` the rest of the administration and the Site Log, `CattoMailSmokeTest` the catto-mail pages and webhook endpoint, `SecurityBoundaryTest` extra form fields, rate limits, the worker-configuration warning and the health check, and `ProfileTest`, `ConsentTest`, `MessageActionTest` and `ArchiveContactTest` the subscriber-facing pages. `tests/Unit` holds unit tests; `tests/Integration` boots the application against the `ctnlist_test` database (each test rolled back) and covers the services: suppression (including the banlist database, `ctnlist_banlist_test`), the send and message logs, mail, rendering, messages, the delivery queue, consent, contact and subscriber administration, catto-mail against the fake, maintenance and diagnostics, sign-in, settings and the HTTP boundary.
+
+`bin/dev test-installer` is separate from `bin/dev check` (several minutes, and it needs the Internet for the packages): it runs `install-ctnlist` as root in a stand-in server, a systemd container with PHP-FPM, PostgreSQL and nginx (`dev/installer-test/`). It installs the last released version as a new installation, runs the installer a second time, switches to the working tree as the next version and back, refuses a release with a changed schema and then recreates the database on request, and adds a second installation for a host name nginx already serves.
 
 Real SMTP delivery and a production banlist database are not part of the development stack and must be tested on a target installation. The catto-mail end-to-end checks, `bin/dev test-cattomail` against a development catto-mail and the Release checklist's proof, test campaign and webhook round trip on the server, are still to be run once the new production server exists.
 

@@ -60,6 +60,18 @@ final class PhpExtensionsTest extends TestCase
         }
     }
 
+    /** The installer refuses a server that lacks an extension `composer install` would refuse it for. */
+    public function testTheInstallerChecksTheSameExtensions(): void
+    {
+        $installer = (string) file_get_contents(dirname(__DIR__, 2) . '/install-ctnlist');
+        $line = preg_match('/^EXTENSIONS="([a-z_ ]+)"$/m', $installer, $m) === 1 ? $m[1] : self::fail('the EXTENSIONS line is not in install-ctnlist');
+        $checked = explode(' ', $line);
+        sort($checked);
+        $required = array_keys(DiagnoseCommand::REQUIRED_EXTENSIONS);
+        sort($required);
+        self::assertSame($required, $checked);
+    }
+
     /** @return iterable<string, array{string}> */
     public static function required(): iterable
     {

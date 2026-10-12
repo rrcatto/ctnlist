@@ -271,6 +271,7 @@ Usage: bin/dev <command> [args]
   cattomail-link     Attach web/app to the cattomail-dev network (catto-mail development route; up re-attaches automatically when it exists)
   cattomail-status   Show what the catto-mail development route has and lacks (never prints secret values)
   test-cattomail     Optional real end-to-end check against the local development catto-mail (sends one proof)
+  test-installer [--keep]  Optional: run install-ctnlist in a stand-in server (a new installation, a release switch, a changed schema); several minutes, needs the Internet
   cattomail-ca [h:p] Save catto-mail's development certificate (default 127.0.0.1:8443) for CATTOMAIL_CA_FILE
   reset-db           DESTROY the database volume and re-run migrations
 
@@ -308,6 +309,7 @@ case "$cmd" in
     cattomail-link) cattomail_link ;;
     cattomail-status) cattomail_status ;;
     test-cattomail) "$0" console ctnlist:cattomail:check --e2e "$@" ;;
+    test-installer) exec dev/installer-test/run.sh "$@" ;;
     cattomail-ca) cattomail_ca "$@" ;;
     restart) "$0" down && "$0" up ;;
     ps) compose ps ;;

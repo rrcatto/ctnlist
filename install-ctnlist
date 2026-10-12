@@ -1,0 +1,528 @@
+#!/usr/bin/env bash
+# install-ctnlist — install ctnlist on a server, or move an installation to a newer release.
+#
+# Run as root on a Debian or Ubuntu server that already has PHP 8.5 with PHP-FPM, Composer,
+# Git, PostgreSQL 16 or later and nginx (the script checks, and names what is missing). It
+# does the steps of README "New installation" or "New release", whichever applies:
+#
+#   a new installation   the code in /usr/local/lib/php/ctnlist/<version>, the directory
+#                        /var/www/<installation> with its .env (secrets generated here), the
+#                        database and the suppression database, the schema, the cache and the
+#                        assets, a PHP-FPM pool, an nginx site and the two scheduled commands;
+#   an existing one      the new release beside the old one, a dump of the database, then the
+#                        installation switched to it: front controller, cache, assets, the
+#                        scheduled commands and a PHP-FPM reload. .env and the data are kept.
+#                        Naming the earlier release with --version switches back the same way.
+#
+#   curl -fsSLO https://raw.githubusercontent.com/rrcatto/ctnlist/vX.Y.Z/install-ctnlist
+#   sudo bash install-ctnlist --installation NAME --version vX.Y.Z
+#
+# It asks for the few values a new installation needs (--help lists them as options).
+# Re-running it is safe: what is there is checked and kept. It never replaces an .env, a
+# database, a PHP-FPM pool or an nginx site that exists, and it never serves a host name that
+# another nginx site already serves: it leaves its site beside it for you to switch over.
+set -uo pipefail
+
+TOTAL=14
+REPO_URL="https://github.com/rrcatto/ctnlist.git"
+CODE_ROOT="/usr/local/lib/php/ctnlist"
+WEB_ROOT="/var/www"
+FPM_USER="www-data"
+ETC="/etc/ctnlist"
+BACKUPS="/var/backups/ctnlist"
+# What `composer install --no-dev` requires (ctnlist:diagnose REQUIRED_EXTENSIONS; tests/Unit/PhpExtensionsTest).
+EXTENSIONS="pdo pdo_pgsql openssl gd mbstring fileinfo filter json session dom xml iconv"
+NAME="" VERSION="" HOST="" ADMIN_EMAIL="" LIST_NAME="" ORGANISATION="" MAIL_FROM="" MAILER_DSN=""
+BANLIST_ENV="" CREATE_BANLIST=false CERT="" CERT_KEY=""
+ASSUME_YES=false RECREATE=false SAMPLES=false WEB_SERVER=true BACKUP=true
+LOG="/var/log/ctnlist-install.log"
+ARGS="$*"
+
+usage() {
+  cat <<'USAGE'
+usage: sudo ./install-ctnlist --installation NAME [options]
+
+  --installation NAME     the installation: its directory is /var/www/NAME (required)
+  --version vX.Y.Z        the release to install (default: the newest release); an earlier
+                          one than the installation runs switches it back
+
+ a new installation (asked for when not given):
+  --host NAME             the site's public host name, e.g. lists.example.org
+  --admin-email ADDRESS   the first administrator; signs in with an emailed link
+  --list-name TEXT        the list's name (default: the host name)
+  --organisation TEXT     who runs the list (default: the list's name)
+  --mail-from ADDRESS     sender of the site's mail (default: info@<host>)
+  --mailer-dsn DSN        the SMTP server for sign-in links and notifications, e.g.
+                          smtps://USER:PASS@smtp.example.org:465 (nobody can sign in without one)
+  --banlist-env FILE      the ban.env of the suppression database this installation shares
+  --create-banlist        or: create a suppression database on this server
+  --certificate FILE      the site's TLS certificate with its chain, and
+  --certificate-key FILE  its key (default: Let's Encrypt's for the host when it is there,
+                          else a temporary self-signed certificate)
+
+ an existing installation:
+  --recreate-database     when the release changed the schema: dump the database, then empty
+                          it and create the schema again. ALL ITS DATA IS LOST. ctnlist has no
+                          upgrade migrations before go-live.
+  --no-backup             do not dump the database before switching releases
+
+ either:
+  --sample-templates      add the three sample email templates that are not there yet
+  --no-web-server         leave nginx and PHP-FPM alone (you configure and reload them)
+  --yes                   do not ask before an existing installation is switched
+  --repo URL              where to fetch the release (default: the ctnlist GitHub repository)
+  -h, --help
+USAGE
+}
+
+while (($#)); do
+  case "$1" in
+    --installation) NAME="${2:-}"; shift 2 ;;
+    --version) VERSION="${2:-}"; shift 2 ;;
+    --host) HOST="${2:-}"; shift 2 ;;
+    --admin-email) ADMIN_EMAIL="${2:-}"; shift 2 ;;
+    --list-name) LIST_NAME="${2:-}"; shift 2 ;;
+    --organisation) ORGANISATION="${2:-}"; shift 2 ;;
+    --mail-from) MAIL_FROM="${2:-}"; shift 2 ;;
+    --mailer-dsn) MAILER_DSN="${2:-}"; shift 2 ;;
+    --banlist-env) BANLIST_ENV="${2:-}"; shift 2 ;;
+    --create-banlist) CREATE_BANLIST=true; shift ;;
+    --certificate) CERT="${2:-}"; shift 2 ;;
+    --certificate-key) CERT_KEY="${2:-}"; shift 2 ;;
+    --recreate-database) RECREATE=true; shift ;;
+    --no-backup) BACKUP=false; shift ;;
+    --sample-templates) SAMPLES=true; shift ;;
+    --no-web-server) WEB_SERVER=false; shift ;;
+    --yes|--non-interactive) ASSUME_YES=true; shift ;;
+    --repo) REPO_URL="${2:-}"; shift 2 ;;
+    -h|--help) usage; exit 0 ;;
+    *) echo "unknown option $1 (--help)" >&2; exit 64 ;;
+  esac
+done
+
+# ------------------------------------------------------------------------- output
+STEP=0
+NOTES=()
+step() {  # step "Description": announce; the caller ends it with pass/warn
+  STEP=$((STEP + 1)); CURRENT="$1"
+  printf '[%02d/%02d] %s ' "$STEP" "$TOTAL" "$1"
+  local pad=$((58 - ${#1})); ((pad < 2)) && pad=2
+  printf '%.*s' "$pad" '..........................................................'
+  echo "== [$STEP/$TOTAL] $1" >>"$LOG"
+}
+pass() { echo " PASS${1:+  ($1)}"; }
+warn() { echo " WARN  $1"; NOTES+=("$1"); }
+note() { echo " WARN  $1"; }   # a warning the summary explains by itself
+# fail <why> <how to fix>
+fail() {
+  echo " FAIL"
+  echo
+  echo "What failed:  step $STEP, $CURRENT"
+  echo "Why:          $1"
+  echo "How to fix:   $2"
+  echo "Re-running:   safe. Fix the cause, then run this again with the same options; what is done is kept."
+  echo "Full log:     $LOG (the last lines:)"
+  tail -n 12 "$LOG" | sed 's/^/    /'
+  exit 1
+}
+run() { "$@" >>"$LOG" 2>&1; }
+ask() {  # ask VAR "Question" [default]
+  local var="$1" q="$2" def="${3:-}" val
+  [[ -n "${!var}" || "$ASSUME_YES" == true ]] && { [[ -n "${!var}" ]] || printf -v "$var" '%s' "$def"; return 0; }
+  read -r -p "$q${def:+ [$def]}: " val </dev/tty || true
+  printf -v "$var" '%s' "${val:-$def}"
+}
+valid_host() { [[ "$1" =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ ]]; }
+valid_email() { [[ "$1" =~ ^[A-Za-z0-9._%+-]{1,64}@([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ ]]; }
+newer() { [[ "$1" != "$2" && "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n1)" == "$1" ]]; }  # newer A B: A > B
+
+# Commands for the installation, as the PHP-FPM user, exactly as cron and the web server run them.
+as_web() { runuser -u "$FPM_USER" -- env CTNLIST_INSTANCE_DIR="$INST" HOME=/tmp PATH=/usr/local/bin:/usr/bin:/bin "$@"; }
+console() { as_web "$PHP" "$TREE/bin/console" "$@" --no-interaction; }
+phinx() { as_web "$PHP" "$TREE/vendor/bin/phinx" "$@"; }
+# A value of a dotenv file, read with the application's own parser (quotes, escapes).
+envget() {  # envget FILE KEY
+  "$PHP" -r 'require $argv[1] . "/vendor/autoload.php"; $v = (new Symfony\Component\Dotenv\Dotenv())->parse((string) file_get_contents($argv[2]));
+    echo $v[$argv[3]] ?? "";' "$TREE" "$1" "$2" 2>>"$LOG"
+}
+# Set KEY=value lines of a dotenv file in place (a missing key is appended); values are quoted when needed.
+envset() {  # envset FILE KEY VALUE [KEY VALUE ...]
+  "$PHP" -r '$f = $argv[1]; $t = (string) file_get_contents($f);
+    for ($i = 2; $i + 1 < $argc; $i += 2) {
+      [$k, $v] = [$argv[$i], $argv[$i + 1]];
+      $q = preg_match("/^[A-Za-z0-9_.:\/@+=-]*$/", $v) === 1 ? $v : "\"" . addcslashes($v, "\\\"\$") . "\"";
+      $n = 0; $t = (string) preg_replace_callback("/^" . preg_quote($k, "/") . "=.*$/m", static fn() => $k . "=" . $q, $t, 1, $n);
+      if ($n === 0) { $t = rtrim($t, "\n") . "\n" . $k . "=" . $q . "\n"; }
+    }
+    file_put_contents($f, $t);' "$@"
+}
+dbq() {  # dbq SQL: one value from the installation's database ("" when it cannot be reached)
+  PGPASSWORD="$DB_PASS" PGCONNECT_TIMEOUT=10 psql -X -At -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -c "$1" 2>>"$LOG"
+}
+pg_super() { (cd / && runuser -u postgres -- psql -X -At -v ON_ERROR_STOP=1 "$@") 2>>"$LOG"; }
+local_db() { [[ "$1" == 127.0.0.1 || "$1" == localhost || "$1" == ::1 ]]; }
+# create_database NAME ROLE PASSWORD: a role and its database on this server's PostgreSQL; never touches an existing role.
+create_database() {
+  [[ "$1" =~ ^[A-Za-z0-9_]+$ && "$2" =~ ^[A-Za-z0-9_]+$ ]] || { REASON="the database name $1 or the role $2 has characters other than letters, digits and _"; return 1; }
+  command -v runuser >/dev/null && id postgres >/dev/null 2>&1 && pg_super -c 'SELECT 1' >/dev/null \
+    || { REASON="PostgreSQL is not running on this server (or has no postgres superuser account)"; return 1; }
+  local num; num="$(pg_super -c 'SHOW server_version_num')"
+  ((num >= 160000)) || { REASON="this server's PostgreSQL is too old (version number $num): ctnlist needs 16 or later"; return 1; }
+  [[ -z "$(pg_super -c "SELECT 1 FROM pg_roles WHERE rolname = '$2'")" ]] \
+    || { REASON="a PostgreSQL role $2 exists already, with another password than the configuration's"; return 1; }
+  [[ -z "$(pg_super -c "SELECT 1 FROM pg_database WHERE datname = '$1'")" ]] \
+    || { REASON="a PostgreSQL database $1 exists already"; return 1; }
+  pg_super -c "CREATE ROLE \"$2\" LOGIN PASSWORD '$3'" -c "CREATE DATABASE \"$1\" OWNER \"$2\" ENCODING 'UTF8' TEMPLATE template0" >>"$LOG" \
+    || { REASON="the role or the database could not be created"; return 1; }
+}
+
+main() {
+  echo "ctnlist installer — log: $LOG"
+  : >>"$LOG" 2>/dev/null || { echo "Run the installer as root (sudo)." >&2; exit 1; }
+  chmod 600 "$LOG"
+  echo "==== $(date +%FT%T%:z) install-ctnlist ${ARGS//--mailer-dsn [^ ]*/--mailer-dsn ***}" >>"$LOG"
+
+  step "Checking that this is root, and the installation's name"
+  [[ $EUID -eq 0 ]] || fail "the installer is not running as root" "run it with sudo, or as root"
+  [[ "$NAME" =~ ^[a-z0-9]([a-z0-9._-]{0,62}[a-z0-9])?$ ]] || fail "no usable --installation name ('$NAME')" \
+    "pass --installation NAME: lower-case letters, digits, dots and hyphens; the installation lives in $WEB_ROOT/NAME"
+  INST="$WEB_ROOT/$NAME"
+  EXISTING=false; [[ -f "$INST/.env" ]] && EXISTING=true
+  HAVE=""
+  if [[ -f "$INST/public_html/index.php" ]]; then
+    HAVE="$(sed -n "s#^\$sharedDirectory = '$CODE_ROOT/\([^/']*\)/';.*#\1#p" "$INST/public_html/index.php" | head -n1)"
+  fi
+  # Not finished yet: no .env, or an .env from an earlier run that stopped before the front controller was copied.
+  FRESH=false; [[ "$EXISTING" != true || ! -f "$INST/public_html/index.php" ]] && FRESH=true
+  if [[ "$EXISTING" == true ]]; then pass "$INST exists${HAVE:+, on release $HAVE}"; else pass "$INST, a new installation"; fi
+
+  step "Checking PHP, its extensions and the server's tools"
+  missing=()
+  PHP="$(command -v php || true)"
+  for tool in git composer openssl psql pg_dump curl runuser; do command -v "$tool" >/dev/null || missing+=("$tool"); done
+  if [[ -z "$PHP" ]]; then missing+=("php (8.5 or later)")
+  elif ! "$PHP" -r 'exit(version_compare(PHP_VERSION, "8.5.0", ">=") ? 0 : 1);'; then missing+=("PHP 8.5 or later (php is $("$PHP" -r 'echo PHP_VERSION;'))")
+  else
+    for ext in $EXTENSIONS; do "$PHP" -r "exit(extension_loaded('$ext') ? 0 : 1);" || missing+=("the PHP extension $ext"); done
+  fi
+  id "$FPM_USER" >/dev/null 2>&1 || missing+=("the user $FPM_USER (PHP-FPM)")
+  PHPV=""; [[ -n "$PHP" ]] && PHPV="$("$PHP" -r 'echo PHP_MAJOR_VERSION . "." . PHP_MINOR_VERSION;')"
+  POOL_DIR="/etc/php/$PHPV/fpm/pool.d"; FPM_SERVICE="php$PHPV-fpm"
+  if [[ "$WEB_SERVER" == true ]]; then
+    command -v nginx >/dev/null || missing+=("nginx")
+    [[ -d "$POOL_DIR" ]] || missing+=("PHP-FPM for PHP $PHPV ($POOL_DIR)")
+    command -v systemctl >/dev/null && [[ -d /run/systemd/system ]] || missing+=("systemd")
+  fi
+  ((${#missing[@]} == 0)) || fail "this server lacks: $(printf '%s; ' "${missing[@]}")" \
+    "on Debian or Ubuntu: apt-get install nginx postgresql composer git curl openssl php8.5-fpm php8.5-cli php8.5-pgsql php8.5-gd php8.5-mbstring php8.5-xml php8.5-intl php8.5-curl   (with --no-web-server, nginx and PHP-FPM are not needed)"
+  pass "PHP $("$PHP" -r 'echo PHP_VERSION;')"
+
+  step "Finding the release"
+  if [[ -z "$VERSION" ]]; then
+    VERSION="$(git ls-remote --tags --refs "$REPO_URL" 'v[0-9]*' 2>>"$LOG" | sed 's#.*refs/tags/##' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1)"
+    [[ -n "$VERSION" ]] || fail "no release was found at $REPO_URL" "check the server's network and DNS, or pass --version vX.Y.Z"
+  fi
+  [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "$VERSION is not a release tag (vX.Y.Z)" "install a release tag, never a branch"
+  NEW="${VERSION#v}"; TREE="$CODE_ROOT/$NEW"
+  BACK=false; [[ -n "$HAVE" ]] && newer "$HAVE" "$NEW" && BACK=true
+  if [[ "$EXISTING" != true ]]; then pass "$VERSION"
+  elif [[ "$HAVE" == "$NEW" ]]; then pass "$VERSION, the release the installation runs: checking it over"
+  elif [[ "$BACK" == true ]]; then pass "$VERSION, back from $HAVE"
+  else pass "$VERSION, from ${HAVE:-an unknown release}"; fi
+
+  step "Installing the code in $TREE"
+  if [[ -f "$TREE/vendor/autoload_runtime.php" && -f "$TREE/bin/console" ]]; then
+    pass "already there"
+  else
+    tmp="$(mktemp -d "$CODE_ROOT.XXXXXX" 2>/dev/null || { mkdir -p "$(dirname "$CODE_ROOT")" && mktemp -d "$CODE_ROOT.XXXXXX"; })"
+    run git clone --quiet --depth 1 --branch "$VERSION" "$REPO_URL" "$tmp/src" \
+      || { rm -rf "$tmp"; fail "release $VERSION could not be fetched from $REPO_URL" "check that the tag exists: git ls-remote --tags $REPO_URL"; }
+    grep -qF "\$sharedDirectory = '$TREE/';" "$tmp/src/public_html/index.php" \
+      || { rm -rf "$tmp"; fail "release $VERSION does not install to $TREE (its public_html/index.php names another path)" "pass the --version this tag carries"; }
+    rm -rf "$tmp/src/.git"
+    (cd "$tmp/src" && COMPOSER_ALLOW_SUPERUSER=1 COMPOSER_HOME="$tmp/composer" run composer install --no-dev --optimize-autoloader --no-interaction --no-progress) \
+      || { rm -rf "$tmp"; fail "composer install failed" "see the log: usually the network, or a PHP extension the command-line PHP lacks"; }
+    mkdir -p "$CODE_ROOT"; rm -rf "$TREE"
+    mv "$tmp/src" "$TREE" && rm -rf "$tmp"
+    chown -R root:root "$TREE"; chmod -R u=rwX,go=rX "$TREE"
+    pass "read-only to $FPM_USER"
+  fi
+
+  step "Reading the installation's settings"
+  if [[ "$EXISTING" == true ]]; then
+    HOST="$("$PHP" -r 'echo parse_url($argv[1], PHP_URL_HOST);' "$(envget "$INST/.env" APP_BASE_URL)")"
+    [[ -n "$HOST" ]] || fail "$INST/.env has no usable APP_BASE_URL" "set APP_BASE_URL to the site's https address"
+    pass "kept $INST/.env ($HOST)"
+  else
+    ask HOST "The site's public host name, e.g. lists.example.org"
+    valid_host "$HOST" || fail "'$HOST' is not a host name" "pass --host with a fully qualified lower-case name, e.g. lists.example.org"
+    ask ADMIN_EMAIL "The administrator's e-mail address (sign-in links go there)"
+    valid_email "$ADMIN_EMAIL" || fail "'$ADMIN_EMAIL' is not an e-mail address" "pass --admin-email"
+    ask LIST_NAME "The list's name" "$HOST"
+    ask ORGANISATION "The organisation that runs it" "$LIST_NAME"
+    ask MAIL_FROM "Sender of the site's mail" "info@$HOST"
+    valid_email "$MAIL_FROM" || fail "'$MAIL_FROM' is not an e-mail address" "pass --mail-from"
+    ask MAILER_DSN "SMTP server for sign-in links, e.g. smtps://USER:PASS@smtp.example.org:465 (empty: set it in .env later)"
+    if [[ -z "$BANLIST_ENV" && "$CREATE_BANLIST" != true ]]; then
+      if [[ -f "$ETC/ban.env" ]]; then BANLIST_ENV="$ETC/ban.env"
+      else
+        ask BANLIST_ENV "The ban.env of the suppression database this installation shares (empty: create one on this server)"
+        [[ -n "$BANLIST_ENV" ]] || CREATE_BANLIST=true
+      fi
+    fi
+    [[ -z "$BANLIST_ENV" || -f "$BANLIST_ENV" ]] || fail "$BANLIST_ENV does not exist" "pass --banlist-env with the path of the shared suppression database's ban.env, or --create-banlist"
+    [[ -z "$CERT$CERT_KEY" || ( -f "$CERT" && -f "$CERT_KEY" ) ]] || fail "the certificate or its key does not exist" "pass both --certificate and --certificate-key, with existing files"
+    pass "$HOST, administrator $ADMIN_EMAIL"
+  fi
+
+  step "Preparing the installation directory"
+  # Only what is missing: an existing directory keeps its owner and mode.
+  for d in "$INST" "$INST/public_html"; do [[ -d "$d" ]] || install -d -o root -g root -m 755 "$d"; done
+  for d in "$INST/public_html/assets" "$INST/var"; do [[ -d "$d" ]] || install -d -o "$FPM_USER" -g "$FPM_USER" -m 755 "$d"; done
+  [[ -d "$INST/logs" ]] || install -d -o "$FPM_USER" -g root -m 750 "$INST/logs"
+  unwritable=""; for d in public_html/assets var logs; do as_web test -w "$INST/$d" || unwritable+=" $d"; done
+  [[ -z "$unwritable" ]] || fail "$FPM_USER cannot write to$unwritable in $INST" "chown $FPM_USER those directories (README, Layout and permissions)"
+  pass "$INST"
+
+  step "Writing the configuration (.env)"
+  if [[ "$EXISTING" == true ]]; then
+    lacking="$(comm -23 <(sed -n 's/^\([A-Z][A-Z0-9_]*\)=.*/\1/p' "$TREE/.env.example" | sort -u) <(sed -n 's/^\([A-Z][A-Z0-9_]*\)=.*/\1/p' "$INST/.env" | sort -u) | tr '\n' ' ')"
+    if [[ -n "$lacking" ]]; then warn "kept. This release has settings that $INST/.env does not name, so their defaults apply (they are explained in $TREE/.env.example): ${lacking% }"
+    else pass "kept"; fi
+  else
+    db="ctnlist_${NAME//[^a-z0-9]/_}"
+    umask 077; cp "$TREE/.env.example" "$INST/.env.new"; umask 022
+    envset "$INST/.env.new" APP_SECRET "$(openssl rand -hex 32)" APP_INSTANCE_ID "$(openssl rand -hex 16)" APP_SETTINGS_KEY "$(openssl rand -base64 32)" \
+      APP_BASE_URL "https://$HOST/" APP_DOMAIN "$HOST" APP_LIST_NAME "$LIST_NAME" APP_ORGANISATION "$ORGANISATION" APP_ADMIN_EMAIL "$ADMIN_EMAIL" \
+      APP_ABOUT_US "" DB_HOST 127.0.0.1 DB_PORT 5432 DB_NAME "$db" DB_USER "$db" DB_PASS "$(openssl rand -hex 24)" \
+      MAILER_DSN "$MAILER_DSN" MAIL_FROM_ADDRESS "$MAIL_FROM" MAIL_FROM_NAME "$LIST_NAME" MAIL_ADMIN_ADDRESS "$ADMIN_EMAIL" \
+      MAIL_BOUNCE_ADDRESS "$MAIL_FROM" MAIL_TEST_ADDRESS "$ADMIN_EMAIL" CONTACT_MAIL_ADDRESS "$ADMIN_EMAIL" CONTACT_MAIL_NAME "$ORGANISATION" \
+      GDB_ENV_DIRECTORY "$(dirname "${BANLIST_ENV:-$ETC/ban.env}")" GDB_ENV_FILE "$(basename "${BANLIST_ENV:-$ETC/ban.env}")" \
+      || fail "the configuration could not be written" "see the log"
+    chown root:"$FPM_USER" "$INST/.env.new"; chmod 640 "$INST/.env.new"; mv "$INST/.env.new" "$INST/.env"
+    pass "secrets generated; mode 640, root:$FPM_USER"
+  fi
+  DB_HOST="$(envget "$INST/.env" DB_HOST)"; DB_PORT="$(envget "$INST/.env" DB_PORT)"; DB_NAME="$(envget "$INST/.env" DB_NAME)"
+  DB_USER="$(envget "$INST/.env" DB_USER)"; DB_PASS="$(envget "$INST/.env" DB_PASS)"
+  DB_HOST="${DB_HOST:-127.0.0.1}"; DB_PORT="${DB_PORT:-5432}"
+
+  step "Preparing the database"
+  if [[ "$(dbq 'SELECT 1')" == 1 ]]; then
+    pass "$DB_NAME is reachable"
+  elif local_db "$DB_HOST" && [[ "$FRESH" == true ]]; then
+    create_database "$DB_NAME" "$DB_USER" "$DB_PASS" || fail "$REASON" "create the role and the database named in $INST/.env yourself (README, New installation, step 1), or remove what is in the way"
+    [[ "$(dbq 'SELECT 1')" == 1 ]] || fail "the new database $DB_NAME cannot be reached with the configuration's settings" "check pg_hba.conf allows password logins from 127.0.0.1"
+    pass "created $DB_NAME"
+  else
+    fail "the database $DB_NAME on $DB_HOST cannot be reached with the settings of $INST/.env" "check DB_HOST, DB_PORT, DB_NAME, DB_USER and DB_PASS, and that PostgreSQL is running"
+  fi
+
+  step "Preparing the suppression database"
+  if [[ "$(envget "$INST/.env" SUPPRESSION_PROVIDER)" == none ]]; then
+    warn "SUPPRESSION_PROVIDER=none: a production installation needs the suppression database (ctnlist:diagnose refuses it)"
+  else
+    gdir="$(envget "$INST/.env" GDB_ENV_DIRECTORY)"; gfile="$(envget "$INST/.env" GDB_ENV_FILE)"; ban="${gdir%/}/${gfile:-ban.env}"
+    if [[ ! -f "$ban" && "$FRESH" == true && ( "$CREATE_BANLIST" == true || "$ban" == "$ETC/ban.env" ) ]]; then
+      install -d -o root -g "$FPM_USER" -m 750 "$(dirname "$ban")"
+      gpass="$(openssl rand -hex 24)"
+      create_database banlist banlist "$gpass" || fail "$REASON" "pass --banlist-env with the ban.env of the suppression database to share, or remove what is in the way"
+      umask 077; cp "$TREE/config/phinx/ban.env.example" "$ban"; umask 022
+      envset "$ban" GDB_PASS "$gpass"; chown root:"$FPM_USER" "$ban"; chmod 640 "$ban"
+      (cd "$TREE" && GDB_ENV_DIRECTORY="$(dirname "$ban")" GDB_ENV_FILE="$(basename "$ban")" run phinx migrate -c config/phinx/phinx-banlist.php -e production) \
+        || fail "the suppression database's schema could not be created" "see the log"
+      pass "created the database banlist and $ban"
+    elif [[ -f "$ban" ]]; then
+      as_web test -r "$ban" && pass "$ban" || warn "$ban is not readable by $FPM_USER: chgrp $FPM_USER and chmod 640 it"
+    else
+      fail "the suppression database's configuration $ban does not exist" "pass --banlist-env FILE or --create-banlist for a new installation; for this one, correct GDB_ENV_DIRECTORY and GDB_ENV_FILE in $INST/.env"
+    fi
+  fi
+
+  HAS_SCHEMA=false; [[ "$(dbq "SELECT to_regclass('public.phinxlog') IS NOT NULL")" == t ]] && HAS_SCHEMA=true
+  SWITCH=false; [[ "$FRESH" != true && "$HAVE" != "$NEW" ]] && SWITCH=true
+  if [[ "$SWITCH" == true ]]; then
+    echo
+    echo "  $INST will be switched from ${HAVE:-an unknown release} $([[ "$BACK" == true ]] && echo "back ")to $NEW (https://$HOST/)."
+    echo "  Its database is dumped first; .env and the data are kept."
+    if [[ "$ASSUME_YES" != true ]]; then
+      read -r -p "  Continue? [y/N] " answer </dev/tty || answer=""
+      [[ "$answer" =~ ^[Yy]([Ee][Ss])?$ ]] || { echo "Nothing of the installation was changed."; exit 0; }
+    fi
+    echo
+  fi
+
+  step "Backing up and migrating the database"
+  DUMP="" schema_note=""
+  if [[ "$HAS_SCHEMA" == true && "$SWITCH" == true && "$BACKUP" == true ]]; then
+    install -d -o root -g root -m 700 "$BACKUPS"
+    DUMP="$BACKUPS/$NAME-${HAVE:-unknown}-$(date +%Y%m%dT%H%M%S).dump"
+    (umask 077; PGPASSWORD="$DB_PASS" pg_dump -Fc -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f "$DUMP" 2>>"$LOG") \
+      || { rm -f "$DUMP"; fail "the database could not be dumped" "see the log (pg_dump must be at least the server's version); --no-backup skips the dump"; }
+  fi
+  OLD_TREE="$CODE_ROOT/$HAVE"
+  if [[ "$HAS_SCHEMA" == true && "$SWITCH" == true ]]; then
+    if [[ -n "$HAVE" && -d "$OLD_TREE/database/migrations/domain" ]]; then
+      if ! diff -rq "$OLD_TREE/database/migrations/domain" "$TREE/database/migrations/domain" >>"$LOG" 2>&1; then
+        if [[ "$RECREATE" != true ]]; then
+          fail "release $NEW has another database schema than $HAVE, and ctnlist has no upgrade migrations before go-live" \
+            "an installation with nothing to keep: run this again with --recreate-database (the database is dumped${DUMP:+, to $DUMP}, then emptied and created again). Otherwise stay on $HAVE: nothing of the installation was changed."
+        fi
+        [[ -n "$DUMP" ]] || fail "--recreate-database needs the dump it is about to rely on" "run it without --no-backup"
+        dbq "DROP SCHEMA public CASCADE; CREATE SCHEMA public AUTHORIZATION CURRENT_USER" >/dev/null \
+          || fail "the database could not be emptied" "see the log; the dump is $DUMP"
+        HAS_SCHEMA=false
+      fi
+    else
+      schema_note="the schema of ${HAVE:-the old release} could not be compared with $NEW's (its code tree is gone): if pages fail with database errors, the schema differs"
+    fi
+  fi
+  (cd "$TREE" && run phinx migrate -c config/phinx/phinx-paralegal.php -e production) || fail "the schema could not be migrated" "see the log${DUMP:+; the dump is $DUMP}"
+  if [[ -n "$schema_note" ]]; then warn "$schema_note"
+  elif [[ "$HAS_SCHEMA" == true ]]; then pass "${DUMP:+dump $DUMP; }schema unchanged"
+  else pass "${DUMP:+dump $DUMP; }schema created"; fi
+
+  step "Switching the installation to release $NEW"
+  timers=(); for t in worker maintenance; do systemctl is-active --quiet "ctnlist-$t@$NAME.timer" 2>/dev/null && timers+=("ctnlist-$t@$NAME.timer"); done
+  ((${#timers[@]})) && run systemctl stop "${timers[@]}"
+  rm -rf "$INST/public_html/vendor.new"
+  cp -a "$TREE/public_html/vendor" "$INST/public_html/vendor.new" && rm -rf "$INST/public_html/vendor" && mv "$INST/public_html/vendor.new" "$INST/public_html/vendor" \
+    && install -o root -g root -m 644 "$TREE/public_html/index.php" "$INST/public_html/index.php" \
+    || fail "the front controller and the editor files could not be copied" "see the log"
+  rm -rf "$INST/var/cache"
+  run console cache:clear || fail "the cache could not be built" "see the log; as $FPM_USER: CTNLIST_INSTANCE_DIR=$INST php $TREE/bin/console cache:clear"
+  run console asset-map:compile || fail "the assets could not be compiled" "see the log; as $FPM_USER: CTNLIST_INSTANCE_DIR=$INST php $TREE/bin/console asset-map:compile"
+  if [[ "$SAMPLES" == true ]]; then run console ctnlist:templates:samples || warn "the sample templates could not be added"; fi
+  pass "front controller, cache and assets"
+
+  step "Configuring PHP-FPM and nginx"
+  if [[ "$WEB_SERVER" != true ]]; then
+    warn "left alone (--no-web-server): reload PHP-FPM now, so that it loads release $NEW"
+  else
+    web_notes=() web_done="PHP-FPM reloaded"
+    pool="$POOL_DIR/ctnlist-$NAME.conf"
+    if ! grep -rqsF "/run/php/ctnlist-$NAME.sock" "$POOL_DIR" && ! grep -rqsF "$INST" "$POOL_DIR"; then
+      sed "s/<installation>/$NAME/g" "$TREE/deploy/php-fpm/ctnlist.conf.example" > "$pool"
+      run "php-fpm$PHPV" -t || { mv "$pool" "$pool.rejected"; fail "PHP-FPM refuses the new pool" "see the log; the pool is kept as $pool.rejected"; }
+      web_done="new pool $pool"
+    fi
+    if systemctl is-active --quiet "$FPM_SERVICE"; then run systemctl reload "$FPM_SERVICE"; else run systemctl enable --now "$FPM_SERVICE"; fi \
+      || fail "PHP-FPM ($FPM_SERVICE) could not be reloaded" "systemctl status $FPM_SERVICE; journalctl -u $FPM_SERVICE"
+    # The certificate the site uses: links, so that Let's Encrypt's replaces the temporary one on a later run.
+    tls="$ETC/tls/$NAME"; le="/etc/letsencrypt/live/$HOST"
+    install -d -o root -g root -m 755 "$ETC"; install -d -o root -g root -m 700 "$ETC/tls" "$tls"
+    if [[ -n "$CERT" ]]; then ln -sfn "$CERT" "$tls/fullchain.pem"; ln -sfn "$CERT_KEY" "$tls/privkey.pem"
+    elif [[ -f "$le/fullchain.pem" && -f "$le/privkey.pem" ]]; then ln -sfn "$le/fullchain.pem" "$tls/fullchain.pem"; ln -sfn "$le/privkey.pem" "$tls/privkey.pem"
+    elif [[ ! -e "$tls/fullchain.pem" ]]; then
+      run openssl req -x509 -newkey rsa:2048 -nodes -days 30 -subj "/CN=$HOST" -addext "subjectAltName=DNS:$HOST" \
+        -keyout "$tls/selfsigned-key.pem" -out "$tls/selfsigned.pem" || fail "no temporary certificate could be made" "see the log"
+      ln -sfn "$tls/selfsigned.pem" "$tls/fullchain.pem"; ln -sfn "$tls/selfsigned-key.pem" "$tls/privkey.pem"
+    fi
+    [[ "$(readlink "$tls/fullchain.pem")" == "$tls/selfsigned.pem" ]] \
+      && web_notes+=("a temporary self-signed certificate: get the real one (e.g. certbot certonly --webroot -w $INST/public_html -d $HOST), then run this again")
+    site="/etc/nginx/conf.d/ctnlist-$NAME.conf"; snippet="/etc/nginx/snippets/ctnlist-$NAME-fastcgi.conf"
+    if [[ ! -f "$site" && ! -f "$site.new" ]] && ! grep -RqsF "root $INST/public_html;" /etc/nginx; then
+      install -d /etc/nginx/snippets /etc/nginx/conf.d
+      sed "s/<installation>/$NAME/g" "$TREE/deploy/nginx/ctnlist-fastcgi.conf.example" > "$snippet"
+      sed -e "s/<installation>/$NAME/g" -e "s/lists\.example\.org/$HOST/g" \
+          -e "s#^\( *ssl_certificate  *\).*#\1$tls/fullchain.pem;#" -e "s#^\( *ssl_certificate_key  *\).*#\1$tls/privkey.pem;#" \
+          "$TREE/deploy/nginx/ctnlist.conf.example" > "$site.new"
+      # One log_format per name: another ctnlist site on this server has defined it already.
+      grep -RqsE '^\s*log_format\s+ctnlist\s' /etc/nginx --include='*.conf' --include='nginx.conf' && sed -i '/^log_format ctnlist /d' "$site.new"
+      others="$(grep -RlsE "^\s*server_name\s[^;]*\b${HOST//./\\.}\b" /etc/nginx/conf.d /etc/nginx/sites-enabled 2>/dev/null | grep -v "^$site" | tr '\n' ' ')"
+      if [[ -n "$others" ]]; then
+        web_notes+=("nginx already serves $HOST (${others% }): the new site is in $site.new, not in use. To switch: take the old site out, mv $site.new $site, nginx -t, systemctl reload nginx")
+      else
+        mv "$site.new" "$site"
+        if run nginx -t; then
+          if systemctl is-active --quiet nginx; then run systemctl reload nginx; else run systemctl enable --now nginx; fi \
+            || web_notes+=("nginx could not be reloaded: systemctl status nginx")
+        else
+          mv "$site" "$site.new"
+          web_notes+=("nginx refuses the new site ($(nginx -t 2>&1 | grep -m1 -E 'emerg|error' | cut -c1-160)): it is in $site.new, not in use")
+        fi
+      fi
+    elif [[ -f "$site" ]] && run nginx -t; then
+      run systemctl reload nginx || true
+    fi
+    [[ -f "$site.new" && ! " ${web_notes[*]-} " == *"$site.new"* ]] && web_notes+=("the site is still waiting in $site.new: mv it to $site, nginx -t, systemctl reload nginx")
+    if ((${#web_notes[@]})); then
+      joined=""; for n in "${web_notes[@]}"; do NOTES+=("$n"); joined+="${joined:+; }$n"; done
+      note "$joined"
+    else pass "$web_done; https://$HOST/"; fi
+  fi
+
+  step "Scheduling the worker and maintenance"
+  cronfile="$(grep -lsF "CTNLIST_INSTANCE_DIR=$INST " /etc/crontab /etc/cron.d/* 2>/dev/null | head -n1)"
+  usercron="$(grep -lsF "CTNLIST_INSTANCE_DIR=$INST " /var/spool/cron/crontabs/* /var/spool/cron/* 2>/dev/null | head -n1)"
+  if [[ -n "$cronfile" ]]; then
+    sed -i "\#CTNLIST_INSTANCE_DIR=$INST #s#$CODE_ROOT/[^/ ]*/bin/console#$TREE/bin/console#g" "$cronfile"
+    pass "$cronfile now runs release $NEW"
+  elif [[ -n "$usercron" ]]; then
+    warn "the crontab of $(basename "$usercron") schedules this installation: change its two paths to $TREE/bin/console (crontab -e -u $(basename "$usercron"))"
+  elif command -v systemctl >/dev/null && [[ -d /run/systemd/system ]]; then
+    for unit in worker maintenance; do
+      for kind in service timer; do
+        [[ -f "/etc/systemd/system/ctnlist-$unit@.$kind" ]] \
+          || sed -e "s#<version>#$NEW#g" -e "s#^ExecStart=/usr/bin/php #ExecStart=$PHP #" "$TREE/deploy/systemd/ctnlist-$unit@.$kind" > "/etc/systemd/system/ctnlist-$unit@.$kind"
+      done
+      # This installation's release, whatever the shared unit and other installations run.
+      command="$(sed -n 's#^ExecStart=.*/bin/console \(.*\)#\1#p' "$TREE/deploy/systemd/ctnlist-$unit@.service")"
+      install -d "/etc/systemd/system/ctnlist-$unit@$NAME.service.d"
+      printf '# Written by install-ctnlist: the release this installation runs.\n[Service]\nExecStart=\nExecStart=%s %s/bin/console %s\n' \
+        "$PHP" "$TREE" "$command" > "/etc/systemd/system/ctnlist-$unit@$NAME.service.d/release.conf"
+    done
+    run systemctl daemon-reload
+    run systemctl enable --now "ctnlist-worker@$NAME.timer" "ctnlist-maintenance@$NAME.timer" \
+      || fail "the timers could not be started" "systemctl status ctnlist-worker@$NAME.timer"
+    pass "systemd timers ctnlist-worker@$NAME and ctnlist-maintenance@$NAME, release $NEW"
+  else
+    warn "no systemd and no cron entry: schedule the two commands of $TREE/deploy/cron/ctnlist.cron.example"
+  fi
+
+  step "Checking the installation"
+  REPORT="$(console ctnlist:diagnose --production 2>&1)"; echo "$REPORT" >>"$LOG"
+  PROBLEMS="$(grep -E '^(ERROR|WARN) ' <<<"$REPORT" || true)"
+  health=""
+  [[ "$WEB_SERVER" == true && ! -f "/etc/nginx/conf.d/ctnlist-$NAME.conf.new" ]] \
+    && health="$(curl -ksS --max-time 30 --resolve "$HOST:443:127.0.0.1" "https://$HOST/health" 2>>"$LOG" || true)"
+  errors="$(grep -c '^ERROR ' <<<"$REPORT" || true)"
+  if [[ -n "$health" && "$health" != OK ]]; then warn "https://$HOST/health does not answer OK: see /var/log/nginx/ctnlist-$NAME.error.log and $INST/var/log"
+  elif ((errors > 0)); then note "ctnlist:diagnose reports $errors error(s), listed below"
+  else pass "${health:+/health answers OK; }no error from ctnlist:diagnose"; fi
+
+  cat <<DONE
+
+ctnlist $([[ "$EXISTING" == true ]] && echo "release switch" || echo installation) completed.
+
+Site:           https://$HOST/
+Installation:   $INST   (configuration: $INST/.env)
+Release:        $NEW${HAVE:+ (was $HAVE)}   in $TREE
+Database:       $DB_NAME on $DB_HOST${DUMP:+   (dump before the switch: $DUMP)}
+DONE
+  if [[ -n "$PROBLEMS" ]]; then
+    echo
+    echo "ctnlist:diagnose --production says:"
+    sed 's/^/  /' <<<"$PROBLEMS"
+  fi
+  if ((${#NOTES[@]})); then
+    echo
+    echo "Still to do, from the steps above:"
+    printf '  - %s\n' "${NOTES[@]}"
+  fi
+  echo
+  if [[ "$EXISTING" == true ]]; then
+    [[ -n "$HAVE" && "$HAVE" != "$NEW" ]] && echo "Release $HAVE stays in $OLD_TREE. To switch back: install-ctnlist --installation $NAME --version v$HAVE"
+    echo "What the release changed: $TREE/CHANGELOG.md"
+  else
+    cat <<NEXT
+Next:
+  1. Point $HOST at this server (DNS), and replace a temporary certificate with a real one.
+  2. Open https://$HOST/login and ask for a sign-in link as $ADMIN_EMAIL: that address
+     becomes the first administrator. It needs the SMTP server (MAILER_DSN in .env).
+  3. Connect the mail service: Admin > Settings > Delivery, enter its address, approve there.
+  4. Go through the README's release checklist ($TREE/README.md).
+NEXT
+  fi
+}
+
+main
