@@ -11,7 +11,7 @@
   <h1 class="h4">Unsubscribe from {{ list.l_name }}</h1>
   {% for value, label in {
       list: 'This list only',
-      global: 'All ctnlist installations using the global suppression database',
+      global: global_list ? 'All ctnlist installations using the global suppression database' : 'All lists on this site',
       bounce: 'Address does not exist',
       spam: 'Stop sending me spam',
   } %}

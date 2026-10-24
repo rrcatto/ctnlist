@@ -1,0 +1,129 @@
+# ctnlist's web server inside the pod (deploy/podman/README.md), written by ctnlist-podman.sh from this template:
+# @INSTALLATION@ is the installation. It is deploy/nginx/ctnlist.conf.example's HTTPS server block for a pod: the
+# server's own web server answers the public on 80 and 443, holds the certificate and forwards every request here
+# (host-nginx.conf.example) with the Host, X-Forwarded-For and X-Forwarded-Proto headers.
+#
+# Only public_html/ is served: .env, the code, var/ and logs/ are not even mounted in this container. Only the front
+# controller index.php is executed; any other *.php path is a 404.
+
+# Access log without query strings: the sign-in link (/auth/verify?token=...) carries a one-time token, and other
+# links carry subscriber identifiers.
+log_format ctnlist '$remote_addr - [$time_local] "$request_method $uri $server_protocol" $status $body_bytes_sent "$http_user_agent"';
+
+# The scheme the server's web server answered on, for PHP (HTTPS and the port of the URLs it builds) and the
+# redirect to HTTPS below.
+map $http_x_forwarded_proto $ctnlist_https {
+    https on;
+    default "";
+}
+map $http_x_forwarded_proto $ctnlist_port {
+    https 443;
+    default 80;
+}
+
+server {
+    listen 8080;
+    server_name _;
+
+    root /var/www/@INSTALLATION@/public_html;
+    index index.php;
+    server_tokens off;
+    access_log /dev/stdout ctnlist;
+
+    # The visitor's address. The pod's port is published on the server's 127.0.0.1 only, and Podman hands each
+    # connection to it from the pod's own address, 10.0.2.100 (slirp4netns). Only that hop is believed, and only for
+    # the last address in X-Forwarded-For, the one the server's web server put there: an address a visitor wrote in
+    # the header themselves is never taken. Never 0.0.0.0/0, which would take it.
+    set_real_ip_from 10.0.2.100;
+    real_ip_header X-Forwarded-For;
+    real_ip_recursive on;
+
+    # Plain HTTP moves to HTTPS, also where one server block answers both ports (a control panel's).
+    if ($http_x_forwarded_proto = http) {
+        return 301 https://$host$request_uri;
+    }
+
+    # Largest legitimate requests: a subscriber import file (at most 20 MB, the form's limit) or a pasted address
+    # list, and message HTML. PHP's post_max_size/upload_max_filesize match (deploy/php-fpm).
+    client_max_body_size 32m;
+
+    # Headers for files this server serves itself (the two static locations below). PHP responses get theirs,
+    # including the Content-Security-Policy and HSTS, from the application (App\Http\SecurityHeadersListener).
+
+    # Compiled AssetMapper files (bin/console asset-map:compile): content-hashed names, so they can be cached for good.
+    location ^~ /assets/ {
+        try_files $uri =404;
+        access_log off;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header Strict-Transport-Security "max-age=31536000" always;
+    }
+
+    # The prebuilt CKEditor bundle and its emoji list (copied with public_html/): not content-hashed, so a week.
+    location ^~ /vendor/ {
+        try_files $uri =404;
+        access_log off;
+        add_header Cache-Control "public, max-age=604800" always;
+        add_header X-Content-Type-Options nosniff always;
+        add_header Strict-Transport-Security "max-age=31536000" always;
+    }
+
+    # catto-mail webhooks are small signed JSON documents: refuse large bodies here, before PHP (the application
+    # also refuses anything over 1 MiB).
+    location = /cattomail/webhook {
+        client_max_body_size 1m;
+        try_files /index.php =404;
+        include /etc/nginx/ctnlist-fastcgi.conf;
+    }
+
+    # Uptime monitor / load-balancer liveness: "OK" only; not worth an access-log line.
+    location = /health {
+        access_log off;
+        try_files /index.php =404;
+        include /etc/nginx/ctnlist-fastcgi.conf;
+    }
+
+    # mailpit:begin
+    # Mailpit's page for proofs (README "Proofs to Mailpit"): it asks for the name and password itself.
+    location = /mailpit {
+        return 301 /mailpit/;
+    }
+    location ^~ /mailpit/ {
+        proxy_pass http://127.0.0.1:8025;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $http_x_forwarded_proto;
+        # The page follows new mail over a WebSocket (/mailpit/api/events).
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 1h;
+        client_max_body_size 1m;
+        add_header X-Robots-Tag "noindex, nofollow" always;
+        add_header Cache-Control "no-store" always;
+        add_header Strict-Transport-Security "max-age=31536000" always;
+    }
+    # mailpit:end
+
+    # Existing files are served directly; everything else goes to the front controller.
+    location / {
+        try_files $uri /index.php$is_args$args;
+    }
+
+    # The only PHP entry point, reached through try_files only (a request for /index.php itself is a 404, so every
+    # page has one URL).
+    location = /index.php {
+        internal;
+        include /etc/nginx/ctnlist-fastcgi.conf;
+    }
+
+    # Any other PHP file path is not an entry point.
+    location ~ \.php$ {
+        return 404;
+    }
+
+    # Dot files (.env copies, .git, editor files) are never served.
+    location ~ /\. {
+        deny all;
+    }
+}

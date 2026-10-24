@@ -1,0 +1,21 @@
+# ctnlist's pod as a systemd user service (Podman Quadlet), written by ctnlist-podman.sh from this template into
+# ~/.config/containers/systemd/@POD@.kube. It starts at boot when the site's user has linger (root-prepare.sh) and
+# restarts after a failure. Published on 127.0.0.1 only: the server's own web server forwards the site to it.
+[Unit]
+Description=ctnlist (@KIT@)
+Wants=network-online.target
+After=network-online.target
+
+[Kube]
+Yaml=@KIT@/pod/ctnlist.yaml
+# The site's own user inside every container, and the server's 127.0.0.1 (PostgreSQL, the mail server) at 10.0.2.2.
+UserNS=keep-id
+Network=slirp4netns:allow_host_loopback=true
+PublishPort=127.0.0.1:@PORT@:8080
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target

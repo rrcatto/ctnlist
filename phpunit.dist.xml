@@ -21,6 +21,9 @@
         <env name="CATTOMAIL_WEBHOOK_SECRET" value="whsec_test_current" force="true"/>
         <env name="CATTOMAIL_WEBHOOK_SECRET_PREVIOUS" value="whsec_test_previous" force="true"/>
         <env name="CATTOMAIL_GLOBAL_OPTOUT_ENABLED" value="true" force="true"/>
+        <!-- The development route (README "catto-mail development route") belongs to the development .env: tests never take it. -->
+        <env name="CATTOMAIL_API_CONNECT_HOST" value="" force="true"/>
+        <env name="CATTOMAIL_WEBHOOK_URL" value="" force="true"/>
         <env name="APP_BASE_URL" value="https://ctnlist.test/" force="true"/>
         <!-- Proofs go through the (fake) mail service unless a test routes them to Mailpit itself. -->
         <env name="MAIL_PROOF_SMTP" value="" force="true"/>

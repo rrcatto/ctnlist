@@ -30,7 +30,7 @@ Restored or retained:
 - Selected lists form one combined audience.
 - Subscribers appearing in several selected lists are queued once.
 - Only confirmed, non-unsubscribed members of active selected lists are eligible.
-- Global email and domain suppression is enforced during confirmation, queue construction and immediately before delivery.
+- Global email and domain suppression is enforced during confirmation, queue construction and immediately before delivery (with the banlist; see "Deliberate changes from v5" for an installation without it).
 - A global unsubscribe disables every local list membership for that subscriber.
 - Engagement and priority ordering from v5 is retained.
 - Queue rows store the actual list context used for the recipient.
@@ -98,6 +98,7 @@ Made while porting to Symfony, where the v5 behaviour was a defect rather than a
 - The footer links to an acceptable use policy page (`/acceptable-use-policy`, built from `docs/AUP.md`), added in 6.0.10 at the owner's request; v5 had no such page. The policy is ctnlist's own (for subscribers and for senders) and names the installation from its Settings.
 - A proof can be sent straight to a Mailpit instance instead of to a mailbox (`MAIL_PROOF_SMTP`; off by default): it is then read on Mailpit's page. v5's "Send to me" always mailed the proof.
 - Three sample email templates can be installed (`ctnlist:templates:samples`); v5 shipped none.
+- An installation can run without the shared suppression database (`SUPPRESSION_PROVIDER=cattomail`, 6.1.0, the owner's decision): global suppression is then catto-mail's, which refuses suppressed recipients when a send is staged and suppresses bounces and complaints itself. ctnlist keeps the v5 address rules at confirmation, queue build and before each send, its "all lists" unsubscribe covers this site's lists only, and the administrator's bulk domain, bounce and spam scopes, which only record global suppressions, are refused. With `banlist`, still the default, the v5 behaviour is unchanged.
 - The mail service is connected from the Delivery page (Connect, Disconnect): its API key and webhook secret are handed over by the service and stored encrypted, instead of being copied into `.env`. `.env` still works and takes precedence. v5 sent through SMTP servers and had nothing of the kind.
 - The profile form's country list has a blank choice (v5 silently stored the first country, Afghanistan, when none was chosen).
 - A sign-in link is claimed atomically, so two simultaneous sign-ins with it cannot both succeed.

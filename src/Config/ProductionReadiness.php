@@ -55,7 +55,7 @@ final class ProductionReadiness
                 'MAILER_DSN still holds the example server or credentials from .env.example');
         }
 
-        $findings[] = self::finding($values['suppression'] !== 'none', 'suppression provider: ' . ($values['suppression'] ?: 'banlist'),
+        $findings[] = self::finding($values['suppression'] !== 'none', self::suppressionProvider($values['suppression']),
             'SUPPRESSION_PROVIDER=none is for development only (refused outside APP_ENV dev/test)');
         if (trim($values['connect_host']) !== '') {
             $findings[] = ['WARN', 'CATTOMAIL_API_CONNECT_HOST is set: it is a development aid and is ignored outside APP_ENV dev/test; remove it'];
@@ -84,6 +84,13 @@ final class ProductionReadiness
     private static function finding(bool $ok, string $good, string $bad, string $level = 'ERROR'): array
     {
         return $ok ? ['OK', $good] : [$level, $bad];
+    }
+
+    /** The report line naming the suppression source. */
+    public static function suppressionProvider(string $provider): string
+    {
+        return 'suppression provider: ' . ($provider ?: 'banlist')
+            . (strtolower($provider) === 'cattomail' ? ' (catto-mail suppresses at send time; no suppression database of its own)' : '');
     }
 
     public static function strongSecret(string $secret): bool

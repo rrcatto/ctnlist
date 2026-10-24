@@ -1,0 +1,12 @@
+# Runs @POD@-maintenance.service hourly (deploy/systemd/ctnlist-maintenance@.timer for the pod), written by
+# ctnlist-podman.sh into ~/.config/systemd/user/.
+
+[Unit]
+Description=Run ctnlist maintenance (@KIT@) hourly
+
+[Timer]
+OnCalendar=*-*-* *:17:00
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

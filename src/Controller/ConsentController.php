@@ -17,6 +17,7 @@ use App\Security\Csrf;
 use App\Security\MagicLinkRequester;
 use App\Security\SubscriberUser;
 use App\Subscriber\ConsentService;
+use App\Suppression\SuppressionChecker;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\FormInterface;
 use Symfony\Component\HttpFoundation\Request;
@@ -72,7 +73,8 @@ final class ConsentController extends AbstractController
     }
 
     #[Route('/unsubscribe/{token}/{shortcode}/{muid}', name: 'consent_unsubscribe', defaults: ['muid' => ''], methods: ['GET'])]
-    public function unsubscribeForm(string $token, string $shortcode, string $muid, #[CurrentUser] ?SubscriberUser $user, GlobalOptOut $optOut): Response
+    public function unsubscribeForm(string $token, string $shortcode, string $muid, #[CurrentUser] ?SubscriberUser $user, GlobalOptOut $optOut,
+        SuppressionChecker $suppression): Response
     {
         $list = $this->listFor($token, $shortcode);
         if (!$this->isOwner($token, $user)) {
@@ -80,7 +82,7 @@ final class ConsentController extends AbstractController
         }
         $this->denyAccessUnlessGranted('lists.unsubscribe');
         return $this->render('consent/unsubscribe.html.twig', ['token' => strtolower($token), 'list' => $list, 'muid' => $muid,
-            'global_optout_available' => $optOut->isAvailable()]);
+            'global_list' => $suppression->keepsGlobalList(), 'global_optout_available' => $optOut->isAvailable()]);
     }
 
     #[Route('/unsubscribe', name: 'consent_unsubscribe_submit', methods: ['POST'])]

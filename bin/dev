@@ -272,6 +272,7 @@ Usage: bin/dev <command> [args]
   cattomail-status   Show what the catto-mail development route has and lacks (never prints secret values)
   test-cattomail     Optional real end-to-end check against the local development catto-mail (sends one proof)
   test-installer [--keep]  Optional: run install-ctnlist in a stand-in server (a new installation, a release switch, a changed schema); several minutes, needs the Internet
+  test-podman-kit [--keep] Optional: run deploy/podman (root-prepare.sh, ctnlist-podman.sh) in a stand-in server with rootless Podman (a new installation, a release switch, a changed schema); ten minutes or more, needs the Internet
   cattomail-ca [h:p] Save catto-mail's development certificate (default 127.0.0.1:8443) for CATTOMAIL_CA_FILE
   reset-db           DESTROY the database volume and re-run migrations
 
@@ -310,6 +311,7 @@ case "$cmd" in
     cattomail-status) cattomail_status ;;
     test-cattomail) "$0" console ctnlist:cattomail:check --e2e "$@" ;;
     test-installer) exec dev/installer-test/run.sh "$@" ;;
+    test-podman-kit) exec dev/podman-kit-test/run.sh "$@" ;;
     cattomail-ca) cattomail_ca "$@" ;;
     restart) "$0" down && "$0" up ;;
     ps) compose ps ;;

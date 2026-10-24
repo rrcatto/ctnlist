@@ -1,0 +1,36 @@
+# ctnlist's PHP image for rootless Podman (deploy/podman/README.md): PHP-FPM and the command line with the
+# extensions ctnlist needs, for the php container of an installation's pod and for the one-off commands of
+# ctnlist-podman.sh (Composer, migrations, the cache, the assets). ctnlist-podman.sh builds it with the release's
+# deploy/ directory as the context, and tags it localhost/ctnlist:<version>.
+#
+# The base image is pinned to an exact PHP release, so a rebuild never reuses an older cached 8.5 image: raise it
+# for every PHP security release (a ctnlist release does this), then switch the installation to that release.
+ARG PHP_IMAGE=docker.io/library/php:8.5.12-fpm-bookworm
+FROM ${PHP_IMAGE}
+
+# pdo_pgsql, gd with JPEG and WebP (profile pictures), intl and exif; the image has the other extensions built in.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends git unzip ca-certificates \
+      libpq-dev libicu-dev libpng-dev libjpeg62-turbo-dev libwebp-dev \
+ && docker-php-ext-configure gd --with-jpeg --with-webp \
+ && docker-php-ext-install -j"$(nproc)" pdo_pgsql intl gd exif \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY --from=docker.io/library/composer:2 /usr/bin/composer /usr/local/bin/composer
+
+# Production PHP: no errors on pages, every error in the container's log. The command line gets the memory the
+# PHP-FPM pool gives a request.
+RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
+ && printf '%s\n' 'expose_php = Off' 'memory_limit = 512M' > "$PHP_INI_DIR/conf.d/zz-ctnlist.ini"
+
+# PHP-FPM runs ctnlist's own pool (deploy/php-fpm/ctnlist.conf.example: clear_env, limits, OPcache) instead of the
+# image's, whose files would log every request with its query string and pass the container's environment on. It
+# listens inside the pod only and names no user: the pod runs every container as the site's own user (keep-id), and
+# PHP-FPM refuses to start as root with such a pool (the check below runs as root, so it allows it).
+COPY php-fpm/ctnlist.conf.example /usr/local/etc/php-fpm.d/ctnlist.conf
+RUN cd /usr/local/etc/php-fpm.d \
+ && rm -f docker.conf www.conf www.conf.default zz-docker.conf \
+ && sed -i -e 's/^\[ctnlist-<installation>\]$/[ctnlist]/' -e '/^user = /d' -e '/^group = /d' \
+      -e '/^listen\.\(owner\|group\|mode\) = /d' -e 's#^listen = .*#listen = 127.0.0.1:9000#' ctnlist.conf \
+ && printf '%s\n' '[global]' 'error_log = /proc/self/fd/2' 'log_limit = 8192' 'daemonize = no' > 00-global.conf \
+ && php-fpm --test --allow-to-run-as-root

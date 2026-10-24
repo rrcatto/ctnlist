@@ -124,6 +124,9 @@ final class ConsentService
         if (!$global) {
             return 'You have been unsubscribed from ' . $list['l_name'] . '.';
         }
+        if (!$this->suppression->keepsGlobalList()) {
+            return 'You have been unsubscribed from all local lists.';
+        }
         return $suppressed
             ? 'You have been unsubscribed from all local lists and added to the global suppression database.'
             : 'You have been unsubscribed from all local lists, but the global suppression database could not be updated. Please try again later.';

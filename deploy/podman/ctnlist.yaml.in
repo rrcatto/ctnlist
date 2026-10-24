@@ -1,0 +1,116 @@
+# ctnlist's pod (deploy/podman/README.md), written by ctnlist-podman.sh from this template and started by its
+# Quadlet unit: the web server, PHP-FPM and, when the installation has it, Mailpit for proofs. @POD@ is the pod's
+# name, @KIT@ the kit's directory in the site user's home, @VERSION@ the release, @INSTALLATION@ the installation.
+#
+# Inside the containers the layout is README "Layout and permissions": the code at /usr/local/lib/php/ctnlist/
+# <version> (the path the front controller names), the installation at /var/www/<installation>. The code, .env,
+# public_html and ban.env are read-only in every container, so a break-in through PHP cannot change them; PHP
+# writes var/ and logs/ only. The scheduled commands are systemd user timers that run in the php container.
+# ban.env (the banlist: lines) is there only when the installation uses the suppression database.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: @POD@
+spec:
+  restartPolicy: Always
+  containers:
+    - name: php
+      image: @IMAGE@
+      args: ["php-fpm", "--nodaemonize"]
+      workingDir: /usr/local/lib/php/ctnlist/@VERSION@
+      # Only what the console needs to find the installation: the pool keeps clear_env, and the worker must see the
+      # same configuration as the web server (ConfigFingerprint).
+      env:
+        - name: CTNLIST_INSTANCE_DIR
+          value: /var/www/@INSTALLATION@
+      volumeMounts:
+        - name: code
+          mountPath: /usr/local/lib/php/ctnlist/@VERSION@
+          readOnly: true
+        - name: env
+          mountPath: /var/www/@INSTALLATION@/.env
+          readOnly: true
+        - name: public
+          mountPath: /var/www/@INSTALLATION@/public_html
+          readOnly: true
+        - name: var
+          mountPath: /var/www/@INSTALLATION@/var
+        - name: logs
+          mountPath: /var/www/@INSTALLATION@/logs
+        # banlist:begin
+        - name: banlist
+          mountPath: /etc/ctnlist/ban.env
+          readOnly: true
+        # banlist:end
+    - name: web
+      image: @WEB_IMAGE@
+      volumeMounts:
+        - name: webconf
+          mountPath: /etc/nginx/conf.d/default.conf
+          readOnly: true
+        - name: fastcgi
+          mountPath: /etc/nginx/ctnlist-fastcgi.conf
+          readOnly: true
+        - name: public
+          mountPath: /var/www/@INSTALLATION@/public_html
+          readOnly: true
+    # mailpit:begin
+    # Proofs (MAIL_PROOF_SMTP=127.0.0.1:1025): SMTP and the page on the pod's own 127.0.0.1, the page published
+    # at /mailpit/ by the web container behind Mailpit's own password.
+    - name: mailpit
+      image: @MAILPIT_IMAGE@
+      args: ["--smtp", "127.0.0.1:1025", "--listen", "127.0.0.1:8025", "--webroot", "/mailpit/",
+             "--ui-auth-file", "/etc/mailpit/users", "--database", "/data/mailpit.db", "--max", "500", "--max-age", "30d",
+             "--smtp-disable-rdns", "--disable-version-check", "--label", "ctnlist proofs"]
+      volumeMounts:
+        - name: mailpit-data
+          mountPath: /data
+        - name: mailpit-users
+          mountPath: /etc/mailpit/users
+          readOnly: true
+    # mailpit:end
+  volumes:
+    - name: code
+      hostPath:
+        path: @KIT@/releases/@VERSION@
+        type: Directory
+    - name: env
+      hostPath:
+        path: @KIT@/site/.env
+        type: File
+    - name: public
+      hostPath:
+        path: @KIT@/site/public_html
+        type: Directory
+    - name: var
+      hostPath:
+        path: @KIT@/site/var
+        type: Directory
+    - name: logs
+      hostPath:
+        path: @KIT@/site/logs
+        type: Directory
+    # banlist:begin
+    - name: banlist
+      hostPath:
+        path: @KIT@/config/ban.env
+        type: File
+    # banlist:end
+    - name: webconf
+      hostPath:
+        path: @KIT@/pod/web.conf
+        type: File
+    - name: fastcgi
+      hostPath:
+        path: @KIT@/pod/fastcgi.conf
+        type: File
+    # mailpit:begin
+    - name: mailpit-data
+      hostPath:
+        path: @KIT@/mailpit
+        type: Directory
+    - name: mailpit-users
+      hostPath:
+        path: @KIT@/config/mailpit-users
+        type: File
+    # mailpit:end

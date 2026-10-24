@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace App\Suppression;
 
 /**
- * Global email/domain suppression shared by all installations. Checked at
- * confirmation, queue build and immediately before every campaign send.
+ * Global email/domain suppression shared by all installations (the banlist),
+ * or only the v5 address rules where catto-mail's suppression stands in for it.
+ * Checked at confirmation, queue build and immediately before every campaign send.
  */
 interface SuppressionChecker
 {
@@ -24,4 +25,10 @@ interface SuppressionChecker
 
     /** Record a global domain suppression. Types: NOTEXIST, SPAM. */
     public function suppressDomain(string $domain, string $type): bool;
+
+    /**
+     * False when the installation keeps no global suppression list of its own
+     * (SUPPRESSION_PROVIDER cattomail or none): nothing can then be recorded.
+     */
+    public function keepsGlobalList(): bool;
 }

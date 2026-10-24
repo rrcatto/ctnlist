@@ -17,6 +17,14 @@ final class ProductionReadinessTest extends TestCase
         self::assertSame([], array_values(array_filter($findings, static fn(array $f): bool => $f[0] !== 'OK')), 'no warnings or errors');
     }
 
+    /** catto-mail's suppression instead of a banlist is a production setting. */
+    public function testTheCattoMailSuppressionProviderPasses(): void
+    {
+        $findings = ProductionReadiness::check(array_replace(self::ready(), ['suppression' => 'cattomail']));
+        self::assertSame([], array_values(array_filter($findings, static fn(array $f): bool => $f[0] !== 'OK')), 'no warnings or errors');
+        self::assertContains(['OK', 'suppression provider: cattomail (catto-mail suppresses at send time; no suppression database of its own)'], $findings);
+    }
+
     /**
      * @param array<string, mixed> $change
      */

@@ -126,6 +126,9 @@ final class SubscriberAdmin
         if (!in_array($scope, self::UNSUBSCRIBE_SCOPES, true)) {
             throw new \InvalidArgumentException('Unknown scope.');
         }
+        if ($scope !== 'list' && !$this->suppression->keepsGlobalList()) {
+            throw new InvalidField('scope', 'This site keeps no global suppression list: the mail service suppresses bounced and complaining addresses itself.');
+        }
         if ($scope === 'list' && $this->lists->findById($listId) === null) {
             throw new InvalidField('listId', 'The selected list does not exist.');
         }

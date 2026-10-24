@@ -108,8 +108,12 @@ dump="$(sed -n 's/.*(dump before the switch: \(.*\))$/\1/p' "$GEN/upgrade-1.log"
   && in_vps grep -q "/usr/local/lib/php/ctnlist/$NEXT/bin/console ctnlist:cattomail:work" "/etc/systemd/system/ctnlist-worker@lists.service.d/release.conf" \
   && in_vps systemctl start "ctnlist-worker@lists.service" && [[ "$(in_vps systemctl is-active "ctnlist-worker@lists.timer")" == active ]] \
   && pass "the site, the timers and the worker run the new release" || fail "after the switch: health '$(body /health)'"
-in_vps test -d "/usr/local/lib/php/ctnlist/$LAST" && grep -q "does not name" "$GEN/upgrade-1.log" \
-  && pass "the old release is kept, and the settings the new one adds are named" || fail "old release, new settings: $(grep -E '^\[07' "$GEN/upgrade-1.log")"
+# The settings this working tree's .env.example adds to the last release's, which the switch must name (or none).
+keys() { sed -n 's/^\([A-Z][A-Z0-9_]*\)=.*/\1/p' | sort -u; }
+added="$(comm -13 <(git -C "$REPO" show "v$LAST:.env.example" | keys) <(keys < "$REPO/.env.example") | paste -sd' ' -)"
+if [[ -n "$added" ]]; then named() { grep -q "does not name.*${added##* }" "$GEN/upgrade-1.log"; }; else named() { grep -q "Writing the configuration .* PASS  (kept)" "$GEN/upgrade-1.log"; }; fi
+in_vps test -d "/usr/local/lib/php/ctnlist/$LAST" && named \
+  && pass "the old release is kept, and the settings the new one adds are named (${added:-none})" || fail "old release, new settings (${added:-none}): $(grep -E '^\[07' "$GEN/upgrade-1.log")"
 if installer --installation lists --version "v$LAST" > "$GEN/back-1.log" 2>&1 && [[ "$(release_of lists)" == "$LAST" && "$(body /health)" == OK \
      && "$(sql "SELECT count(*) FROM subscribers WHERE s_email = 'kept@example.org'")" == 1 ]] \
    && installer --installation lists > "$GEN/back-2.log" 2>&1 && [[ "$(release_of lists)" == "$NEXT" && "$(body /health)" == OK ]]; then

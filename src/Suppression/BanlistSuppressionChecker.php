@@ -83,4 +83,9 @@ final class BanlistSuppressionChecker implements SuppressionChecker
             return false;
         }
     }
+
+    public function keepsGlobalList(): bool
+    {
+        return true;
+    }
 }

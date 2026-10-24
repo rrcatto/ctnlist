@@ -1,0 +1,14 @@
+# Hourly housekeeping in the pod (deploy/podman/README.md), the user-service form of deploy/systemd/ctnlist-maintenance@.service,
+# written by ctnlist-podman.sh into ~/.config/systemd/user/@POD@-maintenance.service and started by its timer. It runs
+# in the php container, so it reads the same .env as the web server; @VERSION@ is the release the pod runs.
+
+[Unit]
+Description=ctnlist maintenance (@KIT@)
+# Only while the pod runs: during a release switch the timer starts nothing.
+Requisite=@POD@.service
+After=@POD@.service
+
+[Service]
+Type=oneshot
+ExecStart=@PODMAN@ exec @POD@-php php /usr/local/lib/php/ctnlist/@VERSION@/bin/console ctnlist:maintenance --no-interaction
+TimeoutStartSec=1800

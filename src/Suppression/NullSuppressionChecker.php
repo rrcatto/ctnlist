@@ -33,4 +33,9 @@ final class NullSuppressionChecker implements SuppressionChecker
         $this->logger->warning('Global domain unsubscribe not recorded: no suppression provider is configured.');
         return false;
     }
+
+    public function keepsGlobalList(): bool
+    {
+        return false;
+    }
 }

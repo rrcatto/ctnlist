@@ -231,7 +231,7 @@ final class DiagnoseCommand extends Command
             }
         }
         if (!$production) {
-            $say('OK', 'suppression provider: ' . ($this->suppression ?: 'banlist'));
+            $say('OK', ProductionReadiness::suppressionProvider((string) $this->suppression));
         }
 
         // Obsolete settings still present in the environment.

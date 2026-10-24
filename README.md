@@ -1,4 +1,4 @@
-# ctnlist 6.0.11
+# ctnlist 6.1.0
 
 ctnlist is a web-based mailing-list application created by Richard Royston Catto in 2009. Versions 5.0.x and 6.0.x are an incremental modernisation of the working v5.0 application, not a replacement of its established workflows.
 
@@ -122,7 +122,7 @@ database/       Phinx migrations (domain/, banlist/), destructive development re
 assets/         application CSS and JavaScript for Symfony AssetMapper (app.js, styles/app.css, ckeditor/ editor configuration, images/, lib/ vendored Bootstrap and Bootstrap Icons)
 importmap.php   AssetMapper import map (entry point: assets/app.js)
 public_html/    per-installation web root: front controller (index.php) and vendor/ckeditor5/ (prebuilt CKEditor 5 bundle and its emoji list)
-deploy/         production templates: nginx server block and FastCGI snippet, PHP-FPM pool, cron entries, systemd units, Mailpit for proofs (mailpit/, nginx/mailpit.location.conf.example)
+deploy/         production templates: nginx server block and FastCGI snippet, PHP-FPM pool, cron entries, systemd units, Mailpit for proofs (mailpit/, nginx/mailpit.location.conf.example); podman/, the kit for running an installation in a rootless Podman pod (Rootless Podman)
 resources/      sample-templates/: the three sample email templates (HTML and text parts) that ctnlist:templates:samples installs
 src/            application code, namespace App\ (Controller/, Repository/ and domain folders: Campaign/, Queue/, Mail/, CattoMail/, Log/, Subscriber/, Security/, Suppression/, Maintenance/; Config/ (settings, production rules), Http/ (headers, CSP, rate limits, pagination), Session/, Twig/, Util/; Form/ and Validator/; Command/ for console commands)
 templates/      Twig templates: base.html.twig and layout/ (navbar, admin bar, flash messages, footer) form the site layout
@@ -130,6 +130,7 @@ tests/          PHPUnit: Unit/, Integration/ (application against the ctnlist_te
 docs/           project documentation; AUP.md is also the source of the site's acceptable use policy page, so docs/ is part of an installed release
 dev/podman/     development container files
 dev/installer-test/  the stand-in server and the test of install-ctnlist (bin/dev test-installer)
+dev/podman-kit-test/ the stand-in server and the test of the Podman kit (bin/dev test-podman-kit)
 ```
 
 ## Deployment
@@ -137,12 +138,12 @@ dev/installer-test/  the stand-in server and the test of install-ctnlist (bin/de
 ### Requirements
 
 - PHP 8.5 or later with PHP-FPM and the extensions ctnlist uses, `pdo` and `pdo_pgsql`, `openssl` (encrypted settings), `gd` with JPEG and WebP support (profile pictures), `mbstring`, `fileinfo` (upload type checks), `filter`, `json` and `session`, and those its packages require: `dom` (the archive's HTML sanitiser), `xml` and `iconv`. `composer install` refuses a PHP without them (except `mbstring`, for which it accepts the slower symfony/polyfill-mbstring) and `ctnlist:diagnose` reports any missing one as an ERROR (run it with the PHP version PHP-FPM uses). `intl`, `curl` and `exif` (turns phone photos upright) are recommended; diagnose warns when they are missing.
-- PostgreSQL 16 (the main database; the shared suppression database where this server hosts it).
+- PostgreSQL 16 (the main database; the shared suppression database where this server hosts it, unless global suppression is catto-mail's: [Configuration](#configuration)).
 - nginx in front of PHP-FPM (never Apache). There is no Node or npm build: frontend files are served by Symfony AssetMapper.
 
 ### Layout and permissions
 
-The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.0.11/` (the path is set in `public_html/index.php`): owned by root, read-only to the PHP-FPM user (`www-data`), with `composer install --no-dev --optimize-autoloader` run there. Each installation has its own directory, e.g. `/var/www/<installation>`:
+The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.1.0/` (the path is set in `public_html/index.php`): owned by root, read-only to the PHP-FPM user (`www-data`), with `composer install --no-dev --optimize-autoloader` run there. Each installation has its own directory, e.g. `/var/www/<installation>`:
 
 | Path | Owner, mode | What |
 |---|---|---|
@@ -173,6 +174,18 @@ sudo bash install-ctnlist --installation <installation> --version vX.Y.Z
 - At the end it runs `ctnlist:diagnose --production` and shows its errors and warnings; a new installation has some until the mail service is connected. `--sample-templates` adds the three sample templates, and `--no-web-server` leaves nginx and PHP-FPM to you.
 
 It does not install Mailpit ([Proofs to Mailpit](#proofs-to-mailpit)) and does not connect the mail service (step 11 below). `bin/dev test-installer` runs it in a stand-in server ([Testing and validation](#testing-and-validation)).
+
+### Rootless Podman
+
+The other way to install, for a server that already hosts other sites (a control panel such as Virtualmin, its nginx and its PHP): the installation runs as its own Linux user in a rootless Podman pod, `deploy/podman/` ([its README](deploy/podman/README.md)). The server's nginx keeps ports 80 and 443 and the certificate and forwards the site to the pod on `127.0.0.1:<port>`; PostgreSQL and the mail server stay on the server, which the pod reaches at `10.0.2.2`.
+
+- **The pod:** nginx and PHP-FPM, and Mailpit for proofs with `--mailpit`. The PHP image is built from the release (`deploy/podman/Containerfile`: an exact PHP 8.5 release, the extensions above, the pool of `deploy/php-fpm`), so the server's PHP does not matter. The worker and maintenance are systemd user timers that run in the pod.
+- **Read-only:** the code, `.env` and `public_html` are read-only in every container; PHP writes `var/` and `logs/` only, and cannot reach the user's other files or the server's other sites.
+- **Root, once:** `root-prepare.sh <user>` gives the user the ids rootless containers need and linger, with `--database` the site's database, and with `--banlist-env` (or `--create-banlist`) the suppression database's settings; without those, global suppression is catto-mail's (`SUPPRESSION_PROVIDER=cattomail`). Then root makes nginx forward the site (`deploy/podman/host-nginx.conf.example`).
+- **The site's user, from then on:** `ctnlist-podman.sh install --version vX.Y.Z --port <port>` is a new installation, or the switch to that release, in 13 steps like the installer's: the release in `~/ctnlist/releases/`, `~/ctnlist/site/.env` with generated secrets, the schema, the cache and the assets, the pod and its timers, then `ctnlist:diagnose --production`. It refuses a database holding other tables, dumps the database before a switch, and refuses a release with another schema without `--recreate-database`.
+- **Inside the pod** the layout is the one above (the code at `/usr/local/lib/php/ctnlist/<version>`, the installation at `/var/www/<installation>`), so the front controller and the console commands are unchanged; on the server everything is under `~/ctnlist`.
+
+`bin/dev test-podman-kit` runs the kit in a stand-in server ([Testing and validation](#testing-and-validation)). Use the installer or the kit for an installation, not both.
 
 ### New installation
 
@@ -242,7 +255,10 @@ CTNLIST_INSTANCE_DIR=/var/www/example bin/console ctnlist:templates:samples
 
 Per-installation settings are read from `.env` outside the public web directory. Start with `.env.example`. `APP_ENV` is `prod`, `dev` or `test`. `TRUSTED_PROXIES` lists reverse proxies whose `X-Forwarded-*` headers are trusted (client IP for rate limits and logs, HTTPS detection). With nginx passing requests straight to PHP-FPM (`deploy/nginx`), PHP sees the client address and HTTPS directly and the snippet drops client-supplied forwarding headers; list a proxy only when one sits in front of nginx, and never `0.0.0.0/0` (`ctnlist:diagnose` warns).
 
-The main application uses `DB_*` settings. The separate global suppression database uses `GDB_*` settings in an externally managed `ban.env`. Set `GDB_ENV_DIRECTORY` and, when necessary, `GDB_ENV_FILE` in the installation `.env` (default: `config/phinx/ban.env` in the shared tree); the same variables can be exported when running the banlist Phinx configuration. `SUPPRESSION_PROVIDER=none` disables the suppression database and is only accepted with `APP_ENV` `dev` or `test`.
+The main application uses `DB_*` settings. Global suppression comes from `SUPPRESSION_PROVIDER`:
+- `banlist` (the default): the separate global suppression database, shared by installations, with `GDB_*` settings in an externally managed `ban.env`. Set `GDB_ENV_DIRECTORY` and, when necessary, `GDB_ENV_FILE` in the installation `.env` (default: `config/phinx/ban.env` in the shared tree); the same variables can be exported when running the banlist Phinx configuration.
+- `cattomail`: no suppression database. catto-mail, which delivers every campaign, refuses suppressed recipients when a send is staged and suppresses hard-bounced and complaining addresses itself, and ctnlist marks those subscribers from its outcomes ([catto-mail integration](#catto-mail-integration)). ctnlist still applies the v5 address rules at confirmation, queue build and before each send. A subscriber's "all lists" unsubscribe then unsubscribes them from this site's lists only, and the administrator's bulk scopes that only record global suppressions (domains, bounces, spam complaints) are refused. `GDB_*` are not read.
+- `none` disables suppression altogether and is only accepted with `APP_ENV` `dev` or `test`.
 
 Transactional mail (sign-in links, invitations, notifications, contact-form mail) goes through the SMTP server in `MAILER_DSN`, one connection per message. Campaign content goes through catto-mail (`CATTOMAIL_*`, below). Optional legacy synchronisation targets use `SYNC_DATABASES_JSON`.
 
@@ -473,7 +489,7 @@ The development stacks are separate (catto-mail's pod is on an internal network,
 3. `bin/dev cattomail-ca` saves catto-mail's self-signed development certificate (read from its public port) to `dev/podman/cattomail-ca.pem` (gitignored). Repeat it when catto-mail's certificate is regenerated.
 4. In `dev/podman/ctnlist.env` (leave `CATTOMAIL_API_BASE_URL`, `CATTOMAIL_API_KEY` and `CATTOMAIL_WEBHOOK_SECRET` empty):
    - `CATTOMAIL_API_CONNECT_HOST=catto-mail:443`: catto-mail's address is `https://localhost:8443`, a port that exists only on your machine; from ctnlist's containers the same service answers at `catto-mail`, port 443. TLS is still verified for `localhost`;
-   - `CATTOMAIL_CA_FILE=/usr/local/lib/php/ctnlist/6.0.11/dev/podman/cattomail-ca.pem`;
+   - `CATTOMAIL_CA_FILE=/usr/local/lib/php/ctnlist/6.1.0/dev/podman/cattomail-ca.pem`;
    - `CATTOMAIL_WEBHOOK_URL=http://ctnlist-web/cattomail/webhook`: where catto-mail's pod can reach ctnlist (plain http is accepted by a development catto-mail);
    - for subscription mail, `APP_BASE_URL=https://localhost:8543/` (ctnlist's development HTTPS listener).
 
@@ -619,6 +635,8 @@ Smoke tests never touch the development installation or its database. They drive
 `tests/Smoke/RouteSmokeTest` requests every GET route of the running stack over HTTP, anonymously and as the development administrator, and checks status codes, login redirects, access control and PHP error output. Every new GET route must be added to it. `tests/Smoke/AuthFlowTest` covers sign-in links (opening them changes nothing, the Sign in POST and its CSRF token, parallel, used, expired and malformed links, a link to confirm a list), auth cookies, session rotation, logout and CSRF, `tests/Smoke/LayoutTest` the site layout, assets, the Content-Security-Policy and error pages, `AdminScreensTest` the administration screens, `AdminListsRolesTest` and `RoleAdministrationTest` list and role administration, `AdminMessagesTemplatesTest`, `AdminQueueTest`, `AdminSubscribersTest`, `SettingsPageTest` and `ReportsTest` the rest of the administration and the Site Log, `CattoMailSmokeTest` the catto-mail pages and webhook endpoint, `SecurityBoundaryTest` extra form fields, rate limits, the worker-configuration warning and the health check, and `ProfileTest`, `ConsentTest`, `MessageActionTest` and `ArchiveContactTest` the subscriber-facing pages. `tests/Unit` holds unit tests; `tests/Integration` boots the application against the `ctnlist_test` database (each test rolled back) and covers the services: suppression (including the banlist database, `ctnlist_banlist_test`), the send and message logs, mail, rendering, messages, the delivery queue, consent, contact and subscriber administration, catto-mail against the fake, maintenance and diagnostics, sign-in, settings and the HTTP boundary.
 
 `bin/dev test-installer` is separate from `bin/dev check` (several minutes, and it needs the Internet for the packages): it runs `install-ctnlist` as root in a stand-in server, a systemd container with PHP-FPM, PostgreSQL and nginx (`dev/installer-test/`). It installs the last released version as a new installation, runs the installer a second time, switches to the working tree as the next version and back, refuses a release with a changed schema and then recreates the database on request, and adds a second installation for a host name nginx already serves.
+
+`bin/dev test-podman-kit` is separate in the same way (ten minutes or more): it runs `deploy/podman` in a stand-in server with rootless Podman, PostgreSQL and nginx configured from `host-nginx.conf.example` (`dev/podman-kit-test/`). `root-prepare.sh` prepares a site user with a database and a new suppression database; `ctnlist-podman.sh` refuses a database holding another application's table, installs the working tree as the next version with Mailpit, and the test reaches the site through nginx and the pod: HTTPS and the visitor's address as PHP sees them (a forged `X-Forwarded-For` is ignored), a sign-in with the link mailed through the pod, the absolute address the mail service's Connect page is given, the timers and a restart. It then runs the kit a second time, switches to the next version and back, refuses a release with a changed schema and recreates the database on request. `tests/Unit/PodmanKitTest` holds the kit's read-only mounts, the hop it trusts, its logs without query strings and its agreement with `deploy/php-fpm`, `deploy/nginx` and `deploy/systemd`.
 
 Real SMTP delivery and a production banlist database are not part of the development stack and must be tested on a target installation. The catto-mail end-to-end checks, `bin/dev test-cattomail` against a development catto-mail and the Release checklist's proof, test campaign and webhook round trip on the server, are still to be run once the new production server exists.
 

@@ -100,15 +100,14 @@ final class ConsentServiceTest extends IntegrationTestCase
         self::assertSame(['joined', 'unsubscribed'], $this->events($id, $news), 'one unsubscribe event');
     }
 
-    /** No suppression database here (SUPPRESSION_PROVIDER=none): the subscriber is not told it was recorded. */
-    public function testAGlobalUnsubscribeSaysWhenTheSuppressionDatabaseWasNotUpdated(): void
+    /** No suppression database here (SUPPRESSION_PROVIDER=none, as with cattomail): the subscriber is told only what was done. */
+    public function testAGlobalUnsubscribeWithoutASuppressionDatabaseNamesNone(): void
     {
         $id = $this->createSubscriber('jane@example.com');
         $user = $this->service(SubscriberUserProvider::class)->loadUserBySubscriberId($id);
         $all = $this->service(ListRepository::class)->findByShortcode('ALL') ?? self::fail('ALL');
 
-        self::assertSame('You have been unsubscribed from all local lists, but the global suppression database could not be updated. Please try again later.',
-            $this->service(ConsentService::class)->unsubscribe($user, $all, 'global', ''));
+        self::assertSame('You have been unsubscribed from all local lists.', $this->service(ConsentService::class)->unsubscribe($user, $all, 'global', ''));
     }
 
     /**

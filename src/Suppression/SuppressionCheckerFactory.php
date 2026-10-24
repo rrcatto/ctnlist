@@ -11,10 +11,11 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Dotenv\Dotenv;
 
 /**
- * Selects the suppression source from SUPPRESSION_PROVIDER. The banlist
- * connection settings come from the external ban.env (GDB_ENV_DIRECTORY /
- * GDB_ENV_FILE, default config/phinx/ban.env), read without touching the
- * process environment.
+ * Selects the suppression source from SUPPRESSION_PROVIDER: banlist (the
+ * shared database), cattomail (catto-mail's suppression, no banlist) or none
+ * (development and tests only). The banlist connection settings come from
+ * the external ban.env (GDB_ENV_DIRECTORY / GDB_ENV_FILE, default
+ * config/phinx/ban.env), read without touching the process environment.
  */
 final class SuppressionCheckerFactory
 {
@@ -33,6 +34,7 @@ final class SuppressionCheckerFactory
     {
         return match (strtolower($this->provider)) {
             'none' => $this->none(),
+            'cattomail' => new CattoMailSuppressionChecker(),
             'banlist' => new BanlistSuppressionChecker($this->banlistConnection(), $this->site, $this->logger),
             default => throw new \RuntimeException('Unknown SUPPRESSION_PROVIDER: ' . $this->provider),
         };

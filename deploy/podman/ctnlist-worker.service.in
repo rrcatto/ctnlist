@@ -1,0 +1,15 @@
+# The catto-mail worker in the pod (deploy/podman/README.md), the user-service form of deploy/systemd/ctnlist-worker@.service,
+# written by ctnlist-podman.sh into ~/.config/systemd/user/@POD@-worker.service and started by its timer. It runs in
+# the php container, so it reads the same .env as the web server; @VERSION@ is the release the pod runs.
+
+[Unit]
+Description=ctnlist catto-mail worker (@KIT@)
+# Only while the pod runs: during a release switch the timer starts nothing.
+Requisite=@POD@.service
+After=@POD@.service
+
+[Service]
+Type=oneshot
+# The command holds a PostgreSQL advisory lock; a run that overlaps does nothing.
+ExecStart=@PODMAN@ exec @POD@-php php /usr/local/lib/php/ctnlist/@VERSION@/bin/console ctnlist:cattomail:work --no-interaction
+TimeoutStartSec=600

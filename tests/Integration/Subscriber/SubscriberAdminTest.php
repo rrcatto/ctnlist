@@ -8,6 +8,7 @@ use App\Log\MessageLog;
 use App\Repository\SubscriberRepository;
 use App\Subscriber\SubscriberAdmin;
 use App\Tests\Integration\IntegrationTestCase;
+use App\Validator\InvalidField;
 
 final class SubscriberAdminTest extends IntegrationTestCase
 {
@@ -24,7 +25,15 @@ final class SubscriberAdminTest extends IntegrationTestCase
         $this->db->executeStatement('UPDATE list_subscribers SET ls_confirmed = TRUE WHERE ls_l_id = ?', [$news]);
         self::assertSame(1, $admin->bulkUnsubscribe('a@example.com unknown@example.com', $news, 'Bulk unsubscribe', 'list'));
         self::assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM list_subscribers WHERE ls_l_id = ? AND ls_unsubscribed', [$news]));
-        self::assertSame(0, $admin->bulkUnsubscribe('a@example.com', $news, '', 'spam'), 'nothing can be recorded without a suppression provider');
+        foreach (['domain', 'bounce', 'spam'] as $scope) {
+            try {
+                $admin->bulkUnsubscribe('a@example.com', $news, '', $scope);
+                self::fail($scope . ': nothing can be recorded without a suppression database, and the administrator is told so');
+            } catch (InvalidField $e) {
+                self::assertSame('scope', $e->field);
+                self::assertStringContainsString('keeps no global suppression list', $e->getMessage());
+            }
+        }
 
         $this->expectException(\InvalidArgumentException::class);
         $admin->bulkUnsubscribe('a@example.com', 999999, '', 'list');

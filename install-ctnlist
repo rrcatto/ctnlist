@@ -319,7 +319,9 @@ main() {
 
   step "Preparing the suppression database"
   if [[ "$(envget "$INST/.env" SUPPRESSION_PROVIDER)" == none ]]; then
-    warn "SUPPRESSION_PROVIDER=none: a production installation needs the suppression database (ctnlist:diagnose refuses it)"
+    warn "SUPPRESSION_PROVIDER=none: a production installation needs the suppression database or catto-mail's (ctnlist:diagnose refuses none)"
+  elif [[ "$(envget "$INST/.env" SUPPRESSION_PROVIDER)" == cattomail ]]; then
+    pass "none: SUPPRESSION_PROVIDER=cattomail (catto-mail suppresses at send time)"
   else
     gdir="$(envget "$INST/.env" GDB_ENV_DIRECTORY)"; gfile="$(envget "$INST/.env" GDB_ENV_FILE)"; ban="${gdir%/}/${gfile:-ban.env}"
     if [[ ! -f "$ban" && "$FRESH" == true && ( "$CREATE_BANLIST" == true || "$ban" == "$ETC/ban.env" ) ]]; then

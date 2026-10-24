@@ -1,0 +1,12 @@
+# A stand-in for a server that hosts ctnlist on rootless Podman, used only by bin/dev test-podman-kit
+# (dev/podman-kit-test/run.sh): Ubuntu 24.04 with systemd as PID 1, Podman 4.9 (Quadlet) with slirp4netns,
+# PostgreSQL 16 and nginx, Git and curl, as README "Rootless Podman" asks. root-prepare.sh and ctnlist-podman.sh do
+# the rest. jq reads Mailpit's API in the test.
+FROM docker.io/library/ubuntu:24.04
+RUN apt-get update -qq \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+      systemd systemd-sysv dbus dbus-user-session iproute2 ca-certificates git curl openssl jq \
+      podman catatonit slirp4netns uidmap fuse-overlayfs crun netavark aardvark-dns nginx postgresql postgresql-client >/dev/null \
+ && rm -rf /var/lib/apt/lists/*
+STOPSIGNAL SIGRTMIN+3
+CMD ["/sbin/init"]
