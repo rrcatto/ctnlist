@@ -86,4 +86,36 @@ final class MarkdownTest extends TestCase
         self::assertStringNotContainsString('{{contact}}', $markdown);
         self::assertDoesNotMatchRegularExpression('/\badmin(istrator)?\b.*@|questions about this policy/i', $markdown);
     }
+
+    public function testThePrivacyPolicyOfTheReleaseRenders(): void
+    {
+        $markdown = (string) file_get_contents(dirname(__DIR__, 3) . '/docs/PRIVACY.md');
+        $html = Markdown::toHtml($markdown);
+        self::assertSame(1, substr_count($html, '<h1>'));
+        self::assertStringContainsString('<h1>{{site_name}} Privacy Policy</h1>', $html);
+        self::assertGreaterThanOrEqual(8, substr_count($html, '<h2>'));
+        self::assertMatchesRegularExpression('/^Version [A-Za-z0-9][A-Za-z0-9._-]*/m', $markdown);
+        self::assertStringContainsString('<th scope="col">Cookie</th>', $html, 'the cookies, as a table');
+        self::assertStringNotContainsString('| ---', $html, 'no Markdown is left over');
+        self::assertDoesNotMatchRegularExpression('/^#{1,6} /m', $html);
+        // The installation's policy: it names no product, domain or repository, only the placeholders.
+        foreach (['catto-mail', 'cattomail', 'catto mail', 'ctnlist', 'github'] as $name) {
+            self::assertStringNotContainsStringIgnoringCase($name, $markdown);
+        }
+        preg_match_all('/\{\{[^}]*\}\}/', $markdown, $placeholders);
+        self::assertEqualsCanonicalizing(['{{site_name}}', '{{domain}}', '{{organisation}}', '{{site_log_retention}}', '{{administrator_email}}'], array_values(array_unique($placeholders[0])));
+        // Requests about personal information go to the administrator's address from Settings: the document writes none.
+        self::assertStringNotContainsString('@', $markdown);
+        self::assertSame(3, substr_count($markdown, '{{administrator_email}}'));
+        self::assertStringContainsString('<a href="https://inforegulator.org.za">inforegulator.org.za</a>', $html, 'where to complain');
+    }
+
+    public function testThePrivacyPolicySaysHowLongVisitsAreKept(): void
+    {
+        self::assertSame('for 120 days', \App\Controller\PageController::siteLogRetention(null), 'the default');
+        self::assertSame('for 120 days', \App\Controller\PageController::siteLogRetention(''));
+        self::assertSame('with no fixed time limit', \App\Controller\PageController::siteLogRetention('0'));
+        self::assertSame('for 1 day', \App\Controller\PageController::siteLogRetention('1'));
+        self::assertSame('for 90 days', \App\Controller\PageController::siteLogRetention('90'));
+    }
 }

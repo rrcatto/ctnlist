@@ -124,19 +124,32 @@ final class MaintenanceTest extends IntegrationTestCase
         self::assertSame(0, $maintenance->run()['webhook bodies pruned']);
     }
 
-    /** The Site Log is kept unless APP_SITELOG_RETENTION_DAYS is set (it holds IP addresses and is not needed forever). */
-    public function testSiteLogIsPrunedOnlyWhenConfigured(): void
+    /**
+     * The Site Log keeps a visit for APP_SITELOG_RETENTION_DAYS, 120 days when it is not set (it holds IP addresses
+     * and is not needed forever); 0 keeps it, as v5 did.
+     */
+    public function testSiteLogIsPrunedAfterItsRetention(): void
     {
-        $this->db->executeStatement("INSERT INTO sitelog (stl_url, stl_logged_at) VALUES ('/old', ?), ('/new', ?)", [$this->daysAgo(400), $this->daysAgo(1)]);
-        self::assertArrayNotHasKey('Site Log rows removed', $this->service(Maintenance::class)->run(), 'kept by default');
-        self::assertSame(1, (int) $this->db->fetchOne("SELECT COUNT(*) FROM sitelog WHERE stl_url = '/old'"));
+        $this->db->executeStatement("INSERT INTO sitelog (stl_url, stl_logged_at) VALUES ('/old', ?), ('/middle', ?), ('/new', ?)",
+            [$this->daysAgo(400), $this->daysAgo(200), $this->daysAgo(1)]);
+        $count = fn(string $url): int => (int) $this->db->fetchOne('SELECT COUNT(*) FROM sitelog WHERE stl_url = ?', [$url]);
 
-        $withRetention = new Maintenance($this->db, $this->service(\App\Repository\CattoMailWebhookRepository::class), $this->service(\App\CattoMail\CattoMailConfig::class),
+        self::assertArrayNotHasKey('Site Log rows removed', $this->maintenanceWithSiteLogRetention('0')->run(), '0 keeps the Site Log');
+        self::assertSame(1, $count('/old'));
+
+        self::assertGreaterThanOrEqual(1, $this->maintenanceWithSiteLogRetention('365')->run()['Site Log rows removed']);
+        self::assertSame([0, 1, 1], [$count('/old'), $count('/middle'), $count('/new')]);
+
+        self::assertSame(120, Maintenance::SITELOG_RETENTION_DAYS);
+        self::assertGreaterThanOrEqual(1, $this->maintenanceWithSiteLogRetention(null)->run()['Site Log rows removed'], 'not set: the default');
+        self::assertSame([0, 1], [$count('/middle'), $count('/new')]);
+    }
+
+    private function maintenanceWithSiteLogRetention(?string $days): Maintenance
+    {
+        return new Maintenance($this->db, $this->service(\App\Repository\CattoMailWebhookRepository::class), $this->service(\App\CattoMail\CattoMailConfig::class),
             $this->service(\App\Config\RuntimeSettings::class), $this->service(\App\Maintenance\StuckWork::class), $this->service(\App\Maintenance\DatabaseLock::class),
-            $this->service(\App\Maintenance\MaintenanceActivity::class), $this->service(\Psr\Clock\ClockInterface::class), new \Psr\Log\NullLogger(), '365');
-        self::assertGreaterThanOrEqual(1, $withRetention->run()['Site Log rows removed']);
-        self::assertSame(0, (int) $this->db->fetchOne("SELECT COUNT(*) FROM sitelog WHERE stl_url = '/old'"));
-        self::assertSame(1, (int) $this->db->fetchOne("SELECT COUNT(*) FROM sitelog WHERE stl_url = '/new'"));
+            $this->service(\App\Maintenance\MaintenanceActivity::class), $this->service(\Psr\Clock\ClockInterface::class), new \Psr\Log\NullLogger(), $days);
     }
 
     public function testOverlappingRunsSkip(): void

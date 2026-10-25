@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller;
 
 use App\Config\SiteConfig;
+use App\Maintenance\Maintenance;
 use App\Util\Markdown;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -33,10 +34,28 @@ final class PageController extends AbstractController
         ]);
     }
 
+    /**
+     * The privacy policy, built from docs/PRIVACY.md of the release like the
+     * acceptable use policy below, with one more placeholder: how long the
+     * Site Log keeps its rows ({{site_log_retention}}, from
+     * APP_SITELOG_RETENTION_DAYS or its default, as ctnlist:maintenance applies them). Requests
+     * about personal information go to the administrator's address, the one
+     * the footer links to ({{administrator_email}}, MAIL_ADMIN_ADDRESS or else
+     * APP_ADMIN_EMAIL): the document writes no address of its own.
+     */
     #[Route('/privacy', name: 'privacy', methods: ['GET'])]
-    public function privacy(): Response
+    public function privacy(SiteConfig $site, #[Autowire('%kernel.project_dir%/docs/PRIVACY.md')] string $file,
+        #[Autowire('%env(default::APP_SITELOG_RETENTION_DAYS)%')] ?string $siteLogDays = null): Response
     {
-        return $this->render('page/privacy.html.twig');
+        return $this->policy($site, $file, 'Privacy Policy', $site->listName . ' and your personal information: what is collected, why, who handles it and your rights.',
+            ['{{site_log_retention}}' => self::siteLogRetention($siteLogDays), '{{administrator_email}}' => $site->adminEmail], false);
+    }
+
+    /** How long the Site Log keeps a visit, in the words of the privacy policy ("are kept …"). */
+    public static function siteLogRetention(?string $days): string
+    {
+        $days = Maintenance::siteLogRetentionDays($days);
+        return $days > 0 ? 'for ' . $days . ' day' . ($days === 1 ? '' : 's') : 'with no fixed time limit';
     }
 
     /**
@@ -54,6 +73,18 @@ final class PageController extends AbstractController
     #[Route('/acceptable-use-policy', name: 'acceptable_use_policy', methods: ['GET'])]
     public function acceptableUsePolicy(SiteConfig $site, #[Autowire('%kernel.project_dir%/docs/AUP.md')] string $file): Response
     {
+        // One address on this page, the policy's abuse address: the footer leaves the administrator's out.
+        return $this->policy($site, $file, 'Acceptable Use Policy', 'The rules for the subscribers of ' . $site->listName . ' and for whoever writes and sends its messages.', [], true);
+    }
+
+    /**
+     * A policy document of the release as a page, its placeholders filled with
+     * this installation's values after rendering, escaped.
+     *
+     * @param array<string, string> $more placeholders of this document only
+     */
+    private function policy(SiteConfig $site, string $file, string $fallbackTitle, string $description, array $more, bool $withoutAdministrator): Response
+    {
         $markdown = is_file($file) ? (string) file_get_contents($file) : '';
         if (trim($markdown) === '') {
             throw $this->createNotFoundException();
@@ -62,13 +93,13 @@ final class PageController extends AbstractController
             '{{site_name}}' => $site->listName,
             '{{domain}}' => $site->domain,
             '{{organisation}}' => $site->organisation !== '' ? $site->organisation : 'the operator of ' . $site->listName,
-        ];
+        ] + $more;
         $escaped = array_map(static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), $names);
         return $this->render('page/policy.html.twig', [
-            'title' => strtr(Markdown::title($markdown) ?? 'Acceptable Use Policy', $names),
+            'title' => strtr(Markdown::title($markdown) ?? $fallbackTitle, $names),
+            'description' => $description,
             'policy' => new Markup(strtr(Markdown::toHtml($markdown), $escaped), 'UTF-8'),
-            // One address on this page, the policy's abuse address: the footer leaves the administrator's out.
-            'footer_without_administrator' => true,
+            'footer_without_administrator' => $withoutAdministrator,
         ]);
     }
 }

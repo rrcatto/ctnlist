@@ -1,4 +1,4 @@
-{# Site footer: the list, its configured contact details and the policy links. #}
+{# Site footer: the list, its configured contact details, the policy links and the release. #}
 <footer class="app-footer border-top bg-1 mt-auto">
   <div class="container py-7">
     <div class="row gy-5">
@@ -28,5 +28,7 @@
         <a href="{{ path('contact') }}">Contact</a>
       </nav>
     </div>
+    {# The release this site runs, as in the generator meta tag. #}
+    <div class="text-center small fg-3 mt-3">ctnlist v{{ app_version }}</div>
   </div>
 </footer>

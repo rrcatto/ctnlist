@@ -13,7 +13,8 @@ use Twig\Extension\GlobalsInterface;
 use Twig\TwigFunction;
 
 /**
- * Twig globals: `site` (SiteConfig) and `counters` (AdminCounters).
+ * Twig globals: `site` (SiteConfig), `counters` (AdminCounters) and
+ * `app_version` (SiteConfig::VERSION, in every page's generator meta tag and footer).
  * Function: `profile_image_url(app.user)`, the user's profile picture or the
  * placeholder (signed out, or no picture yet).
  */
@@ -30,7 +31,7 @@ final class AppExtension extends AbstractExtension implements GlobalsInterface
     /** @return array<string, mixed> */
     public function getGlobals(): array
     {
-        return ['site' => $this->site, 'counters' => $this->counters];
+        return ['site' => $this->site, 'counters' => $this->counters, 'app_version' => SiteConfig::VERSION];
     }
 
     public function getFunctions(): array

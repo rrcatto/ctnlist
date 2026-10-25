@@ -1,4 +1,4 @@
-# ctnlist 6.1.0
+# ctnlist 6.1.1
 
 ctnlist is a web-based mailing-list application created by Richard Royston Catto in 2009. Versions 5.0.x and 6.0.x are an incremental modernisation of the working v5.0 application, not a replacement of its established workflows.
 
@@ -26,6 +26,8 @@ Since 6.0 every route is a Symfony 8.1 controller and the Fat-Free Framework has
 - separate PostgreSQL global email/domain suppression database
 - production templates (nginx, PHP-FPM, cron, systemd) and a production preflight, `ctnlist:diagnose --production`
 - an acceptable use policy page, `/acceptable-use-policy`, linked from every page's footer and built from `docs/AUP.md`: the site's own rules for its subscribers and for whoever writes and sends its messages. The document names no product or domain; the page fills in the installation's list name, domain and organisation from Settings, and sends abuse reports and complaints to `abuse@<APP_DOMAIN>`, which must be a mailbox that is read. That is the only address on the page: the administrator's address is not shown there, not even in the footer (replace the file to publish a different policy)
+- a privacy policy page, `/privacy`, built from `docs/PRIVACY.md` in the same way: what the site collects, why, who handles it, the cookies, how long each kind is kept and the subscriber's rights under POPIA. Requests go to the administrator's address (`MAIL_ADMIN_ADDRESS`, else `APP_ADMIN_EMAIL`), the one the footer links to, and the page says how long visits are kept from `APP_SITELOG_RETENTION_DAYS` (replace the file to publish a different policy)
+- every page names the release, in a `generator` meta tag and on the footer's last line
 
 ## Restored v5 functionality
 
@@ -127,7 +129,7 @@ resources/      sample-templates/: the three sample email templates (HTML and te
 src/            application code, namespace App\ (Controller/, Repository/ and domain folders: Campaign/, Queue/, Mail/, CattoMail/, Log/, Subscriber/, Security/, Suppression/, Maintenance/; Config/ (settings, production rules), Http/ (headers, CSP, rate limits, pagination), Session/, Twig/, Util/; Form/ and Validator/; Command/ for console commands)
 templates/      Twig templates: base.html.twig and layout/ (navbar, admin bar, flash messages, footer) form the site layout
 tests/          PHPUnit: Unit/, Integration/ (application against the ctnlist_test database), Smoke/ (HTTP against the stack's smoke installation), Support/ (FakeCattoMail)
-docs/           project documentation; AUP.md is also the source of the site's acceptable use policy page, so docs/ is part of an installed release
+docs/           project documentation; AUP.md and PRIVACY.md are also the sources of the site's acceptable use policy and privacy pages, so docs/ is part of an installed release
 dev/podman/     development container files
 dev/installer-test/  the stand-in server and the test of install-ctnlist (bin/dev test-installer)
 dev/podman-kit-test/ the stand-in server and the test of the Podman kit (bin/dev test-podman-kit)
@@ -143,7 +145,7 @@ dev/podman-kit-test/ the stand-in server and the test of the Podman kit (bin/dev
 
 ### Layout and permissions
 
-The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.1.0/` (the path is set in `public_html/index.php`): owned by root, read-only to the PHP-FPM user (`www-data`), with `composer install --no-dev --optimize-autoloader` run there. Each installation has its own directory, e.g. `/var/www/<installation>`:
+The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.1.1/` (the path is set in `public_html/index.php`): owned by root, read-only to the PHP-FPM user (`www-data`), with `composer install --no-dev --optimize-autoloader` run there. Each installation has its own directory, e.g. `/var/www/<installation>`:
 
 | Path | Owner, mode | What |
 |---|---|---|
@@ -221,6 +223,7 @@ Before a release goes live. The items marked † need the production server and 
 - [ ] † `ctnlist:diagnose --production` as `www-data` reports no ERROR; `https://<host>/health` answers `OK`.
 - [ ] † The mail service connected on the Delivery page (or set in `.env`, with `<APP_BASE_URL>cattomail/webhook` registered by hand), and the page shows that the From address's domain can send; `ctnlist:cattomail:check` reports it reachable and authenticated, and `bin/dev test-cattomail` has passed against a development catto-mail.
 - [ ] † `abuse@<APP_DOMAIN>` is a mailbox that is read: the acceptable use policy sends abuse reports and complaints there, and shows no other address.
+- [ ] † The administrator's address (`MAIL_ADMIN_ADDRESS`, else `APP_ADMIN_EMAIL`) is a mailbox that is read: the privacy policy sends requests about personal information there. Check the policy against the installation (`APP_SITELOG_RETENTION_DAYS` sets how long it says visits are kept, 120 days when not set; 0 keeps them with no limit).
 - [ ] † If proofs go to Mailpit (`MAIL_PROOF_SMTP`): `ctnlist-mailpit` is running, its SMTP and web ports listen on 127.0.0.1 only, `https://<host>/mailpit/` asks for the password, and a proof sent from the message list appears there.
 - [ ] † A proof to an address you can read, a small campaign to a test list, a webhook round trip (delivery and bounce events on **Admin → Settings → Delivery**) and an address-validation job.
 - [ ] † Recovery sanity check: the Delivery page shows no stuck work, and a send job without a final webhook is reconciled after `CATTOMAIL_RECONCILE_AFTER_SECONDS`.
@@ -489,7 +492,7 @@ The development stacks are separate (catto-mail's pod is on an internal network,
 3. `bin/dev cattomail-ca` saves catto-mail's self-signed development certificate (read from its public port) to `dev/podman/cattomail-ca.pem` (gitignored). Repeat it when catto-mail's certificate is regenerated.
 4. In `dev/podman/ctnlist.env` (leave `CATTOMAIL_API_BASE_URL`, `CATTOMAIL_API_KEY` and `CATTOMAIL_WEBHOOK_SECRET` empty):
    - `CATTOMAIL_API_CONNECT_HOST=catto-mail:443`: catto-mail's address is `https://localhost:8443`, a port that exists only on your machine; from ctnlist's containers the same service answers at `catto-mail`, port 443. TLS is still verified for `localhost`;
-   - `CATTOMAIL_CA_FILE=/usr/local/lib/php/ctnlist/6.1.0/dev/podman/cattomail-ca.pem`;
+   - `CATTOMAIL_CA_FILE=/usr/local/lib/php/ctnlist/6.1.1/dev/podman/cattomail-ca.pem`;
    - `CATTOMAIL_WEBHOOK_URL=http://ctnlist-web/cattomail/webhook`: where catto-mail's pod can reach ctnlist (plain http is accepted by a development catto-mail);
    - for subscription mail, `APP_BASE_URL=https://localhost:8543/` (ctnlist's development HTTPS listener).
 
@@ -542,7 +545,7 @@ Output and exit status are the same for both. They print one line of counts when
 | Global opt-outs | Must be kept | Never pruned (they record an explicit request). |
 | Sign-in links (`auth_login_tokens`) | Temporary | Removed once used or expired and older than the sign-in rate windows (the rate limits count them). |
 | Sign-in sessions (`auth_sessions`), PHP sessions (`sessions`) | Temporary | Sign-in sessions are removed once expired or signed out; PHP sessions (CSRF tokens, messages) once idle for longer than `AUTH_SESSION_TTL` or `AUTH_MAGIC_LINK_TTL`, whichever is longer. Active sessions are never touched. |
-| Site Log | History, personal data (IP addresses) | Kept, as in v5, unless `APP_SITELOG_RETENTION_DAYS` is set. |
+| Site Log | History, personal data (IP addresses) | Removed `APP_SITELOG_RETENTION_DAYS` (default 120) days after the visit; 0 keeps it, as v5 did. |
 | `options` (settings overrides, status heartbeats) | Configuration | Kept. |
 
 Maintenance works in batches of at most 1,000 rows, each its own short transaction, and at most 50 batches per task per run; the rest waits for the next run.

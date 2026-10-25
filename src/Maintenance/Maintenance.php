@@ -34,8 +34,8 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  * - per-address validation results superseded by a newer result for the
  *   same subscriber, from jobs finished more than CATTOMAIL_DETAIL_RETENTION_DAYS
  *   ago (job counts and every subscriber's latest result stay);
- * - Site Log rows older than APP_SITELOG_RETENTION_DAYS, only when set (0,
- *   the default, keeps the Site Log as v5 did).
+ * - Site Log rows older than APP_SITELOG_RETENTION_DAYS (SITELOG_RETENTION_DAYS
+ *   when it is not set; 0 keeps the Site Log, as v5 did).
  *
  * Never touched: subscribers, consent and membership history, suppression,
  * the Send Log, smlog, send runs/jobs/recipient outcomes, idempotency keys
@@ -49,6 +49,8 @@ final class Maintenance
 {
     public const BATCH = 1000;
     public const MAX_BATCHES = 50;
+    /** How long the Site Log keeps a visit when APP_SITELOG_RETENTION_DAYS is not set (it holds IP addresses). */
+    public const SITELOG_RETENTION_DAYS = 120;
 
     private int $batch = self::BATCH;
     private int $maxBatches = self::MAX_BATCHES;
@@ -65,6 +67,12 @@ final class Maintenance
         private readonly LoggerInterface $logger,
         #[Autowire('%env(default::APP_SITELOG_RETENTION_DAYS)%')] private readonly ?string $siteLogRetention = null,
     ) {
+    }
+
+    /** The days the Site Log keeps a visit for APP_SITELOG_RETENTION_DAYS: the default when it is not set, 0 for no limit. */
+    public static function siteLogRetentionDays(?string $setting): int
+    {
+        return is_numeric($setting) ? max(0, (int) $setting) : self::SITELOG_RETENTION_DAYS;
     }
 
     /** Smaller batches (tests); never above BATCH rows per statement. */
@@ -118,7 +126,7 @@ final class Maintenance
         $sessionCutoff = time() - max($this->settings->int('AUTH_SESSION_TTL', 86400), $this->settings->int('AUTH_MAGIC_LINK_TTL', 1800));
         $bodyCutoff = $this->ago($this->config->webhookBodyRetentionDays * 86400);
         $detailCutoff = $this->ago($this->config->detailRetentionDays * 86400);
-        $siteLogDays = is_numeric($this->siteLogRetention) ? max(0, (int) $this->siteLogRetention) : 0;
+        $siteLogDays = self::siteLogRetentionDays($this->siteLogRetention);
 
         $links = "FROM auth_login_tokens WHERE (alt_expires_at < :now OR alt_used_at IS NOT NULL) AND alt_created_at < :keep";
         $sessions = 'FROM auth_sessions WHERE as_expires_at < :now OR as_revoked_at IS NOT NULL';

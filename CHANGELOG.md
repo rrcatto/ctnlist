@@ -2,6 +2,13 @@
 
 The release history of ctnlist. Versions 5.0.x and 6.0.x are an incremental modernisation of the working v5.0 application; the v5 behaviour they keep, and the deliberate changes from it, are listed in [RESTORED-FUNCTIONALITY.md](docs/RESTORED-FUNCTIONALITY.md).
 
+## 6.1.1 (2026-10-26)
+
+A full privacy policy, and the release named on every page:
+- **Privacy policy:** the Privacy page is now a full policy, built from `docs/PRIVACY.md` of the release like the acceptable use policy: what is collected (the address, the profile, lists and consent, what happens to each message, the engagement score, the contact form, forwards, the record of visits), why, who else handles it (the email delivery service, the mail server, the hosting provider, the people who run the lists), the two cookies, how long each kind is kept, the subscriber's rights under POPIA with the Information Regulator, and how it is protected. It names the installation from its Settings, sends requests to the administrator's address (`MAIL_ADMIN_ADDRESS`, else `APP_ADMIN_EMAIL`, the address the footer links to), and says how long the record of visits is kept from `APP_SITELOG_RETENTION_DAYS`. That mailbox must be read (README, *Release checklist*). It replaces the v5 text, which said personal information was divulged to nobody.
+- **Site Log retention:** the record of visits, which holds IP addresses, is now kept for 120 days by default: `ctnlist:maintenance` removes older rows. `APP_SITELOG_RETENTION_DAYS` sets another number of days, and 0 keeps it with no limit, as v5 did and as earlier releases did by default. `.env.example` now sets 120; an existing `.env` that sets 0 keeps the Site Log until it is changed.
+- **Version:** every page names the release in its head (`<meta name="generator" content="ctnlist v6.1.1">`, the 404 page too), and the footer shows it, centred, on its last line.
+
 ## 6.1.0 (2026-10-24)
 
 Global suppression without a suppression database, and a second way to install, in a rootless Podman pod:

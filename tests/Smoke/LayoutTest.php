@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Tests\Smoke;
 
+use App\Config\SiteConfig;
+
 /**
  * The shared Twig layout: assets, the sticky header, navigation for anonymous
  * visitors, subscribers, administrators and custom roles, CKEditor loading,
@@ -117,6 +119,9 @@ final class LayoutTest extends SmokeTestCase
         self::assertSame(200, self::request($client, 'GET', '/assets/lib/bootstrap-icons/' . $font[1])['status'], 'the icon font is served');
         self::assertMatchesRegularExpression('#<link rel="icon" href="/assets/images/favicon-[^"]+\.svg"#', $body);
         self::assertStringContainsString('<footer class="app-footer', $body);
+        // The release, in the head for anyone checking which version runs, and on the footer's last line.
+        self::assertStringContainsString('<meta name="generator" content="ctnlist v' . SiteConfig::VERSION . '">', $body);
+        self::assertStringContainsString('<div class="text-center small fg-3 mt-3">ctnlist v' . SiteConfig::VERSION . '</div>' . "\n  </div>\n</footer>", $body);
         self::assertStringContainsString('href="/privacy"', $body);
         self::assertStringContainsString('<a href="/acceptable-use-policy">Acceptable use</a>', $body, 'every page links to the policy');
         // The configured telephone number, as v5's footer showed it.
@@ -274,6 +279,7 @@ final class LayoutTest extends SmokeTestCase
         $missing = self::request(self::client(), 'GET', '/no-such-page');
         self::assertSame(404, $missing['status']);
         self::assertStringContainsString('<h1>Not Found</h1>', $missing['body']);
+        self::assertStringContainsString('<meta name="generator" content="ctnlist v' . SiteConfig::VERSION . '">', $missing['body']);
     }
 
     private static function signIn(int $subscriberId): \CurlHandle
@@ -340,5 +346,34 @@ final class LayoutTest extends SmokeTestCase
             });
         });
         self::assertSame(405, self::request(self::client(), 'POST', '/acceptable-use-policy')['status']);
+    }
+
+    /**
+     * The privacy policy is built from docs/PRIVACY.md in the same way, and says how long this installation keeps
+     * the record of visits. Requests go to the administrator's address, which the footer also links to.
+     */
+    public function testThePrivacyPolicyPage(): void
+    {
+        self::withSetting('APP_LIST_NAME', 'Example & Co News', static function (): void {
+            self::withSetting('APP_ORGANISATION', 'Example <Org> (Pty) Ltd', static function (): void {
+                $page = self::request(self::client(), 'GET', '/privacy');
+                self::assertSame(200, $page['status']);
+                self::assertStringContainsString('<h1>Example &amp; Co News Privacy Policy</h1>', $page['body']);
+                self::assertStringContainsString('Example &amp; Co News Privacy Policy</title>', $page['body']);
+                $policy = self::match('#<article class="card app-policy">(.*?)</article>#s', $page['body'], 'the policy article')[1];
+                self::assertStringContainsString('Example &lt;Org&gt; (Pty) Ltd is responsible for the personal information processed through Example &amp; Co News.', $policy);
+                self::assertMatchesRegularExpression('#through Example &amp; Co News \([a-z0-9.-]+\)#', $policy, 'the installation\'s domain');
+                self::assertStringContainsString('information officer at admin@ctnlist.test.', $policy);
+                self::assertSame(3, substr_count($policy, 'admin@ctnlist.test'), 'requests go to the administrator\'s address');
+                self::assertMatchesRegularExpression('#<strong>Records of visits</strong> are kept (for \d+ days?|with no fixed time limit)\.#', $policy);
+                self::assertStringNotContainsString('{{', $policy, 'every placeholder is filled');
+                // The development administrator's address is a configured value: only the document's own text counts.
+                self::assertDoesNotMatchRegularExpression('/catto|ctnlist/i', str_replace('admin@ctnlist.test', '', $policy), 'the policy names the installation, never a product');
+                self::assertStringContainsString('<footer class="app-footer', $page['body']);
+                self::assertStringContainsString('mailto:admin@ctnlist.test', $page['body'], 'the footer keeps the administrator');
+                self::assertStringNotContainsString(' style="', $page['body']);
+            });
+        });
+        self::assertSame(405, self::request(self::client(), 'POST', '/privacy')['status']);
     }
 }
