@@ -134,25 +134,38 @@ final class SubscriberRepository
         $this->db->executeStatement('UPDATE subscribers SET s_priority = GREATEST(s_priority, ?) WHERE s_id = ?', [$priority, $id]);
     }
 
-    /** Subscribers matching the administrator's list filters. */
-    public function reportCount(string $email, bool $activeOnly, bool $includeUnsubscribed, int $listId): int
+    /**
+     * The administrator's "Show" choice on the subscriber list: everyone (the
+     * default, '' ), or only those subscribed to an active list (confirmed and
+     * not unsubscribed), or only the others (unconfirmed, unsubscribed, or on
+     * no list at all, such as a record a sign-in request created).
+     */
+    public const SHOW = [
+        '' => 'Everyone',
+        'subscribed' => 'Subscribed to an active list',
+        'not' => 'Not subscribed to an active list',
+    ];
+
+    /** Subscribers matching the administrator's list filters ($show: a key of SHOW). */
+    public function reportCount(string $email, bool $activeOnly, string $show, int $listId): int
     {
-        [$where, $params] = self::reportFilter($email, $activeOnly, $includeUnsubscribed, $listId);
+        [$where, $params] = self::reportFilter($email, $activeOnly, $show, $listId);
         return (int) $this->db->fetchOne('SELECT COUNT(DISTINCT s.s_id) FROM subscribers s ' . $where, $params);
     }
 
     /**
-     * A page of the administrator's subscriber list: engaged first, with every
-     * membership as a list name and state (confirmed, unsubscribed or
-     * pending), ordered by list name.
+     * A page of the administrator's subscriber list: engaged first, then the
+     * newest records, with every membership as a list name and state
+     * (confirmed, unsubscribed or pending), ordered by list name.
      *
      * @return list<array<string, mixed>> rows; `memberships` is a list<array{name: string, state: string}>
      */
-    public function reportPage(string $email, bool $activeOnly, bool $includeUnsubscribed, int $listId, int $offset, int $limit): array
+    public function reportPage(string $email, bool $activeOnly, string $show, int $listId, int $offset, int $limit): array
     {
-        [$where, $params] = self::reportFilter($email, $activeOnly, $includeUnsubscribed, $listId);
+        [$where, $params] = self::reportFilter($email, $activeOnly, $show, $listId);
         $rows = $this->db->fetchAllAssociative(
             "SELECT s.s_id, s.s_uuid, s.s_email, s.s_fname, s.s_lname, s.s_priority, s.s_last_interacted, s.s_bounces, s.s_emailsleft,
+                    s.s_created_at, s.s_last_login_at,
                     COALESCE(JSON_AGG(JSON_BUILD_OBJECT('name', l.l_name, 'state', CASE
                         WHEN ls.ls_confirmed AND NOT ls.ls_unsubscribed THEN 'confirmed'
                         WHEN ls.ls_unsubscribed THEN 'unsubscribed'
@@ -162,7 +175,7 @@ final class SubscriberRepository
              LEFT JOIN lists l ON l.l_id = ls.ls_l_id
              {$where}
              GROUP BY s.s_id
-             ORDER BY (s.s_last_interacted IS NULL) ASC, s.s_last_interacted DESC, s.s_priority DESC, s.s_email ASC
+             ORDER BY (s.s_last_interacted IS NULL) ASC, s.s_last_interacted DESC, s.s_priority DESC, s.s_created_at DESC, s.s_email ASC
              LIMIT " . max(1, min(200, $limit)) . ' OFFSET ' . max(0, $offset),
             $params
         );
@@ -173,6 +186,32 @@ final class SubscriberRepository
             );
         }
         return $rows;
+    }
+
+    /**
+     * Records created since $since that nobody has confirmed: never signed in
+     * and never confirmed on any list, newest first, with the number of
+     * emails the Send Log holds for the address.
+     *
+     * @return list<array{s_uuid: string, s_email: string, s_created_at: string, emails_sent: int}>
+     */
+    public function unconfirmedSince(string $since, int $limit): array
+    {
+        return array_map(static fn(array $row): array => [
+            's_uuid' => (string) $row['s_uuid'],
+            's_email' => (string) $row['s_email'],
+            's_created_at' => (string) $row['s_created_at'],
+            'emails_sent' => (int) $row['emails_sent'],
+        ], $this->db->fetchAllAssociative(
+            'SELECT s.s_uuid, s.s_email, s.s_created_at,
+                    (SELECT COUNT(*) FROM sendlog sl WHERE LOWER(sl.sl_email) = LOWER(s.s_email)) AS emails_sent
+             FROM subscribers s
+             WHERE s.s_created_at >= ? AND s.s_last_login_at IS NULL
+               AND NOT EXISTS (SELECT 1 FROM list_subscribers ls WHERE ls.ls_s_id = s.s_id AND ls.ls_confirmed = TRUE)
+             ORDER BY s.s_created_at DESC, s.s_id DESC
+             LIMIT ' . max(1, min(1000, $limit)),
+            [$since]
+        ));
     }
 
     /**
@@ -206,7 +245,7 @@ final class SubscriberRepository
     }
 
     /** @return array{0: string, 1: array<string, mixed>} */
-    private static function reportFilter(string $email, bool $activeOnly, bool $includeUnsubscribed, int $listId): array
+    private static function reportFilter(string $email, bool $activeOnly, string $show, int $listId): array
     {
         $clauses = [];
         $params = [];
@@ -217,8 +256,8 @@ final class SubscriberRepository
         if ($activeOnly) {
             $clauses[] = 's.s_last_interacted IS NOT NULL';
         }
-        if (!$includeUnsubscribed) {
-            $clauses[] = 'EXISTS (SELECT 1 FROM list_subscribers active_ls JOIN lists active_l ON active_l.l_id = active_ls.ls_l_id
+        if ($show === 'subscribed' || $show === 'not') {
+            $clauses[] = ($show === 'not' ? 'NOT ' : '') . 'EXISTS (SELECT 1 FROM list_subscribers active_ls JOIN lists active_l ON active_l.l_id = active_ls.ls_l_id
                 WHERE active_ls.ls_s_id = s.s_id AND active_ls.ls_confirmed = TRUE AND active_ls.ls_unsubscribed = FALSE AND active_l.l_active = TRUE)';
         }
         if ($listId > 0) {

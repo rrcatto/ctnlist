@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Form\Type;
 
 use App\Form\Model\SubscribeRequest;
+use App\Http\BotCheck;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\EmailType;
@@ -14,7 +15,8 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
 
 /**
  * Email address plus the list to subscribe to: a choice of `lists` (with
- * their descriptions), or a hidden field when there is only one.
+ * their descriptions), or a hidden field when there is only one; and the
+ * hidden trap field (BotCheck).
  */
 final class SubscribeType extends AbstractType
 {
@@ -25,6 +27,7 @@ final class SubscribeType extends AbstractType
             'empty_data' => '',
             'attr' => ['maxlength' => 254, 'autocomplete' => 'email'],
         ]);
+        $builder->add(BotCheck::TRAP_FIELD, BotTrapType::class);
         $lists = $options['lists'];
         $choices = [];
         foreach ($lists as $list) {

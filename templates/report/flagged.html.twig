@@ -1,0 +1,86 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Flagged activity{% endblock %}
+
+{% block content %}
+{% include 'layout/_page_header.html.twig' with {title: 'Flagged activity', description: 'Bots on the sign-in and subscribe forms: what the site refused, where it came from, and the records they left behind.'} %}
+
+<section class="mb-8" aria-labelledby="refused-heading">
+  <h2 class="h5 mb-1" id="refused-heading">Refused form submissions</h2>
+  <p class="fg-2">Sign-in and subscribe requests the site took for a bot's: it showed the usual "link sent" answer and sent nothing, so the bot cannot tell. The newest {{ refused_shown }}; all of them are in the <a href="{{ path('report_sitelog', {fl: 1}) }}">Site Log</a>, as long as it keeps them.</p>
+  {% if refused is empty %}
+    {% include 'layout/_empty_state.html.twig' with {icon: 'shield-check', message: 'No form submission has been refused.'} %}
+  {% else %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead><tr><th scope="col">When</th><th scope="col">Form</th><th scope="col">Why</th><th scope="col">Address typed in</th><th scope="col">IP address</th><th scope="col">Browser</th></tr></thead>
+        <tbody>
+        {% for row in refused %}
+          <tr>
+            <td class="text-nowrap">{{ row.stl_logged_at }}</td>
+            <td><code>{{ row.stl_method }} {{ row.stl_url }}</code></td>
+            <td><span class="badge theme-warning">{{ row.stl_flag }}</span></td>
+            <td>{{ row.stl_flag_email }}</td>
+            <td class="text-nowrap"><a href="{{ path('report_sitelog', {ip: row.stl_ip}) }}">{{ row.stl_ip }}</a>{% if row.stl_host and row.stl_host != row.stl_ip %}<br><small class="fg-2">{{ row.stl_host }}</small>{% endif %}</td>
+            <td class="small fg-2">{{ row.stl_agent ?: '(none)' }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</section>
+
+<section class="mb-8" aria-labelledby="addresses-heading">
+  <h2 class="h5 mb-1" id="addresses-heading">IP addresses behind them</h2>
+  <p class="fg-2">Requests for the sign-in, subscribe and contact pages that were refused, or that named no browser or one long out of use (Internet Explorer, Chrome or Firefox before version 80, Safari before 11), which is how these bots disguise themselves. Most recent first; a link opens that address's requests in the Site Log.</p>
+  {% if addresses is empty %}
+    {% include 'layout/_empty_state.html.twig' with {icon: 'globe', message: 'No bot-like requests for the form pages.'} %}
+  {% else %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead><tr><th scope="col">IP address</th><th scope="col" class="text-end">Requests</th><th scope="col" class="text-end">Refused</th><th scope="col">First seen</th><th scope="col">Last seen</th><th scope="col">Why</th><th scope="col">Latest browser</th></tr></thead>
+        <tbody>
+        {% for address in addresses %}
+          <tr>
+            <td class="text-nowrap"><a href="{{ path('report_sitelog', {ip: address.ip}) }}">{{ address.ip }}</a>{% if address.host and address.host != address.ip %}<br><small class="fg-2">{{ address.host }}</small>{% endif %}</td>
+            <td class="text-end">{{ address.requests }}</td>
+            <td class="text-end">{{ address.refused }}</td>
+            <td class="text-nowrap">{{ address.first }}</td>
+            <td class="text-nowrap">{{ address.last }}</td>
+            <td><span class="badge theme-warning">{{ address.reason }}</span></td>
+            <td class="small fg-2">{{ address.agent ?: '(none)' }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</section>
+
+{% if records is not null %}
+<section class="mb-8" aria-labelledby="records-heading">
+  <h2 class="h5 mb-1" id="records-heading">New records nobody has confirmed</h2>
+  <p class="fg-2">Created in the last {{ record_days }} days, never signed in and never confirmed on a list. The sign-in and subscribe forms create a record for every new address typed in, so a bot typing other people's addresses leaves these behind. They are sent no campaigns unless they confirm. They cannot be deleted: each keeps the record of its list request.</p>
+  {% if records is empty %}
+    {% include 'layout/_empty_state.html.twig' with {icon: 'people', message: 'No new unconfirmed records.'} %}
+  {% else %}
+    {% set can_edit = is_granted('subscribers.manage') %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead><tr><th scope="col">Created</th><th scope="col">Email address</th><th scope="col" class="text-end">Emails sent to it</th></tr></thead>
+        <tbody>
+        {% for record in records %}
+          <tr>
+            <td class="text-nowrap">{{ record.s_created_at }}</td>
+            <td>{% if can_edit %}<a href="{{ path('admin_subscriber', {token: record.s_uuid}) }}">{{ record.s_email }}</a>{% else %}{{ record.s_email }}{% endif %}</td>
+            <td class="text-end"><a href="{{ path('report_sendlog', {e: record.s_email}) }}">{{ record.emails_sent }}</a></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+</section>
+{% endif %}
+{% endblock %}

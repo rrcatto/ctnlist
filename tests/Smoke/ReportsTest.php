@@ -16,10 +16,12 @@ final class ReportsTest extends SmokeTestCase
         self::assertSame(200, self::request($client, 'GET', $marker)['status']);
         self::assertSame(404, self::request($client, 'GET', '/no-such-page')['status']);
 
-        $rows = self::$db->prepare('SELECT stl_url, stl_logged_in, stl_email, stl_logged_at FROM sitelog WHERE stl_agent = ? ORDER BY stl_id');
+        $rows = self::$db->prepare('SELECT stl_method, stl_url, stl_status, stl_logged_in, stl_email, stl_logged_at, stl_flag FROM sitelog WHERE stl_agent = ? ORDER BY stl_id');
         $rows->execute([$agent]);
         $logged = $rows->fetchAll(\PDO::FETCH_ASSOC);
         self::assertSame(['/privacy', '/no-such-page'], array_column($logged, 'stl_url'), 'path only, unknown pages too');
+        self::assertSame([['GET', 200], ['GET', 404]], array_map(static fn(array $row): array => [$row['stl_method'], (int) $row['stl_status']], $logged), 'the method and the answer');
+        self::assertNull($logged[0]['stl_flag'], 'a page view is never flagged');
         self::assertFalse((bool) $logged[0]['stl_logged_in']);
         self::assertNull($logged[0]['stl_email']);
         self::assertLessThan(120, abs(strtotime((string) $logged[0]['stl_logged_at']) - time()), 'timestamp in PHP time');

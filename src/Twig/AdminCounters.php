@@ -19,25 +19,22 @@ final class AdminCounters
     {
     }
 
-    /** Subscribers with at least one confirmed, active list membership. */
+    /** Every subscriber record, as the subscriber list shows them by default. */
     public function subscribers(): int
     {
-        return $this->count('subscribers', 'SELECT COUNT(DISTINCT s.s_id)
-             FROM subscribers s
-             JOIN list_subscribers ls ON ls.ls_s_id = s.s_id
-             JOIN lists l ON l.l_id = ls.ls_l_id
-             WHERE ls.ls_confirmed = TRUE AND ls.ls_unsubscribed = FALSE AND l.l_active = TRUE');
+        return $this->count('subscribers', 'SELECT COUNT(*) FROM subscribers');
     }
 
-    /** Eligible subscribers who have interacted with a message. */
+    /** Subscribers who have interacted with a message, as Active readers shows them by default. */
     public function activeReaders(): int
     {
-        return $this->count('activeReaders', 'SELECT COUNT(DISTINCT s.s_id)
-             FROM subscribers s
-             JOIN list_subscribers ls ON ls.ls_s_id = s.s_id
-             JOIN lists l ON l.l_id = ls.ls_l_id
-             WHERE s.s_last_interacted IS NOT NULL
-               AND ls.ls_confirmed = TRUE AND ls.ls_unsubscribed = FALSE AND l.l_active = TRUE');
+        return $this->count('activeReaders', 'SELECT COUNT(*) FROM subscribers WHERE s_last_interacted IS NOT NULL');
+    }
+
+    /** Form submissions refused as automated, still in the Site Log (Flagged activity). */
+    public function flagged(): int
+    {
+        return $this->count('flagged', 'SELECT COUNT(*) FROM sitelog WHERE stl_flag IS NOT NULL');
     }
 
     public function queue(): int

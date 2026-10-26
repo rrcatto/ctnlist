@@ -8,6 +8,8 @@ use App\CattoMail\GlobalOptOut;
 use App\CattoMail\UnsubscribeLinks;
 use App\Form\Model\SubscribeRequest;
 use App\Form\Type\SubscribeType;
+use App\Http\BotCheck;
+use App\Log\SiteLog;
 use App\Repository\ListRepository;
 use App\Repository\MembershipRepository;
 use App\Repository\MessageRepository;
@@ -177,7 +179,8 @@ final class ConsentController extends AbstractController
     /**
      * The visitors' subscribe form: emails a link to confirm the chosen list
      * (MagicLinkRequester, return action "confirm"). Invalid input shows the
-     * form again with the address and list kept.
+     * form again with the address and list kept. Bots (BotCheck) get the same
+     * answer as people, and nothing is sent or created for them.
      */
     #[Route('/subscribe/request', name: 'subscribe_request', methods: ['POST'])]
     public function subscribeRequest(Request $request, MagicLinkRequester $requester): Response
@@ -193,7 +196,13 @@ final class ConsentController extends AbstractController
             $chosen = array_values(array_filter($lists, static fn(array $list): bool => $list['l_id'] === $data->listId));
             return $this->subscribePage($messageId !== null && $chosen !== [] ? $chosen : $lists, $messageId, $form);
         }
-        $requester->request($data->email, 'confirm', $messageId, $data->listId);
+        $trap = $form->get(BotCheck::TRAP_FIELD)->getData();
+        $bot = BotCheck::reason($request, is_string($trap) ? $trap : '');
+        if ($bot !== null) {
+            SiteLog::flag($request, $bot, $data->email);
+        } else {
+            $requester->request($data->email, 'confirm', $messageId, $data->listId);
+        }
         return $this->render('auth/link_sent.html.twig', ['message' => 'If the address is valid, we have emailed you a link to confirm your subscription. You are subscribed once you confirm.']);
     }
 

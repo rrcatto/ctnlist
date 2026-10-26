@@ -8,7 +8,8 @@ use Symfony\Component\HttpFoundation\Request;
 
 /**
  * A page of a v5 paginated list. Rows per page come from ?r= (1-200,
- * default 10); a page number outside the range is clamped to it.
+ * default 10, also when empty); a page number outside the range is clamped
+ * to it.
  */
 final class Pagination
 {
@@ -22,7 +23,7 @@ final class Pagination
 
     public static function fromRequest(Request $request, int $page, int $total): self
     {
-        $perPage = max(1, min(200, $request->query->getInt('r') ?: 10));
+        $perPage = max(1, min(200, RequestNumber::of($request->query, 'r') ?: 10));
         $lastPage = max(1, (int) ceil($total / $perPage));
         return new self(max(1, min($page, $lastPage)), $lastPage, $perPage, $total);
     }

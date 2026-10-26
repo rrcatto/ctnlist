@@ -13,6 +13,7 @@ use App\Form\Model\QueueRotation;
 use App\Form\Type\ProofType;
 use App\Form\Type\QueueRotationType;
 use App\Http\Pagination;
+use App\Http\RequestNumber;
 use App\Mail\ProofMailer;
 use App\Queue\QueueBuilder;
 use App\Queue\QueueOutcome;
@@ -62,7 +63,7 @@ final class QueueController extends AbstractController
     public function queueMessage(Request $request): Response
     {
         set_time_limit(86400);
-        $outcome = $this->builder->queueMessage($request->request->getString('muid'), $request->request->getInt('limit') ?: self::QUEUE_LIMIT);
+        $outcome = $this->builder->queueMessage($request->request->getString('muid'), RequestNumber::of($request->request, 'limit') ?: self::QUEUE_LIMIT);
         return $this->outcome('Queue message', $outcome);
     }
 
@@ -143,7 +144,7 @@ final class QueueController extends AbstractController
     public function process(Request $request, QueueProcessor $processor): Response
     {
         set_time_limit(86400);
-        $outcome = $processor->process($request->request->getString('muid'), $request->request->getInt('limit') ?: self::SEND_LIMIT);
+        $outcome = $processor->process($request->request->getString('muid'), RequestNumber::of($request->request, 'limit') ?: self::SEND_LIMIT);
         $message = 'Handed ' . $outcome->handedOff . ' message(s) to catto-mail.';
         if ($outcome->staged > $outcome->handedOff && $outcome->status !== SendOutcome::FAILED) {
             $message .= ' ' . ($outcome->staged - $outcome->handedOff) . ' more are waiting for catto-mail and will be retried automatically.';

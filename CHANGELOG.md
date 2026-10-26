@@ -2,6 +2,15 @@
 
 The release history of ctnlist. Versions 5.0.x and 6.0.x are an incremental modernisation of the working v5.0 application; the v5 behaviour they keep, and the deliberate changes from it, are listed in [RESTORED-FUNCTIONALITY.md](docs/RESTORED-FUNCTIONALITY.md).
 
+## 6.1.3 (2026-10-26)
+
+Bots kept off the sign-in and subscribe forms, every subscriber record on the Subscribers page, and a Flagged activity report:
+- **Bots on the forms:** form bots were typing other people's addresses into the sign-in and subscribe forms, so the site emailed sign-in links to people who never asked for them, a risk to the domain's reputation. Both forms now refuse what looks like a bot (`App\Http\BotCheck`): a hidden field filled in (`website`, off-screen and out of the tab order, which people never see), a request that a server in front marks with `X-Suspect-Network: 1`, or no browser named or one long out of use (Internet Explorer, Chrome or Firefox before 80, Safari before 11, which is how these bots describe themselves). The visitor gets the usual "link sent" answer, so a bot cannot tell; nothing is sent and no record is created. README *Configuration* shows how nginx can mark networks.
+- **Flagged activity** (Reports → Flagged activity, `logs.view`): the refused submissions with the address typed in, the IP addresses behind bot-like requests for the form pages (earlier requests count by their browser), and the records created in the last 30 days that never signed in or confirmed a list, which bots leave behind (shown to holders of `subscribers.view`). The menu counts the refused submissions.
+- **Site Log:** each request's method and the site's answer (status) are recorded and shown, and a refused submission's reason and address; a filter shows the refused submissions only. The privacy policy says so. The table has four new columns, so this release has another schema than 6.1.2: an installation moves to it with `--recreate-database` (the installer or the Podman kit dumps the database first).
+- **Subscribers page:** it shows every record by default, confirmed or not, with when it was created and last signed in. Earlier releases showed only subscribers with a confirmed membership unless "Include unsubscribed" was ticked, which hid the records the sign-in and subscribe forms create for new addresses; a "Show" choice now narrows the list to those subscribed to an active list, or to the others. The menu counts every record, and Active readers every one who has interacted with a message.
+- **Fixed:** searching the Subscribers page with "All lists" answered "The request could not be completed" (a 400): the empty list field could not be read as a number. An emptied "Rows per page" box (Subscribers, Send Log, Site Log) or queue limit failed the same way; both now mean the default.
+
 ## 6.1.2 (2026-10-26)
 
 Periods of time written one way:

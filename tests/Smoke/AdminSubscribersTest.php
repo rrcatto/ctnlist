@@ -45,6 +45,29 @@ final class AdminSubscribersTest extends SmokeTestCase
         self::assertSame(403, self::request(self::client(), 'GET', '/subscribers/' . self::$admin['s_uuid'])['status'], 'anonymous');
     }
 
+    /** Every record is listed unless the administrator chooses otherwise, and an empty filter is no filter. */
+    public function testEveryRecordIsShownByDefault(): void
+    {
+        $unconfirmed = 'smoke-unconfirmed@ctnlist.test';
+        self::$db->prepare('INSERT INTO subscribers (s_email) VALUES (?) ON CONFLICT ((LOWER(s_email))) DO NOTHING')->execute([$unconfirmed]);
+        $client = self::client();
+        self::loginAsAdmin($client);
+        $search = static fn(string $query): string => self::request($client, 'GET', '/subscribers?e=smoke-unconfirmed' . $query)['body'];
+
+        self::assertStringContainsString($unconfirmed, $search(''), 'a record on no list as confirmed is shown');
+        self::assertMatchesRegularExpression('#ALL <span class="badge[^"]*">pending</span>#', $search(''), 'with its unconfirmed membership');
+        self::assertStringContainsString('<td class="text-nowrap">Never</td>', $search(''), 'never signed in');
+        self::assertStringContainsString($unconfirmed, $search('&s=not'));
+        self::assertStringContainsString('There are no matching subscribers.', $search('&s=subscribed'));
+        self::assertStringContainsString(self::$admin['s_email'], self::request($client, 'GET', '/subscribers?s=subscribed&e=admin%40')['body']);
+
+        // The search form as a browser sends it with "All lists" and a cleared "Rows per page" box.
+        $form = self::request($client, 'GET', '/subscribers?e=smoke-unconfirmed&l=&r=&s=');
+        self::assertSame(200, $form['status'], 'empty filters are no filters, not a 400');
+        self::assertStringContainsString($unconfirmed, $form['body']);
+        self::assertSame(200, self::request($client, 'GET', '/subscribers?l=x&r=ten&s=junk')['status']);
+    }
+
     public function testBulkFormsValidateBeforeChangingAnything(): void
     {
         $client = self::client();

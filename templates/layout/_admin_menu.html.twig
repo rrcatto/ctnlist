@@ -35,9 +35,10 @@
   {label: 'Lists', icon: 'list-ul', routes: ['admin_lists'], items: [
     {label: 'Lists', route: 'admin_lists', permission: 'lists.manage'},
   ]},
-  {label: 'Reports', icon: 'bar-chart', routes: ['report_sendlog', 'report_sitelog'], items: [
+  {label: 'Reports', icon: 'bar-chart', routes: ['report_sendlog', 'report_sitelog', 'report_flagged'], items: [
     {label: 'Send Log', route: 'report_sendlog', permission: 'logs.view', counter: 'sendlog'},
     {label: 'Site Log', route: 'report_sitelog', permission: 'logs.view'},
+    {label: 'Flagged activity', route: 'report_flagged', permission: 'logs.view', counter: 'flagged'},
   ]},
   {label: 'Roles & ACL', icon: 'shield-lock', routes: ['admin_roles', 'admin_role'], items: [
     {label: 'Roles & ACL', route: 'admin_roles', permission: 'roles.manage'},

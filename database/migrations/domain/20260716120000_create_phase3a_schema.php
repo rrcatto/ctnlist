@@ -227,15 +227,22 @@ CREATE INDEX idx_sendlog_datesent ON sendlog (sl_datesent);
 CREATE TABLE sitelog (
     stl_id BIGSERIAL PRIMARY KEY,
     stl_email VARCHAR(254),
+    stl_method VARCHAR(10),
     stl_url VARCHAR(253),
+    stl_status SMALLINT,
     stl_ip VARCHAR(45),
     stl_host VARCHAR(253),
     stl_xfwdfor VARCHAR(45),
     stl_agent VARCHAR(500),
     stl_logged_in BOOLEAN NOT NULL DEFAULT FALSE,
+    -- A form submission refused as automated (App\Http\BotCheck): why, and the
+    -- address typed into the form. The visitor was shown the usual answer.
+    stl_flag VARCHAR(100),
+    stl_flag_email VARCHAR(254),
     stl_logged_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX idx_sitelog_logged_at ON sitelog (stl_logged_at);
+CREATE INDEX idx_sitelog_flagged ON sitelog (stl_logged_at) WHERE stl_flag IS NOT NULL;
 
 CREATE TABLE smlog (
     sml_id BIGSERIAL PRIMARY KEY,

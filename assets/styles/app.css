@@ -88,6 +88,15 @@
     margin-inline: auto;
 }
 
+/* The hidden trap field of the sign-in and subscribe forms (BotTrapType): off-screen, not display: none, which form bots skip. */
+.app-trap {
+    position: absolute;
+    left: -10000px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+}
+
 /* The acceptable use policy (rendered from docs/AUP.md): one readable column. */
 .app-policy {
     max-width: 52rem;

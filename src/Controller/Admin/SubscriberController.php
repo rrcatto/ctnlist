@@ -14,6 +14,7 @@ use App\Form\Type\BulkUnsubscribeType;
 use App\Form\Type\ExportType;
 use App\Form\Type\SubscriberType;
 use App\Http\Pagination;
+use App\Http\RequestNumber;
 use App\Repository\CattoMailValidationRepository;
 use App\Repository\ListRepository;
 use App\Repository\MembershipRepository;
@@ -209,16 +210,18 @@ final class SubscriberController extends AbstractController
     private function report(int $page, Request $request, bool $activeOnly): Response
     {
         $email = $request->query->getString('e');
-        $listId = $request->query->getInt('l');
-        $includeUnsubscribed = $request->query->getBoolean('u');
-        $pagination = Pagination::fromRequest($request, $page, $this->subscribers->reportCount($email, $activeOnly, $includeUnsubscribed, $listId));
+        $listId = RequestNumber::of($request->query, 'l');
+        $show = $request->query->getString('s');
+        $show = array_key_exists($show, SubscriberRepository::SHOW) ? $show : '';
+        $pagination = Pagination::fromRequest($request, $page, $this->subscribers->reportCount($email, $activeOnly, $show, $listId));
         return $this->render('admin/subscribers.html.twig', [
             'active' => $activeOnly,
-            'rows' => $this->subscribers->reportPage($email, $activeOnly, $includeUnsubscribed, $listId, $pagination->offset(), $pagination->perPage),
+            'rows' => $this->subscribers->reportPage($email, $activeOnly, $show, $listId, $pagination->offset(), $pagination->perPage),
             'pagination' => $pagination,
             'lists' => $this->lists->all(),
-            'filters' => ['e' => $email, 'l' => $listId, 'u' => $includeUnsubscribed],
-            'query' => '?' . http_build_query(['e' => $email, 'r' => $pagination->perPage, 'u' => $includeUnsubscribed ? 1 : 0, 'l' => $listId]),
+            'show_choices' => SubscriberRepository::SHOW,
+            'filters' => ['e' => $email, 'l' => $listId, 's' => $show],
+            'query' => '?' . http_build_query(['e' => $email, 'r' => $pagination->perPage, 's' => $show, 'l' => $listId]),
         ]);
     }
 

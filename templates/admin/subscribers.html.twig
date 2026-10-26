@@ -7,7 +7,7 @@
 {% set base = path(active ? 'admin_subscribers_active' : 'admin_subscribers') %}
 {% embed 'layout/_page_header.html.twig' with {
   title: active ? 'Active readers' : 'Subscribers',
-  description: active ? 'Subscribers who have interacted with a message, most recent first.' : 'Subscriber identities and their list memberships, most recently engaged first.'
+  description: active ? 'Subscribers who have interacted with a message, most recent first.' : 'Every subscriber record and its list memberships, confirmed or not: the most recently engaged first, then the newest.'
 } %}
   {% block actions %}
     {% if is_granted('subscribers.manage') %}
@@ -23,8 +23,10 @@
     <div class="md:col-4"><label class="form-label" for="f-e">Email address contains</label><input class="form-control" id="f-e" type="search" name="e" value="{{ filters.e }}"></div>
     <div class="md:col-3"><label class="form-label" for="l">List</label>{% include 'admin/_list_select.html.twig' with {name: 'l', selected: filters.l, blank: 'All lists'} %}</div>
     <div class="col-6 md:col-2"><label class="form-label" for="f-r">Rows per page</label><input class="form-control" id="f-r" type="number" min="1" max="200" name="r" value="{{ pagination.perPage }}"></div>
-    <div class="col-6 md:col-3">
-      <div class="form-field mb-3"><input class="check" type="checkbox" name="u" value="1" id="include-unsubscribed"{{ filters.u ? ' checked' }}><label for="include-unsubscribed">Include unsubscribed</label></div>
+    <div class="col-6 md:col-3"><label class="form-label" for="f-s">Show</label>
+      <select class="form-control" id="f-s" name="s">
+        {% for value, label in show_choices %}<option value="{{ value }}"{{ filters.s == value ? ' selected' }}>{{ label }}</option>{% endfor %}
+      </select>
     </div>
     <div class="col-12 d-flex gap-3">
       <button class="btn-solid theme-primary" type="submit"><i class="bi bi-search me-1" aria-hidden="true"></i>Search</button>
@@ -34,7 +36,7 @@
 </form>
 
 {% if rows is empty %}
-  {% include 'layout/_empty_state.html.twig' with {icon: 'people', message: 'There are no matching subscribers.', hint: 'Try a different search, or include unsubscribed subscribers.'} %}
+  {% include 'layout/_empty_state.html.twig' with {icon: 'people', message: 'There are no matching subscribers.', hint: 'Try a different search, or show everyone.'} %}
 {% else %}
   {% set can_edit = is_granted('subscribers.manage') %}
   <div class="table-responsive">
@@ -48,6 +50,8 @@
           <th scope="col" class="text-end">Bounces</th>
           <th scope="col" class="text-end">Emails left</th>
           <th scope="col">Last interaction</th>
+          <th scope="col">Created</th>
+          <th scope="col">Last signed in</th>
         </tr>
       </thead>
       <tbody>
@@ -66,6 +70,8 @@
           <td class="text-end">{{ row.s_bounces }}</td>
           <td class="text-end">{{ row.s_emailsleft }}</td>
           <td class="text-nowrap">{{ row.s_last_interacted ?: '–' }}</td>
+          <td class="text-nowrap">{{ row.s_created_at }}</td>
+          <td class="text-nowrap">{{ row.s_last_login_at ?: 'Never' }}</td>
         </tr>
       {% endfor %}
       </tbody>

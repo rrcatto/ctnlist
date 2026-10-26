@@ -58,7 +58,7 @@ The repository is a shared code tree installed per version at `/usr/local/lib/ph
 
 ## Architecture
 
-**Request flow.** `public_html/index.php` → Symfony runtime → `App\Kernel` → attribute-routed controllers in `src/Controller/` (`app_logout` and `auth_verify_submit` are in `config/routes.yaml`, handled by the firewall). The PHP session (`App\Session\DatabaseSessionHandler`, `sessions` table) carries only CSRF tokens and flashes; anonymous pages without a form start none. `App\Log\SiteLogListener` records every request except `GET /health` in the Site Log after the response is sent.
+**Request flow.** `public_html/index.php` → Symfony runtime → `App\Kernel` → attribute-routed controllers in `src/Controller/` (`app_logout` and `auth_verify_submit` are in `config/routes.yaml`, handled by the firewall). The PHP session (`App\Session\DatabaseSessionHandler`, `sessions` table) carries only CSRF tokens and flashes; anonymous pages without a form start none. `App\Log\SiteLogListener` records every request except `GET /health` in the Site Log after the response is sent, with its method and status, and a refused form's flag (`SiteLog::flag()`).
 
 **Layers.** Controller → Symfony Form (type in `src/Form/Type/`, plain data model in `src/Form/Model/`) → domain service or manager (`src/Subscriber/`, `src/Campaign/`, `src/Queue/`, `src/Security/`, …) → DBAL repository (`src/Repository/`, returning arrays). Form types hold no SQL and models no persistence; a model converts to the service's input (`input()`, `fields()`) and from repository rows (`fromList()`, `fromMessage()`, …).
 
@@ -77,6 +77,7 @@ The repository is a shared code tree installed per version at `/usr/local/lib/ph
 - SQL uses DBAL parameters only; `LIMIT`/`OFFSET` are clamped integers; user search terms go through `App\Repository\Like`.
 - The application log is Symfony's minimal `logger` on standard error from `notice` up (`config/services.yaml`; `error` in tests). Never log secrets, setting values (names only), tokens or message bodies. The Site Log stores paths without the query string and masks the one-click signature (`SiteLog::loggablePath()`).
 - Sign-in links have their own database rate limits (`AUTH_MAGIC_LINK_*`); contact messages, forwards/resends and global opt-out changes go through `App\Http\RequestThrottle` (429 over the limit).
+- The sign-in and subscribe forms refuse bots (`App\Http\BotCheck`: the hidden `BotTrapType` field `website`, the `X-Suspect-Network: 1` header from a server in front, a missing or outdated browser). The controller answers exactly as for a person, sends and creates nothing, and calls `SiteLog::flag()`; Reports → Flagged activity (`App\Log\FlaggedActivity`, `logs.view`) lists the refusals. A new public form that emails a typed-in address gets the same check.
 - Development aids (`SUPPRESSION_PROVIDER=none`, `CATTOMAIL_API_CONNECT_HOST`, `CATTOMAIL_WEBHOOK_URL`) are refused or ignored outside `APP_ENV` dev/test.
 - The mail service connection (`src/CattoMail/CLAUDE.md`, *Connection*): only administrators connect or disconnect; the API key and the webhook secret exist only encrypted in the Settings store or in `.env`, which wins; the browser's return from the mail service is a GET that changes nothing.
 

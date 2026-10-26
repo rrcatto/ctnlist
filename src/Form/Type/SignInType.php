@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Form\Type;
 
 use App\Form\Model\SignInRequest;
+use App\Http\BotCheck;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\EmailType;
 use Symfony\Component\Form\FormBuilderInterface;
@@ -19,6 +20,7 @@ final class SignInType extends AbstractType
             'empty_data' => '',
             'attr' => ['maxlength' => 254, 'autocomplete' => 'email'],
         ]);
+        $builder->add(BotCheck::TRAP_FIELD, BotTrapType::class);
     }
 
     public function configureOptions(OptionsResolver $resolver): void

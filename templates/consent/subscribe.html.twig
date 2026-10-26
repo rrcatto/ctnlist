@@ -48,6 +48,7 @@
         {{ form_errors(form) }}
         {{ form_widget(form.messageId) }}
         {{ form_row(form.email) }}
+        {{ form_row(form.website) }}
         {% if single %}
           <div class="d-none">{{ form_widget(form.listId) }}</div>
           {{ form_errors(form.listId) }}

@@ -1,4 +1,4 @@
-# ctnlist 6.1.2
+# ctnlist 6.1.3
 
 ctnlist is a web-based mailing-list application created by Richard Royston Catto in 2009. Versions 5.0.x and 6.0.x are an incremental modernisation of the working v5.0 application, not a replacement of its established workflows.
 
@@ -84,7 +84,7 @@ Subscriber state-changing actions again send transactional notifications. The ma
 
 Restored administrator workflows include:
 
-- subscriber search, filters and pagination
+- subscriber search, filters and pagination (every record by default, confirmed or not)
 - active-reader views
 - per-list membership display and consent management
 - bulk subscribe and unsubscribe
@@ -100,7 +100,8 @@ The tree includes:
 - immutable campaign archives and archive forwarding
 - message activity reports with search and pagination
 - Send Log reports and filtering
-- Site Log recording plus an administrator search/filter frontend
+- Site Log recording (the method, path, answer, IP address and browser of every request) plus an administrator search/filter frontend
+- Flagged activity: sign-in and subscribe submissions refused as bots', the IP addresses behind bot-like requests for the form pages, and new records nobody has confirmed
 - roles and ACL administration
 
 ## Consent model
@@ -145,7 +146,7 @@ dev/podman-kit-test/ the stand-in server and the test of the Podman kit (bin/dev
 
 ### Layout and permissions
 
-The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.1.2/` (the path is set in `public_html/index.php`): owned by root, read-only to the PHP-FPM user (`www-data`), with `composer install --no-dev --optimize-autoloader` run there. Each installation has its own directory, e.g. `/var/www/<installation>`:
+The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.1.3/` (the path is set in `public_html/index.php`): owned by root, read-only to the PHP-FPM user (`www-data`), with `composer install --no-dev --optimize-autoloader` run there. Each installation has its own directory, e.g. `/var/www/<installation>`:
 
 | Path | Owner, mode | What |
 |---|---|---|
@@ -267,7 +268,7 @@ The main application uses `DB_*` settings. Global suppression comes from `SUPPRE
 
 Transactional mail (sign-in links, invitations, notifications, contact-form mail) goes through the SMTP server in `MAILER_DSN`, one connection per message. Campaign content goes through catto-mail (`CATTOMAIL_*`, below). Optional legacy synchronisation targets use `SYNC_DATABASES_JSON`.
 
-Sign-in links expire after `AUTH_MAGIC_LINK_TTL` (default 30m) and are rate-limited per address (`AUTH_MAGIC_LINK_MAX_PER_EMAIL` within `AUTH_MAGIC_LINK_EMAIL_WINDOW`, default 15m) and per client IP (`AUTH_MAGIC_LINK_MAX_PER_IP` within `AUTH_MAGIC_LINK_IP_WINDOW`, default 1h); a signed-in session lasts `AUTH_SESSION_TTL` (default 1d). The sign-in page and email state the link lifetime in words from the same setting. Contact messages are limited per hour per client IP and per address (`CONTACT_RATE_LIMIT`, default 5), forwards and resends per subscriber (`FORWARD_RATE_LIMIT`, default 10; holders of `messages.manage` are exempt), and requests or withdrawals of the catto-mail global opt-out to six per subscriber per hour (each one calls catto-mail); over a limit the page answers 429. Public subscribe requests and the confirmation prompts on subscriber links send sign-in links, so the sign-in limits apply to them. There is no CAPTCHA. Contact-form submissions are appended to `CONTACT_LOG_FILE` (default: the installation's `logs/contact.log`). Bulk-subscribe and import logs (`emails_added.txt`) and the export files (`export-subscribers.txt`, `export-remove.txt`) are written to `APP_LOG_DIR` (default: the installation's `logs/`).
+Sign-in links expire after `AUTH_MAGIC_LINK_TTL` (default 30m) and are rate-limited per address (`AUTH_MAGIC_LINK_MAX_PER_EMAIL` within `AUTH_MAGIC_LINK_EMAIL_WINDOW`, default 15m) and per client IP (`AUTH_MAGIC_LINK_MAX_PER_IP` within `AUTH_MAGIC_LINK_IP_WINDOW`, default 1h); a signed-in session lasts `AUTH_SESSION_TTL` (default 1d). The sign-in page and email state the link lifetime in words from the same setting. Contact messages are limited per hour per client IP and per address (`CONTACT_RATE_LIMIT`, default 5), forwards and resends per subscriber (`FORWARD_RATE_LIMIT`, default 10; holders of `messages.manage` are exempt), and requests or withdrawals of the catto-mail global opt-out to six per subscriber per hour (each one calls catto-mail); over a limit the page answers 429. Public subscribe requests and the confirmation prompts on subscriber links send sign-in links, so the sign-in limits apply to them. There is no CAPTCHA. Instead the sign-in and subscribe forms refuse what looks like a bot (`App\Http\BotCheck`): their hidden field (`website`, off-screen and out of the tab order) filled in, a request a server in front marks with `X-Suspect-Network: 1`, or no browser named or one long out of use (Internet Explorer, Chrome or Firefox before 80, Safari before 11). The visitor gets the usual answer, nothing is sent or created, and the request is flagged in the Site Log and on **Reports → Flagged activity**. To mark networks in nginx, put `geo $suspect_network { default 0; 192.0.2.0/24 1; }` in the `http` block and `proxy_set_header X-Suspect-Network $suspect_network;` beside the site's other `proxy_set_header` lines (with PHP-FPM behind nginx directly, `fastcgi_param HTTP_X_SUSPECT_NETWORK $suspect_network;`). A visitor who sends the header only gets their own submissions refused. Contact-form submissions are appended to `CONTACT_LOG_FILE` (default: the installation's `logs/contact.log`). Bulk-subscribe and import logs (`emails_added.txt`) and the export files (`export-subscribers.txt`, `export-remove.txt`) are written to `APP_LOG_DIR` (default: the installation's `logs/`).
 
 ### Settings page
 
@@ -495,7 +496,7 @@ The development stacks are separate (catto-mail's pod is on an internal network,
 3. `bin/dev cattomail-ca` saves catto-mail's self-signed development certificate (read from its public port) to `dev/podman/cattomail-ca.pem` (gitignored). Repeat it when catto-mail's certificate is regenerated.
 4. In `dev/podman/ctnlist.env` (leave `CATTOMAIL_API_BASE_URL`, `CATTOMAIL_API_KEY` and `CATTOMAIL_WEBHOOK_SECRET` empty):
    - `CATTOMAIL_API_CONNECT_HOST=catto-mail:443`: catto-mail's address is `https://localhost:8443`, a port that exists only on your machine; from ctnlist's containers the same service answers at `catto-mail`, port 443. TLS is still verified for `localhost`;
-   - `CATTOMAIL_CA_FILE=/usr/local/lib/php/ctnlist/6.1.2/dev/podman/cattomail-ca.pem`;
+   - `CATTOMAIL_CA_FILE=/usr/local/lib/php/ctnlist/6.1.3/dev/podman/cattomail-ca.pem`;
    - `CATTOMAIL_WEBHOOK_URL=http://ctnlist-web/cattomail/webhook`: where catto-mail's pod can reach ctnlist (plain http is accepted by a development catto-mail);
    - for subscription mail, `APP_BASE_URL=https://localhost:8543/` (ctnlist's development HTTPS listener).
 
@@ -548,7 +549,7 @@ Output and exit status are the same for both. They print one line of counts when
 | Global opt-outs | Must be kept | Never pruned (they record an explicit request). |
 | Sign-in links (`auth_login_tokens`) | Temporary | Removed once used or expired and older than the sign-in rate windows (the rate limits count them). |
 | Sign-in sessions (`auth_sessions`), PHP sessions (`sessions`) | Temporary | Sign-in sessions are removed once expired or signed out; PHP sessions (CSRF tokens, messages) once idle for longer than `AUTH_SESSION_TTL` or `AUTH_MAGIC_LINK_TTL`, whichever is longer. Active sessions are never touched. |
-| Site Log | History, personal data (IP addresses) | Removed `APP_SITELOG_RETENTION` (default 120d, at least 1w) after the visit. v5 kept it for ever; nothing does now, but a long period such as `10y` comes close. |
+| Site Log | History, personal data (IP addresses; the address typed into a refused form) | Removed `APP_SITELOG_RETENTION` (default 120d, at least 1w) after the visit. v5 kept it for ever; nothing does now, but a long period such as `10y` comes close. |
 | `options` (settings overrides, status heartbeats) | Configuration | Kept. |
 
 Maintenance works in batches of at most 1,000 rows, each its own short transaction, and at most 50 batches per task per run; the rest waits for the next run.
@@ -638,7 +639,7 @@ bin/dev test        # PHPUnit: unit, integration and smoke suites
 
 Smoke tests never touch the development installation or its database. They drive a second installation in the same stack, `/var/www/ctnlist-smoke` (served internally at `http://web:8081`, generated `dev/podman/smoke.env`), whose database `ctnlist_smoke` is dropped, migrated and seeded before every `bin/dev test`. Integration tests use `ctnlist_test`, each test in a rolled-back transaction. `SmokeTestCase` refuses any other database and a `SMOKE_BASE_URL` that is not the installation using it, `IntegrationTestCase` refuses any database but `ctnlist_test`, the generated `smoke.env` never carries catto-mail credentials, and `bin/dev check` compares row counts of the development database before and after the tests and fails if anything changed.
 
-`tests/Smoke/RouteSmokeTest` requests every GET route of the running stack over HTTP, anonymously and as the development administrator, and checks status codes, login redirects, access control and PHP error output. Every new GET route must be added to it. `tests/Smoke/AuthFlowTest` covers sign-in links (opening them changes nothing, the Sign in POST and its CSRF token, parallel, used, expired and malformed links, a link to confirm a list), auth cookies, session rotation, logout and CSRF, `tests/Smoke/LayoutTest` the site layout, assets, the Content-Security-Policy and error pages, `AdminScreensTest` the administration screens, `AdminListsRolesTest` and `RoleAdministrationTest` list and role administration, `AdminMessagesTemplatesTest`, `AdminQueueTest`, `AdminSubscribersTest`, `SettingsPageTest` and `ReportsTest` the rest of the administration and the Site Log, `CattoMailSmokeTest` the catto-mail pages and webhook endpoint, `SecurityBoundaryTest` extra form fields, rate limits, the worker-configuration warning and the health check, and `ProfileTest`, `ConsentTest`, `MessageActionTest` and `ArchiveContactTest` the subscriber-facing pages. `tests/Unit` holds unit tests; `tests/Integration` boots the application against the `ctnlist_test` database (each test rolled back) and covers the services: suppression (including the banlist database, `ctnlist_banlist_test`), the send and message logs, mail, rendering, messages, the delivery queue, consent, contact and subscriber administration, catto-mail against the fake, maintenance and diagnostics, sign-in, settings and the HTTP boundary.
+`tests/Smoke/RouteSmokeTest` requests every GET route of the running stack over HTTP, anonymously and as the development administrator, and checks status codes, login redirects, access control and PHP error output. Every new GET route must be added to it. `tests/Smoke/AuthFlowTest` covers sign-in links (opening them changes nothing, the Sign in POST and its CSRF token, parallel, used, expired and malformed links, a link to confirm a list), auth cookies, session rotation, logout and CSRF, `tests/Smoke/LayoutTest` the site layout, assets, the Content-Security-Policy and error pages, `AdminScreensTest` the administration screens, `AdminListsRolesTest` and `RoleAdministrationTest` list and role administration, `AdminMessagesTemplatesTest`, `AdminQueueTest`, `AdminSubscribersTest`, `SettingsPageTest` and `ReportsTest` the rest of the administration and the Site Log, `CattoMailSmokeTest` the catto-mail pages and webhook endpoint, `SecurityBoundaryTest` extra form fields, rate limits, the worker-configuration warning and the health check, `FormBotsTest` the bot check on the sign-in and subscribe forms and Flagged activity, and `ProfileTest`, `ConsentTest`, `MessageActionTest` and `ArchiveContactTest` the subscriber-facing pages. `tests/Unit` holds unit tests; `tests/Integration` boots the application against the `ctnlist_test` database (each test rolled back) and covers the services: suppression (including the banlist database, `ctnlist_banlist_test`), the send and message logs, mail, rendering, messages, the delivery queue, consent, contact and subscriber administration, catto-mail against the fake, maintenance and diagnostics, sign-in, settings and the HTTP boundary.
 
 `bin/dev test-installer` is separate from `bin/dev check` (several minutes, and it needs the Internet for the packages): it runs `install-ctnlist` as root in a stand-in server, a systemd container with PHP-FPM, PostgreSQL and nginx (`dev/installer-test/`). It installs the last released version as a new installation, runs the installer a second time, switches to the working tree as the next version and back, refuses a release with a changed schema and then recreates the database on request, and adds a second installation for a host name nginx already serves.
 

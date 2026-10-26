@@ -33,6 +33,6 @@ final class SiteLogListener
             return;
         }
         $user = $this->security->getUser();
-        $this->siteLog->record($request, $user instanceof SubscriberUser ? $user : null);
+        $this->siteLog->record($request, $event->getResponse()->getStatusCode(), $user instanceof SubscriberUser ? $user : null);
     }
 }

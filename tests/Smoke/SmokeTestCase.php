@@ -87,11 +87,15 @@ abstract class SmokeTestCase extends TestCase
         ), "{$class}: the administrator role holds every permission");
     }
 
-    /** A browser-like client: one curl handle with its own cookie jar. */
+    /** What client() calls itself: a current browser, so the public forms' bot check (BotCheck) lets it through. */
+    protected const BROWSER = 'Mozilla/5.0 (X11; Linux x86_64; rv:150.0) Gecko/20100101 Firefox/150.0 ctnlist-smoke';
+
+    /** A browser-like client: one curl handle with its own cookie jar, named as a current browser. */
     protected static function client(): \CurlHandle
     {
         $client = curl_init();
         curl_setopt($client, CURLOPT_COOKIEFILE, '');
+        curl_setopt($client, CURLOPT_USERAGENT, self::BROWSER);
         return $client;
     }
 

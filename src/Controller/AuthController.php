@@ -6,6 +6,8 @@ namespace App\Controller;
 
 use App\Form\Model\SignInRequest;
 use App\Form\Type\SignInType;
+use App\Http\BotCheck;
+use App\Log\SiteLog;
 use App\Repository\SubscriberRepository;
 use App\Security\Csrf;
 use App\Security\MagicLinkRequester;
@@ -30,6 +32,7 @@ final class AuthController extends AbstractController
         return $this->loginPage($this->signInForm());
     }
 
+    /** Bots (BotCheck) get the same answer as people, and nothing is sent or created for them. */
     #[Route('/login', name: 'login_request', methods: ['POST'])]
     public function requestLink(Request $request): Response
     {
@@ -40,7 +43,13 @@ final class AuthController extends AbstractController
         }
         /** @var SignInRequest $data */
         $data = $form->getData();
-        $this->requester->request($data->email, 'profile');
+        $trap = $form->get(BotCheck::TRAP_FIELD)->getData();
+        $bot = BotCheck::reason($request, is_string($trap) ? $trap : '');
+        if ($bot !== null) {
+            SiteLog::flag($request, $bot, $data->email);
+        } else {
+            $this->requester->request($data->email, 'profile');
+        }
         return $this->render('auth/link_sent.html.twig', ['message' => 'If the address is valid, a secure sign-in link has been sent.']);
     }
 

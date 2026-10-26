@@ -9,6 +9,7 @@
     <p>Enter your email address. We will send you a one-time sign-in link valid for {{ link_lifetime }}.</p>
     {{ form_errors(form) }}
     {{ form_row(form.email) }}
+    {{ form_row(form.website) }}
     <button class="btn-solid theme-primary" type="submit"><i class="bi bi-envelope-arrow-up me-1" aria-hidden="true"></i>Email me a sign-in link</button>
   </fieldset>
 {{ form_end(form) }}

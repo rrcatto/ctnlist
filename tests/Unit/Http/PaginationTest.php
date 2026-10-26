@@ -20,5 +20,9 @@ final class PaginationTest extends TestCase
 
         $empty = Pagination::fromRequest(new Request(['r' => '-4']), 0, 0);
         self::assertSame([1, 1, 1, 0], [$empty->page, $empty->lastPage, $empty->perPage, $empty->offset()], 'v5: a negative r means 1 row');
+
+        foreach (['', ' ', 'ten', '1.5'] as $cleared) {
+            self::assertSame(10, Pagination::fromRequest(new Request(['r' => $cleared]), 1, 25)->perPage, "r={$cleared}: the default, not a 400");
+        }
     }
 }

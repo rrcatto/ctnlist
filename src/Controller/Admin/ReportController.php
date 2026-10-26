@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller\Admin;
 
 use App\Http\Pagination;
+use App\Log\FlaggedActivity;
 use App\Log\MessageLog;
 use App\Repository\SendLogRepository;
 use App\Repository\SiteLogRepository;
@@ -14,7 +15,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
-/** The Send Log, Site Log and message activity reports. */
+/** The Send Log, Site Log, Flagged activity and message activity reports. */
 #[IsGranted('logs.view')]
 final class ReportController extends AbstractController
 {
@@ -48,6 +49,23 @@ final class ReportController extends AbstractController
             'rows' => $pagination->total === 0 ? [] : $siteLog->page($filters, $pagination->offset(), $pagination->perPage),
             'pagination' => $pagination,
             'query' => self::query($filters + ['r' => (string) $pagination->perPage]),
+        ]);
+    }
+
+    /**
+     * Bots on the public forms: refused submissions, the IP addresses behind
+     * them, and new records nobody confirmed (shown to holders of
+     * subscribers.view, since they are subscriber addresses).
+     */
+    #[Route('/flagged', name: 'report_flagged', methods: ['GET'])]
+    public function flagged(FlaggedActivity $activity): Response
+    {
+        return $this->render('report/flagged.html.twig', [
+            'refused' => $activity->refused(),
+            'refused_shown' => FlaggedActivity::REFUSED_SHOWN,
+            'addresses' => $activity->addresses(),
+            'records' => $this->isGranted('subscribers.view') ? $activity->unconfirmedRecords() : null,
+            'record_days' => FlaggedActivity::RECORD_DAYS,
         ]);
     }
 

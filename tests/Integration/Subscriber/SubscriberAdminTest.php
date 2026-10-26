@@ -65,7 +65,7 @@ final class SubscriberAdminTest extends IntegrationTestCase
         $this->setMembership($id, $this->createList('NEWS', 'News, views: daily'), true);
         $this->setMembership($id, $this->createList('OLD', 'Old'), false, true);
 
-        $rows = $this->service(SubscriberRepository::class)->reportPage('jane@example.com', false, true, 0, 0, 10);
+        $rows = $this->service(SubscriberRepository::class)->reportPage('jane@example.com', false, '', 0, 0, 10);
 
         self::assertCount(1, $rows);
         self::assertSame([
