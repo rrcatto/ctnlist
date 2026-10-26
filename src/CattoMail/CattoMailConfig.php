@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\CattoMail;
 
+use App\Util\Duration;
+
 /**
  * Infrastructure configuration of the catto-mail integration (never an
  * editable Setting, never rendered, never logged). The address, the API key
@@ -27,10 +29,14 @@ namespace App\CattoMail;
  * - CATTOMAIL_WEBHOOK_URL: development and test only: the webhook address a
  *   connection asks catto-mail to deliver to, when catto-mail cannot reach
  *   APP_BASE_URL (e.g. http://ctnlist-web/cattomail/webhook on that network).
- * - CATTOMAIL_WEBHOOK_BODY_RETENTION_DAYS (90): raw bodies of processed
+ * - CATTOMAIL_TIMEOUT (15s, at least 1s): the API request timeout.
+ * - CATTOMAIL_RECONCILE_AFTER (15m, at least 1m): jobs without a final
+ *   webhook for this long are polled.
+ * - CATTOMAIL_WEBHOOK_BODY_RETENTION (90d, at least 1w): raw bodies of processed
  *   webhook events are removed after this; the event rows stay.
- * - CATTOMAIL_DETAIL_RETENTION_DAYS (365): rendered content of refused jobs
+ * - CATTOMAIL_DETAIL_RETENTION (1y, at least 30d): rendered content of refused jobs
  *   and validation results superseded by newer ones are removed after this.
+ * The four are periods (App\Util\Duration: 1y1w1d1h1m1s).
  */
 final class CattoMailConfig
 {
@@ -51,6 +57,10 @@ final class CattoMailConfig
     private readonly array $webhookSecrets;
     private readonly bool $currentSecret;
     private readonly bool $previousSecret;
+    public readonly Duration $timeout;
+    public readonly Duration $reconcileAfter;
+    public readonly Duration $webhookBodyRetention;
+    public readonly Duration $detailRetention;
 
     public function __construct(
         public readonly string $baseUrl,
@@ -59,19 +69,23 @@ final class CattoMailConfig
         #[\SensitiveParameter] string $previousWebhookSecret = '',
         public readonly bool $globalOptOutEnabled = false,
         public readonly string $caFile = '',
-        public readonly float $timeoutSeconds = 15.0,
-        public readonly int $reconcileAfterSeconds = 900,
+        ?Duration $timeout = null,
+        ?Duration $reconcileAfter = null,
         public readonly bool $trackOpens = false,
         public readonly bool $trackClicks = false,
         public readonly string $connectHost = '',
-        public readonly int $webhookBodyRetentionDays = 90,
-        public readonly int $detailRetentionDays = 365,
+        ?Duration $webhookBodyRetention = null,
+        ?Duration $detailRetention = null,
         /** @var array{base_url?: string, api_key?: string, webhook_secret?: string} where each value comes from (SOURCE_*) */
         private readonly array $sources = [],
         /** Why the stored connection cannot be read (APP_SETTINGS_KEY), '' when it can or there is none. */
         public readonly string $connectionProblem = '',
         public readonly string $webhookUrl = '',
     ) {
+        $this->timeout = $timeout ?? Duration::parse('15s');
+        $this->reconcileAfter = $reconcileAfter ?? Duration::parse('15m');
+        $this->webhookBodyRetention = $webhookBodyRetention ?? Duration::parse('90d');
+        $this->detailRetention = $detailRetention ?? Duration::parse('1y');
         $this->webhookSecrets = array_values(array_filter([trim($webhookSecret), trim($previousWebhookSecret)], static fn(string $s): bool => $s !== ''));
         $this->currentSecret = trim($webhookSecret) !== '';
         $this->previousSecret = trim($previousWebhookSecret) !== '';

@@ -105,12 +105,12 @@ final class DeliveryController extends AbstractController
             'secrets' => ['current' => $config->hasWebhookSecret(), 'previous' => $config->hasPreviousWebhookSecret()],
             'global_optout' => $config->globalOptOutEnabled,
             'tracking' => ['opens' => $config->trackOpens, 'clicks' => $config->trackClicks],
-            'reconcile_after' => $config->reconcileAfterSeconds,
+            'reconcile_after' => $config->reconcileAfter->words(),
             'health' => $health->last(),
             'health_states' => CattoMailHealth::STATES,
             'activity' => $activityNow,
             // The worker should run every minute or so; well past the reconciliation interval it is not running.
-            'worker_stale' => $config->isConfigured() && ($workerAge === null || $workerAge > max(600, 2 * $config->reconcileAfterSeconds)),
+            'worker_stale' => $config->isConfigured() && ($workerAge === null || $workerAge > max(600, 2 * $config->reconcileAfter->seconds())),
             // The worker ran with another .env, database or credentials than this web server.
             'worker_config_differs' => $activityNow['worker_config'] !== null && $activityNow['worker_config'] !== $fingerprint->value() && !$changedSinceWorkerRun,
             'counts' => $status->counts(),

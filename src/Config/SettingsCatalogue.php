@@ -12,14 +12,15 @@ namespace App\Config;
  * `width` lays the field out on the Settings page (full, half, third or
  * quarter of the row); `heading` starts a sub-section before the field.
  *
- * Types: text, textarea, email, url, int, bool, dsn (MAILER_DSN, edited as
- * separate SMTP fields). `secret` values are
+ * Types: text, textarea, email, url, int, bool, duration (a period written as
+ * App\Util\Duration reads it, 1y1w1d1h1m1s, no shorter than `shortest`), dsn
+ * (MAILER_DSN, edited as separate SMTP fields). `secret` values are
  * encrypted at rest and never written into the page.
  *
  * `default` is the value the application uses when .env does not set the
  * variable (as in SiteConfig and the services reading it).
  *
- * @phpstan-type Setting array{label: string, type: string, width?: string, heading?: string, default?: string, help?: string, min?: int, secret?: bool, optional?: bool}
+ * @phpstan-type Setting array{label: string, type: string, width?: string, heading?: string, default?: string, help?: string, min?: int, shortest?: string, secret?: bool, optional?: bool}
  * @phpstan-type Group array{tab: string, label: string, description: string, settings: array<string, Setting>}
  */
 final class SettingsCatalogue
@@ -105,12 +106,12 @@ final class SettingsCatalogue
             'label' => 'Sign-in',
             'description' => 'Email sign-in links, how long a sign-in lasts, and how often subscribers may forward or resend.',
             'settings' => [
-                'AUTH_MAGIC_LINK_TTL' => ['width' => 'third', 'default' => '1800', 'label' => 'Link lifetime (s)', 'type' => 'int', 'min' => 60, 'help' => 'How long a sign-in link stays valid.'],
+                'AUTH_MAGIC_LINK_TTL' => ['width' => 'third', 'default' => '30m', 'label' => 'Link lifetime', 'type' => 'duration', 'shortest' => '1m', 'help' => 'How long a sign-in link stays valid, such as 30m or 2h.'],
                 'AUTH_MAGIC_LINK_MAX_PER_EMAIL' => ['width' => 'third', 'default' => '5', 'label' => 'Links per address', 'type' => 'int', 'min' => 1, 'help' => 'Sign-in links one address may request…'],
-                'AUTH_MAGIC_LINK_EMAIL_WINDOW' => ['width' => 'third', 'default' => '900', 'label' => 'Address window (s)', 'type' => 'int', 'min' => 60, 'help' => '… within this many seconds.'],
-                'AUTH_SESSION_TTL' => ['width' => 'third', 'default' => '86400', 'label' => 'Session length (s)', 'type' => 'int', 'min' => 300, 'help' => 'How long a sign-in lasts.'],
+                'AUTH_MAGIC_LINK_EMAIL_WINDOW' => ['width' => 'third', 'default' => '15m', 'label' => 'Address window', 'type' => 'duration', 'shortest' => '1m', 'help' => '… within this period, such as 15m.'],
+                'AUTH_SESSION_TTL' => ['width' => 'third', 'default' => '1d', 'label' => 'Session length', 'type' => 'duration', 'shortest' => '5m', 'help' => 'How long a sign-in lasts, such as 1d or 1w.'],
                 'AUTH_MAGIC_LINK_MAX_PER_IP' => ['width' => 'third', 'default' => '20', 'label' => 'Links per IP address', 'type' => 'int', 'min' => 1, 'help' => 'Sign-in links one IP address may request…'],
-                'AUTH_MAGIC_LINK_IP_WINDOW' => ['width' => 'third', 'default' => '3600', 'label' => 'IP window (s)', 'type' => 'int', 'min' => 60, 'help' => '… within this many seconds.'],
+                'AUTH_MAGIC_LINK_IP_WINDOW' => ['width' => 'third', 'default' => '1h', 'label' => 'IP window', 'type' => 'duration', 'shortest' => '1m', 'help' => '… within this period, such as 1h.'],
                 'FORWARD_RATE_LIMIT' => ['width' => 'third', 'default' => '10', 'label' => 'Forwards per hour', 'type' => 'int', 'min' => 1, 'help' => 'Forwards and resends one subscriber may make per hour (administrators are not limited).'],
             ],
         ],

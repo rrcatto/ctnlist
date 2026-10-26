@@ -59,7 +59,7 @@
           <dt class="sm:col-5">Previous secret</dt><dd class="sm:col-7 mb-0">{{ secrets.previous ? 'set: the rotated-out secret is still accepted (remove it once catto-mail stops signing with it)' : 'not set' }}</dd>
         </dl>
         <hr>
-        <p class="mb-1">Webhooks are the primary path; the worker (<code>ctnlist:cattomail:work</code>, from cron every minute) is the safety net: it processes stored events, retries unsent work and polls jobs not updated for {{ (reconcile_after / 60)|round }} minutes.</p>
+        <p class="mb-1">Webhooks are the primary path; the worker (<code>ctnlist:cattomail:work</code>, from cron every minute) is the safety net: it processes stored events, retries unsent work and polls jobs not updated for {{ reconcile_after }}.</p>
         {% if worker_stale %}
           <div class="alert theme-warning mt-3 mb-3" role="note"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div>{{ activity.worker_run ? 'The worker last ran ' ~ activity.worker_run|slice(0, 16) ~ '.' : 'The worker has never run.' }} Check the cron entry.</div></div>
         {% endif %}

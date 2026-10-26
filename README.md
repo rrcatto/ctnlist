@@ -1,4 +1,4 @@
-# ctnlist 6.1.1
+# ctnlist 6.1.2
 
 ctnlist is a web-based mailing-list application created by Richard Royston Catto in 2009. Versions 5.0.x and 6.0.x are an incremental modernisation of the working v5.0 application, not a replacement of its established workflows.
 
@@ -26,7 +26,7 @@ Since 6.0 every route is a Symfony 8.1 controller and the Fat-Free Framework has
 - separate PostgreSQL global email/domain suppression database
 - production templates (nginx, PHP-FPM, cron, systemd) and a production preflight, `ctnlist:diagnose --production`
 - an acceptable use policy page, `/acceptable-use-policy`, linked from every page's footer and built from `docs/AUP.md`: the site's own rules for its subscribers and for whoever writes and sends its messages. The document names no product or domain; the page fills in the installation's list name, domain and organisation from Settings, and sends abuse reports and complaints to `abuse@<APP_DOMAIN>`, which must be a mailbox that is read. That is the only address on the page: the administrator's address is not shown there, not even in the footer (replace the file to publish a different policy)
-- a privacy policy page, `/privacy`, built from `docs/PRIVACY.md` in the same way: what the site collects, why, who handles it, the cookies, how long each kind is kept and the subscriber's rights under POPIA. Requests go to the administrator's address (`MAIL_ADMIN_ADDRESS`, else `APP_ADMIN_EMAIL`), the one the footer links to, and the page says how long visits are kept from `APP_SITELOG_RETENTION_DAYS` (replace the file to publish a different policy)
+- a privacy policy page, `/privacy`, built from `docs/PRIVACY.md` in the same way: what the site collects, why, who handles it, the cookies, how long each kind is kept and the subscriber's rights under POPIA. Requests go to the administrator's address (`MAIL_ADMIN_ADDRESS`, else `APP_ADMIN_EMAIL`), the one the footer links to, and the page says how long visits are kept from `APP_SITELOG_RETENTION` (replace the file to publish a different policy)
 - every page names the release, in a `generator` meta tag and on the footer's last line
 
 ## Restored v5 functionality
@@ -145,7 +145,7 @@ dev/podman-kit-test/ the stand-in server and the test of the Podman kit (bin/dev
 
 ### Layout and permissions
 
-The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.1.1/` (the path is set in `public_html/index.php`): owned by root, read-only to the PHP-FPM user (`www-data`), with `composer install --no-dev --optimize-autoloader` run there. Each installation has its own directory, e.g. `/var/www/<installation>`:
+The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.1.2/` (the path is set in `public_html/index.php`): owned by root, read-only to the PHP-FPM user (`www-data`), with `composer install --no-dev --optimize-autoloader` run there. Each installation has its own directory, e.g. `/var/www/<installation>`:
 
 | Path | Owner, mode | What |
 |---|---|---|
@@ -223,10 +223,10 @@ Before a release goes live. The items marked † need the production server and 
 - [ ] † `ctnlist:diagnose --production` as `www-data` reports no ERROR; `https://<host>/health` answers `OK`.
 - [ ] † The mail service connected on the Delivery page (or set in `.env`, with `<APP_BASE_URL>cattomail/webhook` registered by hand), and the page shows that the From address's domain can send; `ctnlist:cattomail:check` reports it reachable and authenticated, and `bin/dev test-cattomail` has passed against a development catto-mail.
 - [ ] † `abuse@<APP_DOMAIN>` is a mailbox that is read: the acceptable use policy sends abuse reports and complaints there, and shows no other address.
-- [ ] † The administrator's address (`MAIL_ADMIN_ADDRESS`, else `APP_ADMIN_EMAIL`) is a mailbox that is read: the privacy policy sends requests about personal information there. Check the policy against the installation (`APP_SITELOG_RETENTION_DAYS` sets how long it says visits are kept, 120 days when not set; 0 keeps them with no limit).
+- [ ] † The administrator's address (`MAIL_ADMIN_ADDRESS`, else `APP_ADMIN_EMAIL`) is a mailbox that is read: the privacy policy sends requests about personal information there. Check the policy against the installation (`APP_SITELOG_RETENTION` sets how long it says visits are kept: 120d when it is not set, at least 1w).
 - [ ] † If proofs go to Mailpit (`MAIL_PROOF_SMTP`): `ctnlist-mailpit` is running, its SMTP and web ports listen on 127.0.0.1 only, `https://<host>/mailpit/` asks for the password, and a proof sent from the message list appears there.
 - [ ] † A proof to an address you can read, a small campaign to a test list, a webhook round trip (delivery and bounce events on **Admin → Settings → Delivery**) and an address-validation job.
-- [ ] † Recovery sanity check: the Delivery page shows no stuck work, and a send job without a final webhook is reconciled after `CATTOMAIL_RECONCILE_AFTER_SECONDS`.
+- [ ] † Recovery sanity check: the Delivery page shows no stuck work, and a send job without a final webhook is reconciled after `CATTOMAIL_RECONCILE_AFTER`.
 
 ### Request limits
 
@@ -258,6 +258,8 @@ CTNLIST_INSTANCE_DIR=/var/www/example bin/console ctnlist:templates:samples
 
 Per-installation settings are read from `.env` outside the public web directory. Start with `.env.example`. `APP_ENV` is `prod`, `dev` or `test`. `TRUSTED_PROXIES` lists reverse proxies whose `X-Forwarded-*` headers are trusted (client IP for rate limits and logs, HTTPS detection). With nginx passing requests straight to PHP-FPM (`deploy/nginx`), PHP sees the client address and HTTPS directly and the snippet drops client-supplied forwarding headers; list a proxy only when one sits in front of nginx, and never `0.0.0.0/0` (`ctnlist:diagnose` warns).
 
+**Periods.** Every setting that is a period of time, in `.env` and on the Settings page, is written in years, weeks, days, hours, minutes and seconds, in that order, each part optional and a whole number from 1 up: `1y1w1d1h1m1s`, `120d`, `1h`, `1m30s`. There are no months, and `m` is minutes; the letters are lower case. As a length (a timeout, a lifetime, a window) a year is 365 days; as a retention, `1y` is a calendar year, so `3y` can include a leap day. A bare number, `0` and anything else that is not a period are refused on the Settings page; in `.env` they give the setting's default, which `ctnlist:diagnose` reports. The periods are `AUTH_MAGIC_LINK_TTL`, `AUTH_SESSION_TTL`, `AUTH_MAGIC_LINK_EMAIL_WINDOW` and `AUTH_MAGIC_LINK_IP_WINDOW` (also on the Settings page), and `CATTOMAIL_TIMEOUT`, `CATTOMAIL_RECONCILE_AFTER`, `CATTOMAIL_WEBHOOK_BODY_RETENTION`, `CATTOMAIL_DETAIL_RETENTION` and `APP_SITELOG_RETENTION`.
+
 The main application uses `DB_*` settings. Global suppression comes from `SUPPRESSION_PROVIDER`:
 - `banlist` (the default): the separate global suppression database, shared by installations, with `GDB_*` settings in an externally managed `ban.env`. Set `GDB_ENV_DIRECTORY` and, when necessary, `GDB_ENV_FILE` in the installation `.env` (default: `config/phinx/ban.env` in the shared tree); the same variables can be exported when running the banlist Phinx configuration.
 - `cattomail`: no suppression database. catto-mail, which delivers every campaign, refuses suppressed recipients when a send is staged and suppresses hard-bounced and complaining addresses itself, and ctnlist marks those subscribers from its outcomes ([catto-mail integration](#catto-mail-integration)). ctnlist still applies the v5 address rules at confirmation, queue build and before each send. A subscriber's "all lists" unsubscribe then unsubscribes them from this site's lists only, and the administrator's bulk scopes that only record global suppressions (domains, bounces, spam complaints) are refused. `GDB_*` are not read.
@@ -265,7 +267,7 @@ The main application uses `DB_*` settings. Global suppression comes from `SUPPRE
 
 Transactional mail (sign-in links, invitations, notifications, contact-form mail) goes through the SMTP server in `MAILER_DSN`, one connection per message. Campaign content goes through catto-mail (`CATTOMAIL_*`, below). Optional legacy synchronisation targets use `SYNC_DATABASES_JSON`.
 
-Sign-in links expire after `AUTH_MAGIC_LINK_TTL` seconds and are rate-limited per address (`AUTH_MAGIC_LINK_MAX_PER_EMAIL` within `AUTH_MAGIC_LINK_EMAIL_WINDOW`) and per client IP (`AUTH_MAGIC_LINK_MAX_PER_IP` within `AUTH_MAGIC_LINK_IP_WINDOW`); a signed-in session lasts `AUTH_SESSION_TTL` seconds. The sign-in page and email state the link lifetime in words from the same setting. Contact messages are limited per hour per client IP and per address (`CONTACT_RATE_LIMIT`, default 5), forwards and resends per subscriber (`FORWARD_RATE_LIMIT`, default 10; holders of `messages.manage` are exempt), and requests or withdrawals of the catto-mail global opt-out to six per subscriber per hour (each one calls catto-mail); over a limit the page answers 429. Public subscribe requests and the confirmation prompts on subscriber links send sign-in links, so the sign-in limits apply to them. There is no CAPTCHA. Contact-form submissions are appended to `CONTACT_LOG_FILE` (default: the installation's `logs/contact.log`). Bulk-subscribe and import logs (`emails_added.txt`) and the export files (`export-subscribers.txt`, `export-remove.txt`) are written to `APP_LOG_DIR` (default: the installation's `logs/`).
+Sign-in links expire after `AUTH_MAGIC_LINK_TTL` (default 30m) and are rate-limited per address (`AUTH_MAGIC_LINK_MAX_PER_EMAIL` within `AUTH_MAGIC_LINK_EMAIL_WINDOW`, default 15m) and per client IP (`AUTH_MAGIC_LINK_MAX_PER_IP` within `AUTH_MAGIC_LINK_IP_WINDOW`, default 1h); a signed-in session lasts `AUTH_SESSION_TTL` (default 1d). The sign-in page and email state the link lifetime in words from the same setting. Contact messages are limited per hour per client IP and per address (`CONTACT_RATE_LIMIT`, default 5), forwards and resends per subscriber (`FORWARD_RATE_LIMIT`, default 10; holders of `messages.manage` are exempt), and requests or withdrawals of the catto-mail global opt-out to six per subscriber per hour (each one calls catto-mail); over a limit the page answers 429. Public subscribe requests and the confirmation prompts on subscriber links send sign-in links, so the sign-in limits apply to them. There is no CAPTCHA. Contact-form submissions are appended to `CONTACT_LOG_FILE` (default: the installation's `logs/contact.log`). Bulk-subscribe and import logs (`emails_added.txt`) and the export files (`export-subscribers.txt`, `export-remove.txt`) are written to `APP_LOG_DIR` (default: the installation's `logs/`).
 
 ### Settings page
 
@@ -277,7 +279,7 @@ Administrators, and any role given the `settings.manage` permission, can change 
 - **Do not change `APP_SETTINGS_KEY` while encrypted settings exist**: they become unreadable, and mail that needs them fails (the Settings page and the Delivery page report it) until they are entered again or reset, and the mail service is connected again. A future key rotation must decrypt with the old key and re-encrypt with the new key before the new key is deployed.
 - The mail service's address, API key and webhook secret are not on this page: they come from Connect on the Delivery page or from `.env` (which wins).
 - Stay in `.env` only: `APP_SECRET`, `APP_SETTINGS_KEY`, `APP_ENV`/`APP_DEBUG`, `APP_INSTANCE_ID`, the other catto-mail settings (`CATTOMAIL_*`: opt-out capability, tracking, timeouts, retention), the database and suppression-database settings, `TRUSTED_PROXIES`, `APP_BASE_URL`/`APP_DOMAIN`, `APP_TIMEZONE`, file paths (`CONTACT_LOG_FILE`, `APP_LOG_DIR`), the cookie names (`AUTH_SESSION_COOKIE`, `PHP_SESSION_COOKIE`), `APP_ADMIN_EMAIL` and the synchronisation targets.
-- Web addresses must be `http(s)://`; one-line values (names, subjects) cannot contain line breaks.
+- Web addresses must be `http(s)://`; one-line values (names, subjects) cannot contain line breaks; periods are written as in [Configuration](#configuration) (`30m`, `1d`), each no shorter than its minimum (a link lifetime and the windows 1m, a session 5m).
 
 ### Security notes
 
@@ -362,7 +364,8 @@ The page then shows what is connected (the service, the catto-mail client, who c
 | `CATTOMAIL_WEBHOOK_SECRET_PREVIOUS` | Only during a secret rotation: the previous secret, for catto-mail's overlap window. After catto-mail rotates, put the new secret in `CATTOMAIL_WEBHOOK_SECRET` and the old one here; remove it when the overlap has passed. |
 | `CATTOMAIL_GLOBAL_OPTOUT_ENABLED` | `true` only when catto-mail's operator granted this client the global-opt-out capability. |
 | `CATTOMAIL_CA_FILE`, `CATTOMAIL_API_CONNECT_HOST`, `CATTOMAIL_WEBHOOK_URL` | Development only: trust catto-mail's self-signed certificate; reach its API host through another name and, as `name:port`, port; ask a connection to deliver webhooks to an address catto-mail's development pod can reach (the last two are ignored outside `dev`/`test`). |
-| `CATTOMAIL_RECONCILE_AFTER_SECONDS` | Poll jobs that have had no final webhook after this long (default 900; 300 in development). |
+| `CATTOMAIL_TIMEOUT` | The API request timeout (default 15s, at least 1s). |
+| `CATTOMAIL_RECONCILE_AFTER` | Poll jobs that have had no final webhook after this long (default 15m, 5m in development; at least 1m). |
 | `CATTOMAIL_TRACK_OPENS`, `CATTOMAIL_TRACK_CLICKS` | catto-mail open/click tracking per send job (default off). |
 
 **Sending.** Every campaign delivery (queue sends, proofs, resends, forwards) is rendered by ctnlist for its recipient and handed to catto-mail. catto-mail does no mail merge.
@@ -428,7 +431,7 @@ A job only moves forward, decided in one SQL statement, so a late webhook or a s
 Each pass:
 - processes stored webhook events not yet processed;
 - retries unsealed send jobs, pending opt-outs and withdrawals, and validation submissions (same keys);
-- reconciles by polling jobs without a final state whose last check is older than `CATTOMAIL_RECONCILE_AFTER_SECONDS` (`GET /v1/send-jobs/{id}` with its messages, `GET /v1/validation-jobs/{id}` with its results).
+- reconciles by polling jobs without a final state whose last check is older than `CATTOMAIL_RECONCILE_AFTER` (`GET /v1/send-jobs/{id}` with its messages, `GET /v1/validation-jobs/{id}` with its results).
 
 Running it every minute keeps retries prompt; polling still waits for the reconciliation interval.
 
@@ -474,7 +477,7 @@ With a connection made on the Delivery page there is no secret in `.env` to repl
 - Webhook events are kept for diagnosis and de-duplication; their raw bodies (`cattomail_webhook_events.cwe_payload`, which can contain recipient addresses and remote diagnostics) only until the retention period below.
 - Address-validation results are kept per job.
 
-`ctnlist:maintenance` removes webhook bodies after `CATTOMAIL_WEBHOOK_BODY_RETENTION_DAYS` and other temporary detail after `CATTOMAIL_DETAIL_RETENTION_DAYS` (see [Operations](#operations)).
+`ctnlist:maintenance` removes webhook bodies after `CATTOMAIL_WEBHOOK_BODY_RETENTION` and other temporary detail after `CATTOMAIL_DETAIL_RETENTION` (see [Operations](#operations)).
 
 **Possible catto-mail contract enhancements** (not needed for correct operation; not worked around):
 - an authenticated health or identity endpoint, instead of reading a job that cannot exist;
@@ -492,7 +495,7 @@ The development stacks are separate (catto-mail's pod is on an internal network,
 3. `bin/dev cattomail-ca` saves catto-mail's self-signed development certificate (read from its public port) to `dev/podman/cattomail-ca.pem` (gitignored). Repeat it when catto-mail's certificate is regenerated.
 4. In `dev/podman/ctnlist.env` (leave `CATTOMAIL_API_BASE_URL`, `CATTOMAIL_API_KEY` and `CATTOMAIL_WEBHOOK_SECRET` empty):
    - `CATTOMAIL_API_CONNECT_HOST=catto-mail:443`: catto-mail's address is `https://localhost:8443`, a port that exists only on your machine; from ctnlist's containers the same service answers at `catto-mail`, port 443. TLS is still verified for `localhost`;
-   - `CATTOMAIL_CA_FILE=/usr/local/lib/php/ctnlist/6.1.1/dev/podman/cattomail-ca.pem`;
+   - `CATTOMAIL_CA_FILE=/usr/local/lib/php/ctnlist/6.1.2/dev/podman/cattomail-ca.pem`;
    - `CATTOMAIL_WEBHOOK_URL=http://ctnlist-web/cattomail/webhook`: where catto-mail's pod can reach ctnlist (plain http is accepted by a development catto-mail);
    - for subscription mail, `APP_BASE_URL=https://localhost:8543/` (ctnlist's development HTTPS listener).
 
@@ -538,14 +541,14 @@ Output and exit status are the same for both. They print one line of counts when
 |---|---|---|
 | Subscribers, consent and membership history (`list_subscription_events` is append-only), roles, suppression (ctnlist banlist, delivery states), the `ALL` list | Must be kept | Never pruned. |
 | Send Log, smlog and message activity, send runs, jobs and recipient outcomes, archives, the queue | Long-term history | Never pruned; they show whether ctnlist handed a message on and what became of it. |
-| Webhook events | History plus temporary body | The row, type, times, outcome, error and references (job, recipient) are kept; the raw body is removed `CATTOMAIL_WEBHOOK_BODY_RETENTION_DAYS` (default 90) after processing, never before. |
-| Rendered recipient content | Temporary | Cleared when its batch is accepted; for refused or cancelled jobs, `CATTOMAIL_DETAIL_RETENTION_DAYS` (default 365) after they finished (a requeue renders again). |
+| Webhook events | History plus temporary body | The row, type, times, outcome, error and references (job, recipient) are kept; the raw body is removed `CATTOMAIL_WEBHOOK_BODY_RETENTION` (default 90d, at least 1w) after processing, never before. |
+| Rendered recipient content | Temporary | Cleared when its batch is accepted; for refused or cancelled jobs, `CATTOMAIL_DETAIL_RETENTION` (default 1y, at least 30d) after they finished (a requeue renders again). |
 | Send-job create bodies, Idempotency-Keys, catto-mail ids | Retry material, then compact history | Kept: they are small and are what makes a retry, or a restored database, safe. |
-| Address-validation results | History | Job counts and every subscriber's latest result are kept; results superseded by a newer result for the same subscriber are removed from jobs finished more than `CATTOMAIL_DETAIL_RETENTION_DAYS` ago (the job is marked). Results never change consent or memberships. |
+| Address-validation results | History | Job counts and every subscriber's latest result are kept; results superseded by a newer result for the same subscriber are removed from jobs finished more than `CATTOMAIL_DETAIL_RETENTION` ago (the job is marked). Results never change consent or memberships. |
 | Global opt-outs | Must be kept | Never pruned (they record an explicit request). |
 | Sign-in links (`auth_login_tokens`) | Temporary | Removed once used or expired and older than the sign-in rate windows (the rate limits count them). |
 | Sign-in sessions (`auth_sessions`), PHP sessions (`sessions`) | Temporary | Sign-in sessions are removed once expired or signed out; PHP sessions (CSRF tokens, messages) once idle for longer than `AUTH_SESSION_TTL` or `AUTH_MAGIC_LINK_TTL`, whichever is longer. Active sessions are never touched. |
-| Site Log | History, personal data (IP addresses) | Removed `APP_SITELOG_RETENTION_DAYS` (default 120) days after the visit; 0 keeps it, as v5 did. |
+| Site Log | History, personal data (IP addresses) | Removed `APP_SITELOG_RETENTION` (default 120d, at least 1w) after the visit. v5 kept it for ever; nothing does now, but a long period such as `10y` comes close. |
 | `options` (settings overrides, status heartbeats) | Configuration | Kept. |
 
 Maintenance works in batches of at most 1,000 rows, each its own short transaction, and at most 50 batches per task per run; the rest waits for the next run.
@@ -554,7 +557,7 @@ Maintenance works in batches of at most 1,000 rows, each its own short transacti
 
 ### Stuck work and recovery
 
-Work is **stuck** when the worker should long since have moved it on: twice `CATTOMAIL_RECONCILE_AFTER_SECONDS`, and at least ten minutes. That covers:
+Work is **stuck** when the worker should long since have moved it on: twice `CATTOMAIL_RECONCILE_AFTER`, and at least ten minutes. That covers:
 - send jobs not sealed, or sealed but not reconciled within that time;
 - validation jobs not submitted or not reconciled;
 - opt-outs or withdrawals not reported;

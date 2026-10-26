@@ -2,6 +2,15 @@
 
 The release history of ctnlist. Versions 5.0.x and 6.0.x are an incremental modernisation of the working v5.0 application; the v5 behaviour they keep, and the deliberate changes from it, are listed in [RESTORED-FUNCTIONALITY.md](docs/RESTORED-FUNCTIONALITY.md).
 
+## 6.1.2 (2026-10-26)
+
+Periods of time written one way:
+- **Periods:** every setting that is a period of time is now written the owner's way, as in cattolms: years, weeks, days, hours, minutes and seconds, in that order, each optional, lower case, a whole number from 1 up (`1y1w1d1h1m1s`, `120d`, `30m`, `1m30s`). There are no months (`m` is minutes). As a length a year is 365 days; as a retention a year is a calendar year, so `3y` can include a leap day. `App\Util\Duration` reads them.
+  - **Settings page:** the sign-in link lifetime (`AUTH_MAGIC_LINK_TTL`, default `30m`, at least `1m`), the session length (`AUTH_SESSION_TTL`, `1d`, at least `5m`) and the two rate windows (`AUTH_MAGIC_LINK_EMAIL_WINDOW`, `15m`; `AUTH_MAGIC_LINK_IP_WINDOW`, `1h`; at least `1m`) are typed as periods; a bare number, `0`, a month or a period below the minimum is refused at the field with how to write one. A stored override that is a number of seconds is no longer a period: enter it again.
+  - **Renamed in `.env`**, the unit now being in the value: `CATTOMAIL_TIMEOUT_SECONDS` → `CATTOMAIL_TIMEOUT` (`15s`), `CATTOMAIL_RECONCILE_AFTER_SECONDS` → `CATTOMAIL_RECONCILE_AFTER` (`15m`), `CATTOMAIL_WEBHOOK_BODY_RETENTION_DAYS` → `CATTOMAIL_WEBHOOK_BODY_RETENTION` (`90d`, at least `1w`), `CATTOMAIL_DETAIL_RETENTION_DAYS` → `CATTOMAIL_DETAIL_RETENTION` (`1y`, at least `30d`), `APP_SITELOG_RETENTION_DAYS` → `APP_SITELOG_RETENTION` (`120d`). An `.env` must be changed by hand: `ctnlist:diagnose` names an old setting that is still there and any period it cannot read, whose default then applies. The `AUTH_*` periods keep their names and need values such as `30m` and `1d`.
+  - **The Site Log is never kept for ever or not at all:** `0` meant "keep with no limit" in 6.1.1, and now is not a period (its default, `120d`, applies); the shortest retention is a week. The privacy policy says the period in words ("for 120 days").
+  - The sign-in page and email, the Delivery page and `ctnlist:diagnose` say the periods in words ("30 minutes", "15 minutes", "1 year").
+
 ## 6.1.1 (2026-10-26)
 
 A full privacy policy, and the release named on every page:

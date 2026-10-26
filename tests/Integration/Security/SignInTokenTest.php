@@ -42,7 +42,7 @@ final class SignInTokenTest extends IntegrationTestCase
 
         $expires = (int) strtotime((string) $this->db->fetchOne('SELECT alt_expires_at FROM auth_login_tokens WHERE alt_s_id = ? ORDER BY alt_id LIMIT 1', [$id]));
         $created = (int) strtotime((string) $this->db->fetchOne('SELECT alt_created_at FROM auth_login_tokens WHERE alt_s_id = ? ORDER BY alt_id LIMIT 1', [$id]));
-        self::assertSame($requester->lifetimeSeconds(), $expires - $created, 'the configured lifetime');
+        self::assertSame($requester->lifetime()->seconds(), $expires - $created, 'the configured lifetime');
     }
 
     public function testATokenWorksOnceAndNeverAfterItExpires(): void

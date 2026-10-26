@@ -10,7 +10,6 @@ use App\Repository\SubscriberRepository;
 use App\Security\Csrf;
 use App\Security\MagicLinkRequester;
 use App\Security\SignInLinkPage;
-use App\Util\Duration;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\FormInterface;
 use Symfony\Component\HttpFoundation\Request;
@@ -74,7 +73,7 @@ final class AuthController extends AbstractController
 
     private function loginPage(FormInterface $form, int $status = Response::HTTP_OK): Response
     {
-        return $this->render('auth/login.html.twig', ['form' => $form, 'link_lifetime' => Duration::describe($this->requester->lifetimeSeconds())],
+        return $this->render('auth/login.html.twig', ['form' => $form, 'link_lifetime' => $this->requester->lifetime()->words()],
             new Response(status: $status));
     }
 

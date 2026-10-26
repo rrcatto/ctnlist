@@ -11,6 +11,7 @@ use App\Repository\AuthLoginTokenRepository;
 use App\Repository\ListRepository;
 use App\Repository\SubscriberRepository;
 use App\Subscriber\EmailNormaliser;
+use App\Util\Duration;
 use Psr\Clock\ClockInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
 
@@ -27,9 +28,9 @@ final class MagicLinkRequester
     public const RETURN_ACTIONS = ['profile', 'messages', 'confirm', 'unsubscribe', 'forward', 'like', 'dislike', 'resend'];
 
     /** How long a link stays valid (AUTH_MAGIC_LINK_TTL, Settings override first): used for the token and every wording of it. */
-    public function lifetimeSeconds(): int
+    public function lifetime(): Duration
     {
-        return $this->settings->int('AUTH_MAGIC_LINK_TTL', 1800);
+        return $this->settings->duration('AUTH_MAGIC_LINK_TTL', '30m');
     }
 
     public function __construct(
@@ -83,7 +84,7 @@ final class MagicLinkRequester
             $email,
             $hash,
             $now->format('Y-m-d H:i:s'),
-            date('Y-m-d H:i:s', $now->getTimestamp() + $this->lifetimeSeconds()),
+            date('Y-m-d H:i:s', $now->getTimestamp() + $this->lifetime()->seconds()),
             $ip,
             (string) $request?->headers->get('User-Agent', ''),
             $returnAction,
@@ -93,7 +94,7 @@ final class MagicLinkRequester
         $url = rtrim($this->site->baseUrl, '/') . '/auth/verify?token=' . rawurlencode($token);
         // Asked for to confirm a list (subscribe form, consent link): the email says so.
         $confirmList = $returnAction === 'confirm' && $returnListId !== null ? $this->lists->findById($returnListId) : null;
-        if (!$this->mailer->sendMagicLink($email, $found['identity']['s_uuid'], $url, $this->lifetimeSeconds(), $confirmList['l_name'] ?? null)) {
+        if (!$this->mailer->sendMagicLink($email, $found['identity']['s_uuid'], $url, $this->lifetime(), $confirmList['l_name'] ?? null)) {
             $this->tokens->delete($hash);
             return false;
         }
@@ -103,9 +104,9 @@ final class MagicLinkRequester
     private function rateLimited(string $email, string $ip, int $now): bool
     {
         $since = static fn(int $window): string => date('Y-m-d H:i:s', $now - max(60, $window));
-        if ($this->tokens->countForEmailSince($email, $since($this->settings->int('AUTH_MAGIC_LINK_EMAIL_WINDOW', 900))) >= max(1, $this->settings->int('AUTH_MAGIC_LINK_MAX_PER_EMAIL', 5))) {
+        if ($this->tokens->countForEmailSince($email, $since($this->settings->duration('AUTH_MAGIC_LINK_EMAIL_WINDOW', '15m')->seconds())) >= max(1, $this->settings->int('AUTH_MAGIC_LINK_MAX_PER_EMAIL', 5))) {
             return true;
         }
-        return $ip !== '' && $this->tokens->countForIpSince($ip, $since($this->settings->int('AUTH_MAGIC_LINK_IP_WINDOW', 3600))) >= max(1, $this->settings->int('AUTH_MAGIC_LINK_MAX_PER_IP', 20));
+        return $ip !== '' && $this->tokens->countForIpSince($ip, $since($this->settings->duration('AUTH_MAGIC_LINK_IP_WINDOW', '1h')->seconds())) >= max(1, $this->settings->int('AUTH_MAGIC_LINK_MAX_PER_IP', 20));
     }
 }

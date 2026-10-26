@@ -114,8 +114,10 @@ final class MarkdownTest extends TestCase
     {
         self::assertSame('for 120 days', \App\Controller\PageController::siteLogRetention(null), 'the default');
         self::assertSame('for 120 days', \App\Controller\PageController::siteLogRetention(''));
-        self::assertSame('with no fixed time limit', \App\Controller\PageController::siteLogRetention('0'));
-        self::assertSame('for 1 day', \App\Controller\PageController::siteLogRetention('1'));
-        self::assertSame('for 90 days', \App\Controller\PageController::siteLogRetention('90'));
+        self::assertSame('for 120 days', \App\Controller\PageController::siteLogRetention('0'), 'not a period: the default, never "no Site Log"');
+        self::assertSame('for 120 days', \App\Controller\PageController::siteLogRetention('90'), 'a bare number is not a period');
+        self::assertSame('for 1 week', \App\Controller\PageController::siteLogRetention('1d'), 'at least a week');
+        self::assertSame('for 1 year', \App\Controller\PageController::siteLogRetention('1y'));
+        self::assertSame('for 17 weeks 1 day', \App\Controller\PageController::siteLogRetention('17w1d'));
     }
 }

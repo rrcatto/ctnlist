@@ -125,24 +125,26 @@ final class MaintenanceTest extends IntegrationTestCase
     }
 
     /**
-     * The Site Log keeps a visit for APP_SITELOG_RETENTION_DAYS, 120 days when it is not set (it holds IP addresses
-     * and is not needed forever); 0 keeps it, as v5 did.
+     * The Site Log keeps a visit for APP_SITELOG_RETENTION, a period: 120 days when it is not set or is not a period
+     * (it holds IP addresses and is not needed forever), and at least a week (keeping none is not a good idea).
      */
     public function testSiteLogIsPrunedAfterItsRetention(): void
     {
-        $this->db->executeStatement("INSERT INTO sitelog (stl_url, stl_logged_at) VALUES ('/old', ?), ('/middle', ?), ('/new', ?)",
-            [$this->daysAgo(400), $this->daysAgo(200), $this->daysAgo(1)]);
+        $this->db->executeStatement("INSERT INTO sitelog (stl_url, stl_logged_at) VALUES ('/old', ?), ('/middle', ?), ('/recent', ?), ('/new', ?)",
+            [$this->daysAgo(400), $this->daysAgo(200), $this->daysAgo(10), $this->daysAgo(1)]);
         $count = fn(string $url): int => (int) $this->db->fetchOne('SELECT COUNT(*) FROM sitelog WHERE stl_url = ?', [$url]);
 
-        self::assertArrayNotHasKey('Site Log rows removed', $this->maintenanceWithSiteLogRetention('0')->run(), '0 keeps the Site Log');
-        self::assertSame(1, $count('/old'));
+        self::assertGreaterThanOrEqual(1, $this->maintenanceWithSiteLogRetention('1y')->run()['Site Log rows removed']);
+        self::assertSame([0, 1, 1, 1], [$count('/old'), $count('/middle'), $count('/recent'), $count('/new')], 'a calendar year');
 
-        self::assertGreaterThanOrEqual(1, $this->maintenanceWithSiteLogRetention('365')->run()['Site Log rows removed']);
-        self::assertSame([0, 1, 1], [$count('/old'), $count('/middle'), $count('/new')]);
+        self::assertSame('120d', Maintenance::SITELOG_RETENTION);
+        foreach ([null, '0', '120'] as $notAPeriod) {
+            $this->maintenanceWithSiteLogRetention($notAPeriod)->run();
+        }
+        self::assertSame([0, 1, 1], [$count('/middle'), $count('/recent'), $count('/new')], 'not set or not a period: the default, never "no Site Log"');
 
-        self::assertSame(120, Maintenance::SITELOG_RETENTION_DAYS);
-        self::assertGreaterThanOrEqual(1, $this->maintenanceWithSiteLogRetention(null)->run()['Site Log rows removed'], 'not set: the default');
-        self::assertSame([0, 1], [$count('/middle'), $count('/new')]);
+        $this->maintenanceWithSiteLogRetention('1s')->run();
+        self::assertSame([0, 1], [$count('/recent'), $count('/new')], 'at least a week');
     }
 
     private function maintenanceWithSiteLogRetention(?string $days): Maintenance

@@ -38,24 +38,23 @@ final class PageController extends AbstractController
      * The privacy policy, built from docs/PRIVACY.md of the release like the
      * acceptable use policy below, with one more placeholder: how long the
      * Site Log keeps its rows ({{site_log_retention}}, from
-     * APP_SITELOG_RETENTION_DAYS or its default, as ctnlist:maintenance applies them). Requests
+     * APP_SITELOG_RETENTION, as ctnlist:maintenance applies it). Requests
      * about personal information go to the administrator's address, the one
      * the footer links to ({{administrator_email}}, MAIL_ADMIN_ADDRESS or else
      * APP_ADMIN_EMAIL): the document writes no address of its own.
      */
     #[Route('/privacy', name: 'privacy', methods: ['GET'])]
     public function privacy(SiteConfig $site, #[Autowire('%kernel.project_dir%/docs/PRIVACY.md')] string $file,
-        #[Autowire('%env(default::APP_SITELOG_RETENTION_DAYS)%')] ?string $siteLogDays = null): Response
+        #[Autowire('%env(default::APP_SITELOG_RETENTION)%')] ?string $siteLogRetention = null): Response
     {
         return $this->policy($site, $file, 'Privacy Policy', $site->listName . ' and your personal information: what is collected, why, who handles it and your rights.',
-            ['{{site_log_retention}}' => self::siteLogRetention($siteLogDays), '{{administrator_email}}' => $site->adminEmail], false);
+            ['{{site_log_retention}}' => self::siteLogRetention($siteLogRetention), '{{administrator_email}}' => $site->adminEmail], false);
     }
 
-    /** How long the Site Log keeps a visit, in the words of the privacy policy ("are kept …"). */
-    public static function siteLogRetention(?string $days): string
+    /** How long the Site Log keeps a visit, in the words of the privacy policy ("are kept for …"). */
+    public static function siteLogRetention(?string $setting): string
     {
-        $days = Maintenance::siteLogRetentionDays($days);
-        return $days > 0 ? 'for ' . $days . ' day' . ($days === 1 ? '' : 's') : 'with no fixed time limit';
+        return 'for ' . Maintenance::siteLogRetention($setting)->words();
     }
 
     /**

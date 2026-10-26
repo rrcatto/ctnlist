@@ -9,6 +9,7 @@ use App\CattoMail\CattoMailConfig;
 use App\Config\ConfigFingerprint;
 use App\Config\ProductionReadiness;
 use App\Config\RuntimeSettings;
+use App\Config\SettingsCatalogue;
 use App\Config\SettingsCipher;
 use App\Config\SiteConfig;
 use App\Mail\ProofMailer;
@@ -16,6 +17,7 @@ use App\Maintenance\MaintenanceActivity;
 use App\Maintenance\StuckWork;
 use App\Repository\SettingRepository;
 use App\Suppression\SuppressionChecker;
+use App\Util\Duration;
 use Doctrine\DBAL\Connection;
 use Psr\Clock\ClockInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -45,7 +47,11 @@ final class DiagnoseCommand extends Command
 {
     /** Settings ctnlist no longer reads (kept in step with bin/dev OBSOLETE_ENV). */
     public const OBSOLETE = ['MAIL_UNSUBSCRIBE_ADDRESS', 'MAIL_SMTP_SERVERS_JSON', 'MAIL_BATCH_SIZE', 'MAIL_BATCH_DELAY', 'MAIL_BOUNCE_LIMIT', 'APP_STORE_URL', 'MAIL_RATE_PER_MINUTE',
-        'APP_ADVERTISE_URL', 'APP_BOOKING_URL', 'APP_CONTACT_URL'];
+        'APP_ADVERTISE_URL', 'APP_BOOKING_URL', 'APP_CONTACT_URL', 'CATTOMAIL_TIMEOUT_SECONDS', 'CATTOMAIL_RECONCILE_AFTER_SECONDS', 'CATTOMAIL_WEBHOOK_BODY_RETENTION_DAYS',
+        'CATTOMAIL_DETAIL_RETENTION_DAYS', 'APP_SITELOG_RETENTION_DAYS'];
+
+    /** Periods read from .env only (App\Util\Duration, 1y1w1d1h1m1s); the Settings page's are the catalogue's `duration` settings. */
+    public const ENV_PERIODS = ['CATTOMAIL_TIMEOUT', 'CATTOMAIL_RECONCILE_AFTER', 'CATTOMAIL_WEBHOOK_BODY_RETENTION', 'CATTOMAIL_DETAIL_RETENTION', 'APP_SITELOG_RETENTION'];
 
     /**
      * PHP extensions ctnlist needs, and what for: exactly those `composer install --no-dev` requires, ctnlist's own
@@ -240,6 +246,24 @@ final class DiagnoseCommand extends Command
                 $say('WARN', $name . ' is set but no longer used; remove it from .env');
             }
         }
+        // A period that cannot be read falls back to its default without a word anywhere else.
+        $periods = [];
+        foreach (self::ENV_PERIODS as $name) {
+            $value = $_SERVER[$name] ?? $_ENV[$name] ?? '';
+            $periods[$name] = is_scalar($value) ? (string) $value : '';
+        }
+        foreach (SettingsCatalogue::GROUPS as $group) {
+            foreach ($group['settings'] as $name => $setting) {
+                if ($setting['type'] === 'duration') {
+                    $periods[$name] = $this->runtime->get($name);
+                }
+            }
+        }
+        foreach ($periods as $name => $value) {
+            if (trim($value) !== '' && Duration::tryParse($value) === null) {
+                $say('WARN', $name . ' is not a period (' . Duration::FORMAT . '), so its default applies');
+            }
+        }
 
         // Writable directories.
         foreach (['Symfony cache (var/cache)' => $this->cacheDir, 'Symfony logs (var/log)' => $this->logsDir, 'application logs (APP_LOG_DIR)' => $this->appLogDir,
@@ -262,8 +286,8 @@ final class DiagnoseCommand extends Command
         $maintenanceAge = $maintenance['run'] === null ? null : $this->clock->now()->getTimestamp() - (int) strtotime($maintenance['run']);
         $say($maintenanceAge !== null && $maintenanceAge < 7200 ? 'OK' : 'WARN', 'maintenance (ctnlist:maintenance, hourly): '
             . ($maintenance['run'] === null ? 'never ran' : 'last ran ' . $maintenance['run']) . ($maintenance['failed'] !== null ? ', last failure ' . $maintenance['failed'] : ''));
-        $say('OK', sprintf('reconciliation after %d s; webhook bodies kept %d days; refused content and superseded validation results kept %d days',
-            $this->cattoMail->reconcileAfterSeconds, $this->cattoMail->webhookBodyRetentionDays, $this->cattoMail->detailRetentionDays));
+        $say('OK', sprintf('reconciliation after %s; webhook bodies kept %s; refused content and superseded validation results kept %s',
+            $this->cattoMail->reconcileAfter->words(), $this->cattoMail->webhookBodyRetention->words(), $this->cattoMail->detailRetention->words()));
         if ($worker['worker_config'] !== null) {
             $worker['worker_config'] === $this->fingerprint->value() ? $say('OK', 'the worker runs with this configuration')
                 : $say('WARN', 'the worker last ran with a different configuration (installation, environment, database, base URL, catto-mail credentials or keys): '

@@ -23,8 +23,8 @@ final class SettingsFormData
             if (($setting['secret'] ?? false) && $settings->secretProblem($name) !== null) {
                 $value = '';
             } else {
-                // Numbers and switches show the value in effect; text shows its default as a placeholder.
-                $value = $settings->get($name, in_array($setting['type'], ['int', 'bool'], true) ? $default : '');
+                // Numbers, periods and switches show the value in effect; text shows its default as a placeholder.
+                $value = $settings->get($name, in_array($setting['type'], ['int', 'duration', 'bool'], true) ? $default : '');
             }
             $data[$name] = match ($setting['type']) {
                 'bool' => filter_var($value, FILTER_VALIDATE_BOOLEAN),

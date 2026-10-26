@@ -131,11 +131,11 @@ final class SettingsPageTest extends SmokeTestCase
         self::assertStringContainsString('nothing was saved', $page);
         self::assertSame('0', (string) self::value("SELECT COUNT(*) FROM options WHERE o_key LIKE 'setting:%'"), 'nothing stored');
 
-        $number = self::submitForm($admin, '/settings', 'settings_signin', ['settings_signin[AUTH_MAGIC_LINK_TTL]' => 'soon']);
-        self::assertSame(422, $number['status']);
-        self::assertMatchesRegularExpression('#id="settings_signin_AUTH_MAGIC_LINK_TTL_error1">Enter a whole number#', $number['body']);
-        $range = self::submitForm($admin, '/settings', 'settings_signin', ['settings_signin[AUTH_MAGIC_LINK_TTL]' => '10']);
-        self::assertMatchesRegularExpression('#id="settings_signin_AUTH_MAGIC_LINK_TTL_error1">Enter a whole number of at least 60#', $range['body']);
+        $period = self::submitForm($admin, '/settings', 'settings_signin', ['settings_signin[AUTH_MAGIC_LINK_TTL]' => 'soon']);
+        self::assertSame(422, $period['status']);
+        self::assertMatchesRegularExpression('#id="settings_signin_AUTH_MAGIC_LINK_TTL_error1">Write a period as years, weeks, days, hours, minutes and seconds#', $period['body']);
+        $range = self::submitForm($admin, '/settings', 'settings_signin', ['settings_signin[AUTH_MAGIC_LINK_TTL]' => '10s']);
+        self::assertMatchesRegularExpression('#id="settings_signin_AUTH_MAGIC_LINK_TTL_error1">Enter at least 1 minute \(1m\)#', $range['body']);
 
         $forged = self::submitForm($admin, '/settings', 'settings_site', ['settings_site[csrf]' => 'forged', 'settings_site[APP_LIST_NAME]' => 'Forged']);
         self::assertSame(422, $forged['status'], 'a bad CSRF token is rejected');

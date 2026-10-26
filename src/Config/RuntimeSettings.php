@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Config;
 
 use App\Repository\SettingRepository;
+use App\Util\Duration;
 use Doctrine\DBAL\Exception as DbalException;
 use Psr\Log\LoggerInterface;
 
@@ -58,6 +59,12 @@ final class RuntimeSettings
     {
         $value = $this->get($name);
         return is_numeric($value) ? (int) $value : $default;
+    }
+
+    /** A period setting (App\Util\Duration, such as 30m or 1d): $default when it is not set or is not a period. */
+    public function duration(string $name, string $default): Duration
+    {
+        return Duration::tryParse($this->get($name)) ?? Duration::parse($default);
     }
 
     /** @return array<string, mixed> the process environment with the non-secret overrides applied (for SiteConfig) */
@@ -238,7 +245,7 @@ final class RuntimeSettings
 
     /**
      * The value the setting falls back to without an override: .env, or for
-     * numbers and switches that .env leaves unset, the default
+     * numbers, periods and switches that .env leaves unset, the default
      * (text stays blank: blank already means the default).
      *
      * @param Setting $setting
@@ -246,13 +253,13 @@ final class RuntimeSettings
     private function inherited(string $name, array $setting): string
     {
         $env = $this->envValue($name);
-        return $env === '' && in_array($setting['type'], ['int', 'bool'], true) ? ($setting['default'] ?? '') : $env;
+        return $env === '' && in_array($setting['type'], ['int', 'duration', 'bool'], true) ? ($setting['default'] ?? '') : $env;
     }
 
     /**
      * The value to store from the submitted input: trimmed and normalised,
-     * with defaults for empty numbers and switches. Input rules (email, URL,
-     * ranges, host and port syntax) are enforced by the Settings form
+     * with defaults for empty numbers, periods and switches. Input rules (email, URL,
+     * ranges, periods, host and port syntax) are enforced by the Settings form
      * (App\Form\Settings\SettingConstraints) before save() is called.
      *
      * @param Setting $setting
@@ -262,7 +269,7 @@ final class RuntimeSettings
     {
         $raw = $input[$name] ?? '';
         $value = is_scalar($raw) ? trim((string) $raw) : '';
-        if ($value === '' && isset($setting['default']) && in_array($setting['type'], ['int', 'bool'], true)) {
+        if ($value === '' && isset($setting['default']) && in_array($setting['type'], ['int', 'duration', 'bool'], true)) {
             $value = $setting['default'];
         }
         return match ($setting['type']) {

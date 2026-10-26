@@ -11,7 +11,7 @@ use Psr\Clock\ClockInterface;
 /**
  * What counts as stuck: work the worker (every minute) should have moved on
  * long ago. The threshold follows the installation's own reconciliation
- * interval: twice CATTOMAIL_RECONCILE_AFTER_SECONDS, at least ten minutes.
+ * interval: twice CATTOMAIL_RECONCILE_AFTER, at least ten minutes.
  * A job that is merely slow at catto-mail (a dispatched job waiting days for
  * final bounce knowledge) is not stuck as long as ctnlist keeps checking it.
  *
@@ -34,7 +34,7 @@ final class StuckWork
     /** Seconds after which work is stuck. */
     public function threshold(): int
     {
-        return max(600, 2 * $this->config->reconcileAfterSeconds);
+        return max(600, 2 * $this->config->reconcileAfter->seconds());
     }
 
     public function staleBefore(): string

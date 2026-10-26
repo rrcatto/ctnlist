@@ -311,8 +311,8 @@ final class CattoMailClient
         }
         $options = [
             'headers' => ['Accept' => 'application/json, application/problem+json'],
-            'timeout' => $this->config->timeoutSeconds,
-            'max_duration' => $this->config->timeoutSeconds * 2,
+            'timeout' => (float) $this->config->timeout->seconds(),
+            'max_duration' => (float) (2 * $this->config->timeout->seconds()),
             'max_redirects' => 0,
             'query' => $query,
         ];

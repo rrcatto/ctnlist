@@ -44,6 +44,7 @@ services:
             - '../src/Config/SettingsCipherException.php'
             - '../src/Subscriber/ProfileImage.php'
             - '../src/Queue/QueueRowClaimed.php'
+            - '../src/Util/Duration.php'
             # Validation constraints and the data objects Symfony forms edit.
             - '../src/Validator/'
             - '../src/Form/Model/'

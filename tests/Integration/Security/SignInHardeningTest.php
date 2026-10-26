@@ -23,8 +23,8 @@ final class SignInHardeningTest extends IntegrationTestCase
     public function testTheLoginPageAndEmailStateTheConfiguredLifetime(): void
     {
         // A Settings override, set before anything reads the settings in this request cycle.
-        $this->service(SettingRepository::class)->set('AUTH_MAGIC_LINK_TTL', '7200', false, null);
-        self::assertSame(7200, $this->service(MagicLinkRequester::class)->lifetimeSeconds(), 'the value authentication uses');
+        $this->service(SettingRepository::class)->set('AUTH_MAGIC_LINK_TTL', '2h', false, null);
+        self::assertSame(7200, $this->service(MagicLinkRequester::class)->lifetime()->seconds(), 'the value authentication uses');
         self::assertStringContainsString('valid for 2 hours', $this->get('/login'));
         self::assertStringNotContainsString('30 minutes', $this->get('/login'));
 

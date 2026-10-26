@@ -63,9 +63,9 @@ final class TransactionalMailer
      * subscription ($confirmListName), the email says so: the link is the same
      * secure sign-in link and leads to that list's confirmation.
      */
-    public function sendMagicLink(string $toEmail, string $subscriberUuid, string $loginUrl, int $ttlSeconds, ?string $confirmListName = null): bool
+    public function sendMagicLink(string $toEmail, string $subscriberUuid, string $loginUrl, Duration $lifetime, ?string $confirmListName = null): bool
     {
-        $lifetime = Duration::describe($ttlSeconds);
+        $expiresIn = $lifetime->words();
         $list = $this->site->listName;
         if ($confirmListName !== null) {
             $subject = 'Confirm your subscription to ' . $confirmListName;
@@ -78,10 +78,10 @@ final class TransactionalMailer
         }
         $html = '<p>' . self::e($intro) . '</p>'
             . '<p><a href="' . self::e($loginUrl) . '">' . self::e($action) . '</a></p>'
-            . '<p>This link expires in ' . $lifetime . ' and can be used only once.</p>'
+            . '<p>This link expires in ' . $expiresIn . ' and can be used only once.</p>'
             . '<p>If you did not request this link, you can ignore this email.</p>';
         $text = "{$intro}\n\n{$loginUrl}\n\n"
-            . "This link expires in {$lifetime} and can be used only once.\n"
+            . "This link expires in {$expiresIn} and can be used only once.\n"
             . "If you did not request this link, you can ignore this email.\n";
         return $this->sendPlain($toEmail, $subject, $html, $text, 'MAGIC-LINK', '', $subscriberUuid);
     }

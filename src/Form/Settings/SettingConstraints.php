@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Form\Settings;
 
+use App\Validator\DurationSetting;
 use App\Validator\EmailAddress;
 use App\Validator\HostName;
 use App\Validator\Port;
@@ -36,6 +37,7 @@ final class SettingConstraints
             'email' => [new EmailAddress()],
             'url' => [new WebAddress()],
             'int' => [new WholeNumber(min: $setting['min'] ?? null)],
+            'duration' => [new DurationSetting(shortest: $setting['shortest'] ?? null), $singleLine],
             'text' => [new Assert\Length(max: 2000), $singleLine],
             'textarea' => [new Assert\Length(max: 2000)],
             default => [],

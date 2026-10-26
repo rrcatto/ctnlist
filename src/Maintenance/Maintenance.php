@@ -7,6 +7,7 @@ namespace App\Maintenance;
 use App\CattoMail\CattoMailConfig;
 use App\Config\RuntimeSettings;
 use App\Repository\CattoMailWebhookRepository;
+use App\Util\Duration;
 use Doctrine\DBAL\Connection;
 use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
@@ -26,16 +27,17 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  *   loses its CSRF token first (PHP's own session garbage collection is off:
  *   framework.yaml, so php.ini plays no part);
  * - raw bodies of webhook events processed more than
- *   CATTOMAIL_WEBHOOK_BODY_RETENTION_DAYS ago (the event rows, outcomes and
+ *   CATTOMAIL_WEBHOOK_BODY_RETENTION ago (the event rows, outcomes and
  *   references stay; unprocessed events are never touched);
  * - rendered content of recipients of refused or cancelled send jobs older
- *   than CATTOMAIL_DETAIL_RETENTION_DAYS (never retried with that body; a
+ *   than CATTOMAIL_DETAIL_RETENTION (never retried with that body; a
  *   requeue renders again);
  * - per-address validation results superseded by a newer result for the
- *   same subscriber, from jobs finished more than CATTOMAIL_DETAIL_RETENTION_DAYS
+ *   same subscriber, from jobs finished more than CATTOMAIL_DETAIL_RETENTION
  *   ago (job counts and every subscriber's latest result stay);
- * - Site Log rows older than APP_SITELOG_RETENTION_DAYS (SITELOG_RETENTION_DAYS
- *   when it is not set; 0 keeps the Site Log, as v5 did).
+ * - Site Log rows older than APP_SITELOG_RETENTION (SITELOG_RETENTION when it
+ *   is not set or is not a period, at least SITELOG_RETENTION_SHORTEST).
+ * The periods are App\Util\Duration's (1y1w1d1h1m1s), years calendar years.
  *
  * Never touched: subscribers, consent and membership history, suppression,
  * the Send Log, smlog, send runs/jobs/recipient outcomes, idempotency keys
@@ -49,8 +51,10 @@ final class Maintenance
 {
     public const BATCH = 1000;
     public const MAX_BATCHES = 50;
-    /** How long the Site Log keeps a visit when APP_SITELOG_RETENTION_DAYS is not set (it holds IP addresses). */
-    public const SITELOG_RETENTION_DAYS = 120;
+    /** How long the Site Log keeps a visit when APP_SITELOG_RETENTION is not set (it holds IP addresses)… */
+    public const SITELOG_RETENTION = '120d';
+    /** … and at least, since the Site Log is the record of who used the site (the owner: keeping none is not a good idea). */
+    public const SITELOG_RETENTION_SHORTEST = '1w';
 
     private int $batch = self::BATCH;
     private int $maxBatches = self::MAX_BATCHES;
@@ -65,14 +69,14 @@ final class Maintenance
         private readonly MaintenanceActivity $activity,
         private readonly ClockInterface $clock,
         private readonly LoggerInterface $logger,
-        #[Autowire('%env(default::APP_SITELOG_RETENTION_DAYS)%')] private readonly ?string $siteLogRetention = null,
+        #[Autowire('%env(default::APP_SITELOG_RETENTION)%')] private readonly ?string $siteLogRetention = null,
     ) {
     }
 
-    /** The days the Site Log keeps a visit for APP_SITELOG_RETENTION_DAYS: the default when it is not set, 0 for no limit. */
-    public static function siteLogRetentionDays(?string $setting): int
+    /** How long the Site Log keeps a visit for the value of APP_SITELOG_RETENTION. */
+    public static function siteLogRetention(?string $setting): Duration
     {
-        return is_numeric($setting) ? max(0, (int) $setting) : self::SITELOG_RETENTION_DAYS;
+        return Duration::setting($setting, self::SITELOG_RETENTION, self::SITELOG_RETENTION_SHORTEST);
     }
 
     /** Smaller batches (tests); never above BATCH rows per statement. */
@@ -121,12 +125,13 @@ final class Maintenance
     private function tasks(): array
     {
         $now = $this->now();
-        $rateWindow = max($this->settings->int('AUTH_MAGIC_LINK_EMAIL_WINDOW', 900), $this->settings->int('AUTH_MAGIC_LINK_IP_WINDOW', 3600));
+        $seconds = fn(string $name, string $default): int => $this->settings->duration($name, $default)->seconds();
+        $rateWindow = max($seconds('AUTH_MAGIC_LINK_EMAIL_WINDOW', '15m'), $seconds('AUTH_MAGIC_LINK_IP_WINDOW', '1h'));
         $linkKeep = $this->ago($rateWindow);
-        $sessionCutoff = time() - max($this->settings->int('AUTH_SESSION_TTL', 86400), $this->settings->int('AUTH_MAGIC_LINK_TTL', 1800));
-        $bodyCutoff = $this->ago($this->config->webhookBodyRetentionDays * 86400);
-        $detailCutoff = $this->ago($this->config->detailRetentionDays * 86400);
-        $siteLogDays = self::siteLogRetentionDays($this->siteLogRetention);
+        $sessionCutoff = time() - max($seconds('AUTH_SESSION_TTL', '1d'), $seconds('AUTH_MAGIC_LINK_TTL', '30m'));
+        $bodyCutoff = $this->before($this->config->webhookBodyRetention);
+        $detailCutoff = $this->before($this->config->detailRetention);
+        $siteCutoff = $this->before(self::siteLogRetention($this->siteLogRetention));
 
         $links = "FROM auth_login_tokens WHERE (alt_expires_at < :now OR alt_used_at IS NOT NULL) AND alt_created_at < :keep";
         $sessions = 'FROM auth_sessions WHERE as_expires_at < :now OR as_revoked_at IS NOT NULL';
@@ -175,14 +180,11 @@ final class Maintenance
                 fn(): int => (int) $this->db->fetchOne("SELECT COUNT(*) {$superseded}", ['cutoff' => $detailCutoff]),
             ],
         ];
-        if ($siteLogDays > 0) {
-            $siteCutoff = $this->ago($siteLogDays * 86400);
-            $tasks['Site Log rows removed'] = [
-                fn(int $n): int => (int) $this->db->executeStatement(
-                    "DELETE FROM sitelog WHERE stl_id IN (SELECT stl_id FROM sitelog WHERE stl_logged_at < :cutoff ORDER BY stl_id LIMIT {$n})", ['cutoff' => $siteCutoff]),
-                fn(): int => (int) $this->db->fetchOne('SELECT COUNT(*) FROM sitelog WHERE stl_logged_at < :cutoff', ['cutoff' => $siteCutoff]),
-            ];
-        }
+        $tasks['Site Log rows removed'] = [
+            fn(int $n): int => (int) $this->db->executeStatement(
+                "DELETE FROM sitelog WHERE stl_id IN (SELECT stl_id FROM sitelog WHERE stl_logged_at < :cutoff ORDER BY stl_id LIMIT {$n})", ['cutoff' => $siteCutoff]),
+            fn(): int => (int) $this->db->fetchOne('SELECT COUNT(*) FROM sitelog WHERE stl_logged_at < :cutoff', ['cutoff' => $siteCutoff]),
+        ];
         return $tasks;
     }
 
@@ -208,5 +210,10 @@ final class Maintenance
     private function ago(int $seconds): string
     {
         return $this->clock->now()->modify('-' . $seconds . ' seconds')->format('Y-m-d H:i:s');
+    }
+
+    private function before(Duration $period): string
+    {
+        return $period->before($this->clock->now())->format('Y-m-d H:i:s');
     }
 }

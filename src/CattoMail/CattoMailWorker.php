@@ -25,7 +25,7 @@ use Psr\Log\LoggerInterface;
  * 4. submits validation jobs not yet accepted;
  * 5. reconciles by polling: send jobs and validation jobs without a final
  *    state (or with results still to fetch) whose last check is older than
- *    CATTOMAIL_RECONCILE_AFTER_SECONDS (GET /v1/send-jobs/{id} and messages,
+ *    CATTOMAIL_RECONCILE_AFTER (GET /v1/send-jobs/{id} and messages,
  *    GET /v1/validation-jobs/{id} and results).
  *
  * Webhooks are the primary path; this pass is the safety net. Only one
@@ -106,7 +106,7 @@ final class CattoMailWorker
         foreach ($this->validations->unsubmitted() as $job) {
             $report['validation jobs submitted'] += $this->attempt(fn() => $this->validation->submit($job)) ? 1 : 0;
         }
-        $before = $now->modify('-' . $this->config->reconcileAfterSeconds . ' seconds')->format('Y-m-d H:i:s');
+        $before = $now->modify('-' . $this->config->reconcileAfter->seconds() . ' seconds')->format('Y-m-d H:i:s');
         $report['send jobs reconciled'] = 0;
         foreach ($this->outbox->unresolvedJobs($before) as $job) {
             $report['send jobs reconciled'] += $this->attempt(fn() => $this->sendSync->reconcile($job)) ? 1 : 0;

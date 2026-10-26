@@ -10,6 +10,7 @@ use App\Mail\MailConnectionFactory;
 use App\Mail\SmtpServerPool;
 use App\Mail\TransactionalMailer;
 use App\Tests\Integration\IntegrationTestCase;
+use App\Util\Duration;
 use Symfony\Component\Mime\Email;
 
 final class MailerTest extends IntegrationTestCase
@@ -32,13 +33,13 @@ final class MailerTest extends IntegrationTestCase
         $mailer = $this->service(TransactionalMailer::class);
         $uuid = $this->subscriberUuid($this->createSubscriber('jane@example.com'));
 
-        self::assertTrue($mailer->sendMagicLink('jane@example.com', $uuid, 'https://x/auth/verify?token=t', 1800));
+        self::assertTrue($mailer->sendMagicLink('jane@example.com', $uuid, 'https://x/auth/verify?token=t', Duration::parse('30m')));
         self::assertStringContainsString('expires in 30 minutes', (string) $this->email()->getTextBody());
         self::assertStringContainsString('then press Sign in on the page it opens. Opening the link alone does not sign you in.', (string) $this->email()->getTextBody(), 'the link opens a page; its button signs in');
         self::assertStringContainsString('sign-in link', (string) $this->email()->getSubject());
         self::assertSame(['MAGIC-LINK', ''], $this->lastSendLog());
 
-        self::assertTrue($mailer->sendMagicLink('jane@example.com', $uuid, 'https://x/auth/verify?token=t', 1800, 'News & views'));
+        self::assertTrue($mailer->sendMagicLink('jane@example.com', $uuid, 'https://x/auth/verify?token=t', Duration::parse('30m'), 'News & views'));
         self::assertSame('Confirm your subscription to News & views', $this->email(1)->getSubject(), 'says why it was sent');
         self::assertStringContainsString('confirm your subscription to News &amp; views', (string) $this->email(1)->getHtmlBody());
         self::assertStringNotContainsString('Sign in', (string) $this->email(1)->getTextBody());
@@ -106,7 +107,7 @@ final class MailerTest extends IntegrationTestCase
             $this->service(SendLog::class),
             $site,
         );
-        self::assertFalse($mailer->sendMagicLink('jane@example.com', '', 'https://x', 60));
+        self::assertFalse($mailer->sendMagicLink('jane@example.com', '', 'https://x', Duration::parse('1m')));
         self::assertEmailCount(0);
         self::assertSame(0, (int) $this->db->fetchOne('SELECT COUNT(*) FROM sendlog'));
     }

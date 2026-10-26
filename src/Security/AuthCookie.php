@@ -25,7 +25,7 @@ final class AuthCookie
 {
     private const TOKEN_PATTERN = '/^[A-Za-z0-9_-]{43}$/';
 
-    /** Session lifetime in seconds (AUTH_SESSION_TTL, may be overridden in Settings). */
+    /** Session lifetime in seconds (the period AUTH_SESSION_TTL, may be overridden in Settings). */
     public readonly int $ttl;
 
     public function __construct(
@@ -33,7 +33,7 @@ final class AuthCookie
         RuntimeSettings $settings,
         private readonly SiteConfig $site,
     ) {
-        $this->ttl = $settings->int('AUTH_SESSION_TTL', 86400);
+        $this->ttl = $settings->duration('AUTH_SESSION_TTL', '1d')->seconds();
     }
 
     private function secure(Request $request): bool
