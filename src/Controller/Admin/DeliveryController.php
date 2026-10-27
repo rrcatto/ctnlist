@@ -13,6 +13,7 @@ use App\CattoMail\ConnectFlow;
 use App\CattoMail\ConnectionStore;
 use App\CattoMail\GlobalOptOut;
 use App\CattoMail\SendingDomainCheck;
+use App\CattoMail\SendingSetup;
 use App\CattoMail\SendJobAdmin;
 use App\CattoMail\SendJobSync;
 use App\CattoMail\WebhookProcessor;
@@ -35,6 +36,7 @@ use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Security\Http\Attribute\CurrentUser;
 use Symfony\Component\Security\Http\Attribute\IsCsrfTokenValid;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
@@ -75,7 +77,7 @@ final class DeliveryController extends AbstractController
     public function index(CattoMailConfig $config, CattoMailHealth $health, CattoMailActivity $activity, CattoMailStatusRepository $status,
         CattoMailWebhookRepository $webhooks, Request $request, StuckWork $stuck, MaintenanceActivity $maintenance, CattoMailOptOutRepository $optOuts,
         ConfigFingerprint $fingerprint, ConnectFlow $connect, ConnectionStore $connection, SendingDomainCheck $domains, #[CurrentUser] SubscriberUser $user,
-        ProofMailer $proofs): Response
+        ProofMailer $proofs, SendingSetup $setup): Response
     {
         $muid = trim($request->query->getString('m'));
         if ($muid !== '') {
@@ -101,7 +103,13 @@ final class DeliveryController extends AbstractController
             // Connecting and disconnecting are for administrators only (DeliveryConnectionController).
             'is_administrator' => $user->isAdministrator(),
             'connect_obstacle' => $connect->obstacle(),
-            'connect_form' => $user->isAdministrator() ? $this->createForm(MailServiceType::class, ['service' => $stored['service'] ?? ''])->createView() : null,
+            'connect_form' => $user->isAdministrator() ? $this->createForm(MailServiceType::class, null, ['ask_address' => $connect->address() === ''])->createView() : null,
+            // The mail service's address (owner decision 2026-10-27): .env, the Settings page, or the connection.
+            'address' => $connect->address(),
+            'address_source' => $config->source('base_url'),
+            'sending_setup_done' => $setup->complete(),
+            // The From domain's page at the mail service (its DNS records), with the way back here.
+            'domain_steps' => self::withBack($domains->fromAddress()['setup_url'], $this->generateUrl('admin_delivery', [], UrlGeneratorInterface::ABSOLUTE_URL)),
             'api_root' => trim($config->baseUrl) === '' ? '' : self::withoutCredentials($config->apiRoot()),
             'connect_host' => $config->connectHost,
             'ca_file' => $config->caFile !== '',
@@ -228,6 +236,12 @@ final class DeliveryController extends AbstractController
             throw $this->createNotFoundException($e->getMessage(), $e);
         }
         return $this->redirectAfterAction($request, 'admin_delivery');
+    }
+
+    /** A mail service page (a domain's DNS steps) with `back`: the address of the page to return to. '' when there is no page. */
+    public static function withBack(string $page, string $back): string
+    {
+        return $page === '' ? '' : $page . (str_contains($page, '?') ? '&' : '?') . http_build_query(['back' => $back], '', '&', PHP_QUERY_RFC3986);
     }
 
     /** Shown on the page: never user:password@ in a URL, however it was configured. */

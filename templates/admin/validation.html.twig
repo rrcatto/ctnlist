@@ -4,7 +4,7 @@
 {% block title %}Address validation{% endblock %}
 
 {% block content %}
-{% include 'layout/_page_header.html.twig' with {title: 'Address validation', description: 'catto-mail checks addresses for syntax, mail domains and SMTP acceptance. The results are information only: they never change a subscriber, a suggested correction is never applied, and a deliverable address says nothing about consent.'} %}
+{% include 'layout/_page_header.html.twig' with {title: 'Address validation', description: 'The mail service checks whether addresses can receive mail: that each is well formed, that its domain takes mail, and that the receiving server accepts it. The results are information only: they never change a subscriber, a suggested correction is never applied, and a deliverable address says nothing about consent.'} %}
 
 {% if problem %}<div class="alert theme-warning" role="note"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div>{{ problem }}</div></div>{% endif %}
 
@@ -14,7 +14,19 @@
       <div class="card-header fw-semibold">Validate addresses</div>
       <div class="card-body">
         {{ form_errors(form) }}
-        {{ form_row(form.listId, {row_attr: {class: 'mb-0'}}) }}
+        {{ form_row(form.listId) }}
+        <fieldset>
+          <legend class="form-label fs-md fw-normal">{{ form.members.vars.label }}</legend>
+          {{ form_errors(form.members) }}
+          {% for choice in form.members %}
+            <div class="mb-3">
+              {# One choice is always ticked, so the choices carry no required marker. #}
+              {{ form_widget(choice, {required: false, attr: {'aria-describedby': choice.vars.id ~ '_help'}}) }}
+              <div class="form-text mt-0 ms-7" id="{{ choice.vars.id }}_help">{{ members[choice.vars.value][1] }}</div>
+            </div>
+          {% endfor %}
+          {% do form.members.setRendered %}
+        </fieldset>
       </div>
       <div class="card-footer"><button class="btn-solid theme-primary" type="submit"{{ problem ? ' disabled' }}><i class="bi bi-patch-check me-1" aria-hidden="true"></i>Start validation</button></div>
     {{ form_end(form) }}

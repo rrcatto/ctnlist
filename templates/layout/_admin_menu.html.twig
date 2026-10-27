@@ -5,48 +5,50 @@
   permissions through AclVoter). This only hides links: the controllers still
   enforce the permissions. A group with one visible item becomes a plain link.
   `routes` lists the pages that highlight the group; an item with `badge`
-  also shows its counter on the group.
+  also shows its counter on the group. Every group and every item has its own
+  Bootstrap Icons icon (`icon`, decorative: the label names the link).
 #}
 {% set admin_groups = [
   {label: 'Messages', icon: 'envelope', routes: ['admin_messages', 'admin_message', 'admin_proof', 'report_message_views', 'message_forward_admin'], items: [
-    {label: 'All messages', route: 'admin_messages', permission: 'messages.manage', counter: 'messages'},
-    {label: 'New message', route: 'admin_message', permission: 'messages.manage'},
+    {label: 'All messages', icon: 'inboxes', route: 'admin_messages', permission: 'messages.manage', counter: 'messages'},
+    {label: 'New message', icon: 'envelope-plus', route: 'admin_message', permission: 'messages.manage'},
   ]},
   {label: 'Templates', icon: 'file-earmark-text', routes: ['admin_templates', 'admin_template'], items: [
-    {label: 'All templates', route: 'admin_templates', permission: 'templates.manage', counter: 'templates'},
-    {label: 'New template', route: 'admin_template', permission: 'templates.manage'},
+    {label: 'All templates', icon: 'files', route: 'admin_templates', permission: 'templates.manage', counter: 'templates'},
+    {label: 'New template', icon: 'file-earmark-plus', route: 'admin_template', permission: 'templates.manage'},
   ]},
   {label: 'Sending', icon: 'send', routes: ['admin_queue', 'admin_queue_message', 'admin_queue_rotation', 'admin_queue_process', 'admin_queue_sending', 'admin_queue_stop'], items: [
-    {label: 'Queue', route: 'admin_queue', permission: 'queue.process', counter: 'queue', badge: true},
-    {label: 'Queue multiple messages', route: 'admin_queue_rotation', permission: 'messages.queue'},
-    {label: 'Start sending', route: 'admin_queue_process', permission: 'queue.process'},
-    {label: 'Sending progress', route: 'admin_queue_sending', permission: 'queue.process'},
-    {label: 'Stop sending', route: 'admin_queue_stop', permission: 'queue.process'},
+    {label: 'Queue', icon: 'hourglass-split', route: 'admin_queue', permission: 'queue.process', counter: 'queue', badge: true},
+    {label: 'Queue multiple messages', icon: 'layers', route: 'admin_queue_rotation', permission: 'messages.queue'},
+    {label: 'Start sending', icon: 'play-circle', route: 'admin_queue_process', permission: 'queue.process'},
+    {label: 'Sending progress', icon: 'activity', route: 'admin_queue_sending', permission: 'queue.process'},
+    {label: 'Stop sending', icon: 'stop-circle', route: 'admin_queue_stop', permission: 'queue.process'},
   ]},
   {label: 'Subscribers', icon: 'people', routes: ['admin_subscribers', 'admin_subscribers_active', 'admin_subscriber', 'admin_bulk_subscribe', 'admin_bulk_unsubscribe', 'admin_import', 'admin_export', 'admin_sync', 'admin_validation', 'admin_validation_job'], items: [
-    {label: 'All subscribers', route: 'admin_subscribers', permission: 'subscribers.view', counter: 'subscribers'},
-    {label: 'Active readers', route: 'admin_subscribers_active', permission: 'subscribers.view', counter: 'activeReaders'},
-    {label: 'Bulk subscribe', route: 'admin_bulk_subscribe', permission: 'subscribers.manage'},
-    {label: 'Bulk unsubscribe', route: 'admin_bulk_unsubscribe', permission: 'subscribers.manage'},
-    {label: 'Import', route: 'admin_import', permission: 'subscribers.manage'},
-    {label: 'Export', route: 'admin_export', permission: 'subscribers.manage'},
-    {label: 'Synchronise', route: 'admin_sync', permission: 'subscribers.manage'},
-    {label: 'Address validation', route: 'admin_validation', permission: 'subscribers.manage'},
+    {label: 'All subscribers', icon: 'person-lines-fill', route: 'admin_subscribers', permission: 'subscribers.view', counter: 'subscribers'},
+    {label: 'Active readers', icon: 'person-check', route: 'admin_subscribers_active', permission: 'subscribers.view', counter: 'activeReaders'},
+    {label: 'Bulk subscribe', icon: 'person-plus', route: 'admin_bulk_subscribe', permission: 'subscribers.manage'},
+    {label: 'Bulk unsubscribe', icon: 'person-dash', route: 'admin_bulk_unsubscribe', permission: 'subscribers.manage'},
+    {label: 'Import', icon: 'upload', route: 'admin_import', permission: 'subscribers.manage'},
+    {label: 'Export', icon: 'download', route: 'admin_export', permission: 'subscribers.manage'},
+    {label: 'Synchronise', icon: 'arrow-repeat', route: 'admin_sync', permission: 'subscribers.manage'},
+    {label: 'Address validation', icon: 'patch-check', route: 'admin_validation', permission: 'subscribers.manage'},
   ]},
   {label: 'Lists', icon: 'list-ul', routes: ['admin_lists'], items: [
-    {label: 'Lists', route: 'admin_lists', permission: 'lists.manage'},
+    {label: 'Lists', icon: 'list-ul', route: 'admin_lists', permission: 'lists.manage'},
   ]},
   {label: 'Reports', icon: 'bar-chart', routes: ['report_sendlog', 'report_sitelog', 'report_flagged'], items: [
-    {label: 'Send Log', route: 'report_sendlog', permission: 'logs.view', counter: 'sendlog'},
-    {label: 'Site Log', route: 'report_sitelog', permission: 'logs.view'},
-    {label: 'Flagged activity', route: 'report_flagged', permission: 'logs.view', counter: 'flagged'},
+    {label: 'Send Log', icon: 'journal-text', route: 'report_sendlog', permission: 'logs.view', counter: 'sendlog'},
+    {label: 'Site Log', icon: 'globe2', route: 'report_sitelog', permission: 'logs.view'},
+    {label: 'Flagged activity', icon: 'flag', route: 'report_flagged', permission: 'logs.view', counter: 'flagged'},
   ]},
   {label: 'Roles & ACL', icon: 'shield-lock', routes: ['admin_roles', 'admin_role'], items: [
-    {label: 'Roles & ACL', route: 'admin_roles', permission: 'roles.manage'},
+    {label: 'Roles & ACL', icon: 'shield-lock', route: 'admin_roles', permission: 'roles.manage'},
   ]},
-  {label: 'Settings', icon: 'sliders', routes: ['admin_settings', 'admin_delivery', 'admin_delivery_message', 'admin_delivery_job', 'admin_delivery_recipient'], items: [
-    {label: 'Settings', route: 'admin_settings', permission: 'settings.manage'},
-    {label: 'Delivery (catto-mail)', route: 'admin_delivery', permission: 'logs.view'},
+  {label: 'Settings', icon: 'sliders', routes: ['admin_settings', 'admin_sending_setup', 'admin_delivery', 'admin_delivery_message', 'admin_delivery_job', 'admin_delivery_recipient'], items: [
+    {label: 'Settings', icon: 'gear', route: 'admin_settings', permission: 'settings.manage'},
+    {label: 'Set up sending', icon: 'list-check', route: 'admin_sending_setup', permission: 'settings.manage'},
+    {label: 'Delivery (catto-mail)', icon: 'truck', route: 'admin_delivery', permission: 'logs.view'},
   ]},
 ] %}
 {% set route = app.request.attributes.get('_route') %}
@@ -79,7 +81,7 @@
             {% if group.items|length == 1 %}
               {% set item = group.items|first %}
               <li class="nav-item">
-                <a class="nav-link{{ group_active ? ' active' }}" href="{{ path(item.route) }}"{% if route == item.route %} aria-current="page"{% endif %}><i class="bi bi-{{ group.icon }}" aria-hidden="true"></i>{{ item.label }}</a>
+                <a class="nav-link{{ group_active ? ' active' }}" href="{{ path(item.route) }}"{% if route == item.route %} aria-current="page"{% endif %}><i class="bi bi-{{ item.icon }}" aria-hidden="true"></i>{{ item.label }}</a>
               </li>
             {% else %}
               {% set menu_id = 'admin-menu-' ~ loop.index %}
@@ -95,7 +97,7 @@
                 <div class="menu" aria-labelledby="{{ menu_id }}">
                   {% for item in group.items %}
                     <a class="menu-item justify-content-between{{ route == item.route ? ' active' }}" href="{{ path(item.route) }}"{% if route == item.route %} aria-current="page"{% endif %}>
-                      <span>{{ item.label }}</span>
+                      <span><i class="bi bi-{{ item.icon }} me-2" aria-hidden="true"></i>{{ item.label }}</span>
                       {% if item.counter is defined %}<span class="badge rounded-pill badge-subtle theme-secondary">{{ attribute(counters, item.counter) }}</span>{% endif %}
                     </a>
                   {% endfor %}

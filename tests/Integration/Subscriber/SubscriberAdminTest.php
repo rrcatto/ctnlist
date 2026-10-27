@@ -25,15 +25,15 @@ final class SubscriberAdminTest extends IntegrationTestCase
         $this->db->executeStatement('UPDATE list_subscribers SET ls_confirmed = TRUE WHERE ls_l_id = ?', [$news]);
         self::assertSame(1, $admin->bulkUnsubscribe('a@example.com unknown@example.com', $news, 'Bulk unsubscribe', 'list'));
         self::assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM list_subscribers WHERE ls_l_id = ? AND ls_unsubscribed', [$news]));
+        // Without a suppression database the other scopes are blocks kept by the mail service (here
+        // not connected: pending until the worker can report them), which stop the addresses here at once.
         foreach (['domain', 'bounce', 'spam'] as $scope) {
-            try {
-                $admin->bulkUnsubscribe('a@example.com', $news, '', $scope);
-                self::fail($scope . ': nothing can be recorded without a suppression database, and the administrator is told so');
-            } catch (InvalidField $e) {
-                self::assertSame('scope', $e->field);
-                self::assertStringContainsString('keeps no global suppression list', $e->getMessage());
-            }
+            self::assertSame(1, $admin->bulkUnsubscribe('b@example.com', $news, '', $scope), $scope);
         }
+        self::assertSame([['address', 'b@example.com', 'pending'], ['domain', 'example.com', 'pending']],
+            array_map(static fn(array $r): array => array_values($r), $this->db->fetchAllAssociative('SELECT cbl_scope, cbl_value, cbl_status FROM cattomail_blocks ORDER BY cbl_scope, cbl_value')));
+        self::assertSame(0, (int) $this->db->fetchOne("SELECT COUNT(*) FROM list_subscribers ls JOIN subscribers s ON s.s_id = ls.ls_s_id WHERE s.s_email = 'b@example.com' AND NOT ls.ls_unsubscribed"),
+            'a blocked address leaves every list');
 
         $this->expectException(\InvalidArgumentException::class);
         $admin->bulkUnsubscribe('a@example.com', 999999, '', 'list');

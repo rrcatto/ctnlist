@@ -149,6 +149,27 @@ final class CattoMailClient
         return $this->request('POST', '/global-suppressions/' . self::id($id) . '/lift');
     }
 
+    // ---- the account's blocks (catto-mail 2.13: an address or a whole domain, this account's mail only) ----
+
+    /**
+     * @param 'address'|'domain' $scope
+     * @return array<string, mixed> the AccountBlock (201 created, or 200 when the value was already blocked)
+     */
+    public function createBlock(string $idempotencyKey, string $scope, string $value, string $externalReference): array
+    {
+        return $this->request('POST', '/blocks', [$scope => $value, 'external_reference' => $externalReference], $idempotencyKey);
+    }
+
+    /**
+     * Naturally idempotent.
+     *
+     * @return array<string, mixed> the AccountBlock, lifted
+     */
+    public function liftBlock(string $id): array
+    {
+        return $this->request('POST', '/blocks/' . self::id($id) . '/lift');
+    }
+
     // ---- connection (catto-mail's connect flow; integration guide, section 15) ----
 
     /**
@@ -178,7 +199,7 @@ final class CattoMailClient
     /**
      * The client's sending domains and whether each can send now.
      *
-     * @return list<array{domain: string, status: string, dkim_status: string, can_send: bool}>
+     * @return list<array{domain: string, status: string, dkim_status: string, can_send: bool, setup_url: string}>
      */
     public function listSendingDomains(): array
     {
@@ -186,17 +207,21 @@ final class CattoMailClient
     }
 
     /**
-     * The SendingDomain items of an API answer, reduced to what ctnlist reads.
+     * The SendingDomain items of an API answer, reduced to what ctnlist reads. `setup_url` (OpenAPI
+     * 1.0.0-draft.11) is the page of the mail service's dashboard where the domain's DNS records are
+     * published; '' when the answer has none or it is not an http(s) address.
      *
-     * @return list<array{domain: string, status: string, dkim_status: string, can_send: bool}>
+     * @return list<array{domain: string, status: string, dkim_status: string, can_send: bool, setup_url: string}>
      */
     public static function sendingDomains(mixed $items): array
     {
         $domains = [];
         foreach (is_array($items) ? $items : [] as $item) {
             if (is_array($item) && is_string($item['domain'] ?? null) && $item['domain'] !== '') {
+                $setup = is_string($item['setup_url'] ?? null) ? trim($item['setup_url']) : '';
                 $domains[] = ['domain' => strtolower($item['domain']), 'status' => (string) ($item['status'] ?? ''), 'dkim_status' => (string) ($item['dkim_status'] ?? ''),
-                    'can_send' => ($item['can_send'] ?? false) === true];
+                    'can_send' => ($item['can_send'] ?? false) === true,
+                    'setup_url' => preg_match('#^https?://[^\s/@]+(/[^\s]*)?$#i', $setup) === 1 ? $setup : ''];
             }
         }
         return $domains;

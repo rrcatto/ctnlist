@@ -48,17 +48,17 @@ final class AddressValidationController extends AbstractController
     public function index(Request $request, AddressValidation $validation, CattoMailConfig $config, #[CurrentUser] SubscriberUser $user, int $page = 1): Response
     {
         $lists = $this->lists->all();
-        $form = $this->createForm(ValidationRequestType::class, ['listId' => $lists[0]['l_id'] ?? null], ['lists' => $lists]);
+        $form = $this->createForm(ValidationRequestType::class, ['listId' => $lists[0]['l_id'] ?? null, 'members' => 'confirmed'], ['lists' => $lists]);
         $form->handleRequest($request);
         if ($form->isSubmitted() && $form->isValid()) {
-            /** @var array{listId: int} $data */
+            /** @var array{listId: int, members: string} $data */
             $data = $form->getData();
             $list = $this->lists->findById($data['listId']);
             try {
-                $ids = $list === null ? [] : $validation->createForList($list['l_id'], $list['l_name'], $user->id);
+                $ids = $list === null ? [] : $validation->createForList($list['l_id'], $list['l_name'], $user->id, $data['members']);
                 $total = array_sum(array_map(fn(int $id): int => $this->validations->job($id)['cvj_total'] ?? 0, $ids));
                 $this->addFlash('info', match (count($ids)) {
-                    0 => 'The list has no members to validate.',
+                    0 => 'The list has no ' . lcfirst(AddressValidation::MEMBERS[$data['members']][0]) . ' to validate.',
                     1 => 'Validating ' . $total . ' address(es) of ' . $list['l_name'] . '.',
                     // catto-mail takes at most 10,000 addresses per job: every member is submitted, in parts.
                     default => 'Validating all ' . $total . ' addresses of ' . $list['l_name'] . ' in ' . count($ids) . ' jobs of at most '
@@ -76,6 +76,7 @@ final class AddressValidationController extends AbstractController
             'pagination' => $pagination,
             'problem' => $config->problem(),
             'classifications' => self::CLASSIFICATIONS,
+            'members' => AddressValidation::MEMBERS,
         ], new Response(status: $form->isSubmitted() && !$form->isValid() ? 422 : 200));
     }
 

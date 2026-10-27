@@ -8,7 +8,7 @@
   <title>{{ site.listName }} | {% block title %}{% endblock %}</title>
   <meta name="description" content="{% block description %}{{ site.listName }} mailing list: subscribe, manage your subscription and read past messages.{% endblock %}">
   <link rel="icon" href="{{ asset('images/favicon.svg') }}" type="image/svg+xml">
-  {# Bootstrap 6.0.0-alpha.1 and Bootstrap Icons 1.13.1, served from this site (assets/lib, see its README).
+  {# Bootstrap 6.0.0-alpha.1 and Bootstrap Icons 1.13.2, served from this site (assets/lib, see its README).
      Bootstrap's JavaScript is an ES module: assets/app.js imports it, so it arrives through the import map. #}
   <link rel="stylesheet" href="{{ asset('lib/bootstrap/bootstrap.min.css') }}">
   <link rel="stylesheet" href="{{ asset('lib/bootstrap-icons/bootstrap-icons.min.css') }}">
@@ -30,6 +30,7 @@
 
   <main id="main" class="flex-grow-1 py-7">
     <div class="container app-content">
+      {% include 'layout/_sending_setup_notice.html.twig' %}
       <div id="app-flash">{% include 'layout/_flash.html.twig' %}</div>
       {% block content %}{% endblock %}
     </div>

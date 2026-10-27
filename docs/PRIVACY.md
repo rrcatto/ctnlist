@@ -44,6 +44,7 @@ We do not sell or rent your personal information. These handle it for us, and on
 1. **Our email delivery service**, which sends every list message.
    - It receives your address and the message as it is written for you, which can include your name and links that are personal to you.
    - It reports whether the message was delivered, and it refuses to send to addresses that bounced, complained or asked it to send them nothing.
+   - When we block an address, or every address at a domain, because its owner asked us never to write again or complained, we give it the address or the domain to keep, so that none of our mail reaches it.
    - It may check whether an address can receive mail and, when we switch it on for a message, record opens and link clicks.
 2. **Our mail server**, which sends sign-in links, invitations, confirmations of your choices and our answers to the contact form. Notices about your choices (confirming, unsubscribing with the reason you give, changes to your profile) are copied to the list's administrator.
 3. **Our hosting provider**, whose servers hold the site and its database.

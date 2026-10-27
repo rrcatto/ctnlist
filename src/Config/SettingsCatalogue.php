@@ -12,15 +12,20 @@ namespace App\Config;
  * `width` lays the field out on the Settings page (full, half, third or
  * quarter of the row); `heading` starts a sub-section before the field.
  *
- * Types: text, textarea, email, url, int, bool, duration (a period written as
- * App\Util\Duration reads it, 1y1w1d1h1m1s, no shorter than `shortest`), dsn
- * (MAILER_DSN, edited as separate SMTP fields). `secret` values are
- * encrypted at rest and never written into the page.
+ * Types: text, textarea, email, url (`https` true: an https address only), int, bool,
+ * duration (a period written as App\Util\Duration reads it, 1y1w1d1h1m1s, no shorter
+ * than `shortest`), dsn (MAILER_DSN, edited as separate SMTP fields). `secret` values
+ * are encrypted at rest and never written into the page.
+ *
+ * The mail service's address (CATTOMAIL_API_BASE_URL, owner decision 2026-10-27) is
+ * the one catto-mail setting here: a connection stores the address it was made with
+ * under the same name (App\CattoMail\ConnectionStore), and while one is stored the
+ * Settings page does not change it.
  *
  * `default` is the value the application uses when .env does not set the
  * variable (as in SiteConfig and the services reading it).
  *
- * @phpstan-type Setting array{label: string, type: string, width?: string, heading?: string, default?: string, help?: string, min?: int, shortest?: string, secret?: bool, optional?: bool}
+ * @phpstan-type Setting array{label: string, type: string, width?: string, heading?: string, default?: string, help?: string, min?: int, shortest?: string, secret?: bool, optional?: bool, https?: bool}
  * @phpstan-type Group array{tab: string, label: string, description: string, settings: array<string, Setting>}
  */
 final class SettingsCatalogue
@@ -61,6 +66,15 @@ final class SettingsCatalogue
                 'MAIL_ADMIN_NAME' => ['width' => 'half', 'default' => 'Administrator', 'label' => 'Administrator name', 'type' => 'text', 'optional' => true],
                 'MAIL_BOUNCE_ADDRESS' => ['width' => 'half', 'label' => 'Bounce address', 'type' => 'email', 'optional' => true, 'help' => 'Return path of transactional mail (catto-mail sets its own for campaign content).'],
                 'MAIL_TEST_ADDRESS' => ['width' => 'half', 'label' => 'Proof address', 'type' => 'email', 'optional' => true, 'help' => 'Default recipient of proof copies; any address will do.'],
+            ],
+        ],
+        'mail_service' => [
+            'tab' => 'Mail service',
+            'label' => 'Mail service',
+            'description' => 'The service that delivers this site’s campaign mail and checks addresses: a catto-mail installation, where this site has an account. Connect to it under Settings › Set up sending.',
+            'settings' => [
+                'CATTOMAIL_API_BASE_URL' => ['width' => 'full', 'label' => 'Mail service address', 'type' => 'url', 'https' => true, 'optional' => true,
+                    'help' => 'The address you sign in to at the mail service, for example https://mail.example.org. Set up sending and Connect go there. While this site is connected, disconnect on the Delivery page before changing it.'],
             ],
         ],
         'smtp' => [

@@ -6,7 +6,7 @@ namespace App\Tests\Integration\Suppression;
 
 use App\Config\SiteConfig;
 use App\Suppression\BanlistSuppressionChecker;
-use App\Suppression\NullSuppressionChecker;
+use App\Suppression\BlockAwareChecker;
 use App\Suppression\SuppressionChecker;
 use App\Tests\Integration\IntegrationTestCase;
 use Doctrine\DBAL\Connection;
@@ -29,7 +29,9 @@ final class SuppressionTest extends IntegrationTestCase
     public function testTestEnvironmentUsesTheNullChecker(): void
     {
         $checker = $this->service(SuppressionChecker::class);
-        self::assertInstanceOf(NullSuppressionChecker::class, $checker);
+        // The provider (none, in tests) with an administrator's blocks on top.
+        self::assertInstanceOf(BlockAwareChecker::class, $checker);
+        self::assertFalse($checker->keepsGlobalList());
         self::assertFalse($checker->isSuppressed('Jane@Example.com'));
         self::assertTrue($checker->isSuppressed('postmaster@example.com'), 'unusable addresses are always suppressed');
         self::assertFalse($checker->suppressEmail('jane@example.com', 'USER', ''), 'nothing can be recorded');

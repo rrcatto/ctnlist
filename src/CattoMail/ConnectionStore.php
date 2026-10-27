@@ -13,13 +13,18 @@ use Psr\Log\LoggerInterface;
 
 /**
  * The connection to the mail service that an administrator made on the
- * Delivery page (ConnectFlow), kept in the Settings store (`options`,
- * `setting:<NAME>`): the API address, and, encrypted with SettingsCipher
- * (APP_SETTINGS_KEY), the API key and the webhook signing secret that
- * catto-mail handed over once. The names are the .env names, because .env
- * supplies the same values and wins where it sets one (CattoMailConfigFactory);
- * they are not in SettingsCatalogue, so the Settings page never shows or
- * changes them. Nothing here is ever logged or rendered except the details
+ * Delivery page or in Set up sending (ConnectFlow), kept in the Settings store
+ * (`options`, `setting:<NAME>`): the mail service's address, and, encrypted
+ * with SettingsCipher (APP_SETTINGS_KEY), the API key and the webhook signing
+ * secret that catto-mail handed over once. The names are the .env names.
+ *
+ * The address (CATTOMAIL_API_BASE_URL) is also an ordinary setting (owner
+ * decision 2026-10-27): .env gives it, the Settings page can change it while
+ * nothing is connected, and a connection stores the service it was made with
+ * there. Disconnecting keeps it, so connecting again needs no typing. The key
+ * and the secret are not in SettingsCatalogue: the Settings page never shows
+ * or changes them, and .env wins where it sets them (CattoMailConfigFactory).
+ * Nothing here is ever logged or rendered except the address and the details
  * (who, when, which service, which catto-mail client), which hold no secret.
  *
  * @phpstan-type ConnectionDetails array{connection_id: string, application_name: string, client_name: string, service: string,
@@ -34,6 +39,8 @@ final class ConnectionStore
     public const DETAILS = 'CATTOMAIL_CONNECTION';
 
     private const NAMES = [self::BASE_URL, self::API_KEY, self::WEBHOOK_SECRET, self::DETAILS];
+    /** What Disconnect clears: the address stays. */
+    private const CONNECTION = [self::API_KEY, self::WEBHOOK_SECRET, self::DETAILS];
 
     public function __construct(
         private readonly SettingRepository $settings,
@@ -65,6 +72,18 @@ final class ConnectionStore
         } catch (SettingsCipherException $e) {
             return ['base_url' => $stored[self::BASE_URL]['value'], 'api_key' => '', 'webhook_secret' => '', 'problem' => $e->getMessage()];
         }
+    }
+
+    /** The mail service's address stored here (by the Settings page or a connection), or ''. */
+    public function address(): string
+    {
+        return trim($this->stored()[self::BASE_URL]['value'] ?? '');
+    }
+
+    /** Whether a connection (its key) is stored here, readable or not. */
+    public function isConnected(): bool
+    {
+        return isset($this->stored()[self::API_KEY]);
     }
 
     /**
@@ -112,14 +131,27 @@ final class ConnectionStore
         });
     }
 
-    /** Remove the stored connection; .env (if it sets catto-mail) applies again. */
+    /** Remove the stored connection; the address stays, so connecting again needs no typing. */
     public function clear(): void
     {
         $this->db->transactional(function (): void {
-            foreach (self::NAMES as $name) {
+            foreach (self::CONNECTION as $name) {
                 $this->settings->delete($name);
             }
         });
+    }
+
+    /**
+     * Keep the address an administrator gave before connecting (Set up sending, or the
+     * Connect form while none was known). Refused while a connection is stored: its key
+     * belongs to the address it was made with.
+     */
+    public function rememberAddress(string $address, ?int $by): void
+    {
+        if ($this->isConnected()) {
+            throw new \InvalidArgumentException('This site is connected to the mail service at ' . $this->address() . ': disconnect it on the Delivery page before giving another address.');
+        }
+        $this->settings->set(self::BASE_URL, $address, false, $by);
     }
 
     /** @return array<string, array{value: string, secret: bool, updated_at: ?string, updated_by: ?string}> */

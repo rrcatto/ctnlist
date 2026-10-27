@@ -1,0 +1,98 @@
+{#
+  The steps of Set up sending (Admin\SendingSetupController, App\CattoMail\SendingSetup): the page
+  includes it, and it is the htmx region sending-setup, drawn again by its buttons and every 30
+  seconds while the sending domain is being set up at the mail service (the worker asks the mail
+  service every minute meanwhile). One step is open at a time; done steps say so in one line.
+#}
+{% import 'layout/_htmx.html.twig' as hx %}
+{% set steps = state.steps %}
+{% set current = state.current %}
+{% set d = state.from_domain %}
+{% set waiting = current == 'domain' and steps.connect %}
+{% set titles = {account: 'An account at the mail service', connect: 'Connect this site', domain: 'Make the sending domain ready', test: 'Send a test message to yourself'} %}
+<div id="sending-setup" class="app-region"{% if waiting %} {{ hx.refresh(path('admin_sending_setup'), 'sending-setup', '30s') }}{% endif %}>
+  <p class="mb-5"><strong>{{ state.done }} of {{ state.total }}</strong> steps done.{% if current is null %} Sending is set up: campaign mail goes out through the mail service.{% endif %}{% if not is_administrator %} An administrator takes these steps; you can follow them here.{% endif %}</p>
+
+  <ol class="list-unstyled app-steps">
+    {% for key in ['account', 'connect', 'domain', 'test'] %}
+      {% set open = key == current %}
+      <li class="card{{ open ? ' border-primary' : '' }}" id="step-{{ key }}"{{ open ? ' aria-current="step"' }}>
+        <div class="card-body d-flex flex-row gap-5">
+          <span class="app-step-mark {{ steps[key] ? 'theme-success bg-2' : (open ? 'theme-primary bg-2' : 'bg-1') }}" aria-hidden="true">{% if steps[key] %}<i class="bi bi-check-lg"></i>{% else %}{{ loop.index }}{% endif %}</span>
+          <div class="flex-grow-1">
+            <h2 class="h6 mb-1">{{ loop.index }}. {{ titles[key] }} {% if steps[key] %}<span class="badge theme-success ms-1">Done</span>{% endif %}</h2>
+
+            {% if key == 'account' %}
+              {% if steps.account %}
+                <p class="small mb-0">The mail service: {% include 'layout/_copy.html.twig' with {value: state.address, id: 'setup-address', label: 'the mail service\'s address'} %}
+                  {% if not connection and stored_address and is_administrator %}<a class="ms-2" href="{{ path('admin_settings') }}#mail_service">Change it</a>{% endif %}</p>
+              {% else %}
+                <p class="small">The mail service delivers this site's campaign mail and checks addresses. It is a separate service, a catto-mail installation, and this site needs an account there. No account yet? Connect, in the next step, lets you open one there when the service accepts new accounts; otherwise ask the people who run it for an invitation.</p>
+                {% if address_form %}
+                  {{ form_start(address_form, {attr: {class: 'app-narrow ms-0'}}) }}
+                    {{ form_errors(address_form) }}
+                    {{ form_row(address_form.service) }}
+                    <button class="btn-solid theme-primary" type="submit"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>Keep this address</button>
+                  {{ form_end(address_form) }}
+                {% endif %}
+              {% endif %}
+
+            {% elseif key == 'connect' %}
+              {% if steps.connect %}
+                <p class="small mb-0">{% if connection %}Connected{% if connection.client_name %} with the account <strong>{{ connection.client_name }}</strong>{% endif %}, since {{ connection.connected_at|slice(0, 16) }}.{% else %}The mail service's key is set in this installation's .env.{% endif %}</p>
+              {% elseif open %}
+                <p class="small">Connect takes you to the mail service. Sign in there (or open your account), choose it and approve; you come straight back here. This site then gets its own key, and nothing has to be copied.{% if sending_domain %} The domain of this site's From address, <strong>{{ sending_domain }}</strong>, is added to your account there as a sending domain.{% endif %}</p>
+                {% if connect_obstacle %}<div class="alert theme-warning small" role="note"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div>{{ connect_obstacle }}</div></div>{% endif %}
+                {% if connect_form %}{% include 'admin/_delivery_connect_form.html.twig' with {form: connect_form, obstacle: connect_obstacle, label: 'Connect', return: 'setup'} %}{% endif %}
+              {% else %}
+                <p class="small fg-2 mb-0">After step 1.</p>
+              {% endif %}
+
+            {% elseif key == 'domain' %}
+              {% if steps.domain %}
+                <p class="small mb-0">Mail from <strong>{{ d.domain }}</strong>, the domain of this site's From address, can be sent.</p>
+              {% elseif not open %}
+                <p class="small fg-2 mb-0">After step 2: the domain of this site's From address{% if d.domain %} ({{ d.domain }}){% endif %} is set up at the mail service.</p>
+              {% elseif d.state == 'no_from_address' %}
+                <p class="small mb-0">This site has no From address yet: give it under <a href="{{ path('admin_settings') }}#sender">Settings › Sender</a>. Mail goes out from its domain.</p>
+              {% else %}
+                <p class="small">Mail goes out from <strong>{{ d.domain }}</strong>, the domain of this site's From address. At the mail service you add two records to its DNS (where the domain is managed, such as your hosting control panel): one proves the domain is yours, the other holds its signing key, so receivers accept the mail as really from {{ d.domain }}.</p>
+                {% if d.state == 'not_registered' %}
+                  <div class="alert theme-warning small" role="note"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div>{{ d.domain }} is not a sending domain of your account at the mail service yet. Add it there under Settings › Sending domains{% if state.address %} (<a href="{{ state.address }}/dashboard" rel="noopener">your account</a>){% endif %}, or give this site a From address on a domain your account has (<a href="{{ path('admin_settings') }}#sender">Settings › Sender</a>).</div></div>
+                {% elseif domain_steps %}
+                  <p><a class="btn-solid theme-primary" href="{{ domain_steps }}"><i class="bi bi-box-arrow-up-right me-1" aria-hidden="true"></i>Open the DNS steps of {{ d.domain }}</a></p>
+                  <p class="small fg-2">That page at the mail service shows each record with a copy button, checks DNS by itself, and has a link back here.</p>
+                {% else %}
+                  <p class="small">Set it up in your account at the mail service, under Settings › Sending domains.</p>
+                {% endif %}
+                <p class="small fg-2 mb-3"><i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>This page looks again every 30 seconds{% if d.checked_at %} (last answer {{ d.checked_at|slice(11, 5) }}){% endif %}; new DNS records can take a few minutes to be seen.</p>
+                <form method="post" action="{{ path('admin_sending_setup_check') }}" {{ hx.post(path('admin_sending_setup_check'), 'sending-setup') }}>
+                  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+                  <button class="btn-outline theme-secondary" type="submit"><i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Ask the mail service now</button>
+                </form>
+              {% endif %}
+
+            {% else %}
+              {% if steps.test %}
+                <p class="small mb-0">{% if state.test %}The mail service accepted the test message to {{ state.test.to }} on {{ state.test.at }}.{% else %}The mail service has taken mail from this site before.{% endif %}</p>
+              {% elseif open %}
+                <p class="small">A short test message goes from {{ site.fromAddress }} through the mail service to you, {{ admin_email }}. When it arrives, campaign mail works.</p>
+                {% if is_administrator %}
+                  <form method="post" action="{{ path('admin_sending_setup_test') }}" {{ hx.post(path('admin_sending_setup_test'), 'sending-setup') }}>
+                    <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+                    <button class="btn-solid theme-success" type="submit"><i class="bi bi-send me-1" aria-hidden="true"></i>Send the test message</button>
+                  </form>
+                {% endif %}
+              {% else %}
+                <p class="small fg-2 mb-0">After step 3.</p>
+              {% endif %}
+            {% endif %}
+          </div>
+        </div>
+      </li>
+    {% endfor %}
+  </ol>
+  {% if current is null %}
+    <p class="mt-5"><a class="btn-outline theme-secondary" href="{{ path('admin_delivery') }}">See the Delivery page</a></p>
+  {% endif %}
+</div>

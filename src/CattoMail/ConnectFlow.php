@@ -19,11 +19,13 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  * catto-mail's connect flow (its integration guide, section 15: an
  * authorisation-code flow with PKCE, S256):
  *
- * 1. start(): an administrator names the mail service. A random state and
- *    code verifier are kept here (the verifier encrypted), and the
- *    administrator's browser goes to the service's connect page with the
- *    state, the verifier's SHA-256 challenge, where to come back to and where
- *    this installation receives webhooks.
+ * 1. start(): an administrator connects to the mail service's address (the
+ *    one configured, or the one they give when none is: it is then kept). A
+ *    random state and code verifier are kept here (the verifier encrypted), and
+ *    the administrator's browser goes to the service's connect page with the
+ *    state, the verifier's SHA-256 challenge, where to come back to, where this
+ *    installation receives webhooks and the domain it sends from (the site's
+ *    From address: approving adds it to the account there).
  * 2. The administrator signs in there and approves; the service sends the
  *    browser back with a single-use code and the state.
  * 3. complete(): the state is checked, the code is exchanged from this
@@ -70,7 +72,7 @@ final class ConnectFlow
     {
         $env = $this->config->envSettings();
         if ($env !== []) {
-            return 'This installation\'s .env sets ' . implode(', ', $env) . '. A value in .env takes precedence, so a connection made here would not be used: remove '
+            return 'This installation\'s .env sets ' . implode(', ', $env) . ', the mail service\'s key or secret. A value in .env takes precedence, so a connection made here would not be used: remove '
                 . (count($env) === 1 ? 'that setting' : 'those settings') . ' from .env first.';
         }
         $problem = $this->cipher->problem();
@@ -83,6 +85,20 @@ final class ConnectFlow
         return null;
     }
 
+    /** The mail service's address (its origin) as configured, or '' when none is known yet. */
+    public function address(): string
+    {
+        return $this->config->address();
+    }
+
+    /** The domain this site sends from (that of its From address), as the connect page is told; '' when there is none. */
+    public function sendingDomain(): string
+    {
+        $at = strrpos($this->site->fromAddress, '@');
+        $domain = $at === false ? '' : strtolower(trim(substr($this->site->fromAddress, $at + 1)));
+        return preg_match('/^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9-]{2,63}$/', $domain) === 1 ? $domain : '';
+    }
+
     /** Where this installation receives catto-mail's webhooks. */
     public function webhookUrl(): string
     {
@@ -93,17 +109,18 @@ final class ConnectFlow
      * Begin a connection: returns the address at the mail service to send
      * the administrator's browser to.
      *
-     * @param string $service the mail service's address, as the administrator typed it
+     * @param string $service the mail service's address as the administrator typed it, or '' for the configured one
      * @param string $redirectUri this installation's callback address, on the site the administrator is using
+     * @param string $return where the administrator goes once connected: 'delivery' or 'setup' (Set up sending)
      * @throws \InvalidArgumentException
      */
-    public function start(string $service, string $redirectUri, SubscriberUser $admin): string
+    public function start(string $service, string $redirectUri, SubscriberUser $admin, string $return = 'delivery'): string
     {
         $obstacle = $this->obstacle();
         if ($obstacle !== null) {
             throw new \InvalidArgumentException($obstacle);
         }
-        $origin = self::serviceOrigin($service);
+        $origin = self::serviceOrigin(trim($service) !== '' ? $service : $this->address());
         if (!$this->development() && !self::isHttps($redirectUri)) {
             throw new \InvalidArgumentException('The mail service sends an administrator back only to an https address: open this site over https and connect from there.');
         }
@@ -118,8 +135,13 @@ final class ConnectFlow
                 'redirect_uri' => $redirectUri,
                 'webhook_url' => $webhookUrl,
                 'admin' => $admin->uuid,
+                'return' => $return === 'setup' ? 'setup' : 'delivery',
                 'expires_at' => $this->clock->now()->getTimestamp() + self::PENDING_SECONDS,
             ], JSON_UNESCAPED_SLASHES));
+            // An address typed while none was known is kept: the next attempt needs no typing.
+            if ($this->store->address() === '' && !$this->store->isConnected()) {
+                $this->store->rememberAddress($origin, $admin->id);
+            }
         } catch (SettingsCipherException $e) {
             throw new \InvalidArgumentException($e->getMessage(), 0, $e);
         }
@@ -131,19 +153,20 @@ final class ConnectFlow
             'state' => $state,
             'code_challenge' => self::challenge($verifier),
             'code_challenge_method' => 'S256',
-        ], '', '&', PHP_QUERY_RFC3986);
+        ] + ($this->sendingDomain() !== '' ? ['sending_domain' => $this->sendingDomain()] : []), '', '&', PHP_QUERY_RFC3986);
     }
 
     /**
      * The connection request that waits for the mail service's answer, if
      * one is still valid (nothing secret).
      *
-     * @return array{service: string, state: string, admin: string, expires_at: int}|null
+     * @return array{service: string, state: string, admin: string, expires_at: int, return: string}|null
      */
     public function pending(): ?array
     {
         $pending = $this->readPending();
-        return $pending === null ? null : ['service' => $pending['service'], 'state' => $pending['state'], 'admin' => $pending['admin'], 'expires_at' => $pending['expires_at']];
+        return $pending === null ? null : ['service' => $pending['service'], 'state' => $pending['state'], 'admin' => $pending['admin'], 'expires_at' => $pending['expires_at'],
+            'return' => $pending['return']];
     }
 
     /** Whether $state is the state of the request that waits here, started by this administrator. */
@@ -157,7 +180,7 @@ final class ConnectFlow
      * Finish a connection with the code the mail service sent back: exchange
      * it and store what the service hands over.
      *
-     * @return array{service: string, client_name: string, application_name: string} what was connected
+     * @return array{service: string, client_name: string, application_name: string, return: string} what was connected, and where the administrator goes next
      * @throws \InvalidArgumentException
      */
     public function complete(string $state, #[\SensitiveParameter] string $code, SubscriberUser $admin): array
@@ -204,7 +227,8 @@ final class ConnectFlow
             'webhook_endpoint_id' => self::text($webhook['endpoint_id'] ?? null),
         ];
         try {
-            $this->store->save($baseUrl, $apiKey, $secret, $details, $admin->id);
+            // The address is kept as a person gives it (the origin); the API root is derived from it.
+            $this->store->save(preg_replace('#/v1$#', '', $baseUrl) ?? $baseUrl, $apiKey, $secret, $details, $admin->id);
         } catch (SettingsCipherException $e) {
             throw new \InvalidArgumentException($e->getMessage(), 0, $e);
         }
@@ -214,7 +238,7 @@ final class ConnectFlow
         // Names only: the key and the secret are never logged.
         $this->logger->notice('catto-mail connected to {service} (connection {connection}, client "{client}") by {admin}.',
             ['service' => $pending['service'], 'connection' => $details['connection_id'], 'client' => $details['client_name'], 'admin' => $admin->uuid]);
-        return ['service' => $pending['service'], 'client_name' => $details['client_name'], 'application_name' => $details['application_name']];
+        return ['service' => $pending['service'], 'client_name' => $details['client_name'], 'application_name' => $details['application_name'], 'return' => $pending['return']];
     }
 
     /**
@@ -296,7 +320,7 @@ final class ConnectFlow
         return mb_substr($name !== '' ? $name : $this->site->domain, 0, self::NAME_MAX);
     }
 
-    /** @return array{state: string, verifier: string, service: string, redirect_uri: string, webhook_url: string, admin: string, expires_at: int}|null */
+    /** @return array{state: string, verifier: string, service: string, redirect_uri: string, webhook_url: string, admin: string, expires_at: int, return: string}|null */
     private function readPending(): ?array
     {
         $pending = json_decode((string) $this->options->get(self::PENDING), true);
@@ -311,7 +335,8 @@ final class ConnectFlow
             }
         }
         return ['state' => $fields['state'], 'verifier' => $fields['verifier'], 'service' => $fields['service'], 'redirect_uri' => $fields['redirect_uri'],
-            'webhook_url' => $fields['webhook_url'], 'admin' => $fields['admin'], 'expires_at' => (int) $pending['expires_at']];
+            'webhook_url' => $fields['webhook_url'], 'admin' => $fields['admin'], 'expires_at' => (int) $pending['expires_at'],
+            'return' => ($pending['return'] ?? '') === 'setup' ? 'setup' : 'delivery'];
     }
 
     private function changed(): void

@@ -44,7 +44,7 @@ curl -fsSLO https://raw.githubusercontent.com/rrcatto/ctnlist/vX.Y.Z/deploy/podm
 bash ctnlist-podman.sh install --version vX.Y.Z --port 8082
 ```
 
-Choose a free port for each site on the server (8081, 8082, …). The install asks for the host name, the administrator's address, the list's name, the sender and the SMTP server (`--help` lists them as options). In 13 steps, each PASS, WARN or FAIL (a FAIL says why and how to fix it, and running it again is safe), it:
+Choose a free port for each site on the server (8081, 8082, …). The install asks for the host name, the administrator's address, the list's name, the sender, the SMTP server and the mail service's address (optional: Set up sending asks for it otherwise; `--help` lists them as options, `--mail-service` for the last). In 13 steps, each PASS, WARN or FAIL (a FAIL says why and how to fix it, and running it again is safe), it:
 
 1. checks Podman, the user's systemd session and linger;
 2. fetches the release into `~/ctnlist/releases/<version>`, builds its image `localhost/ctnlist:<version>` and installs its Composer packages in a one-off container;
@@ -72,7 +72,7 @@ The pod redirects plain HTTP to HTTPS itself, so a server block that answers bot
 
 ## 4. Then
 
-Sign in at `https://<host>/login` as the administrator's address (it becomes the first administrator), connect the mail service on **Admin → Settings → Delivery**, and go through the README's [release checklist](../../README.md#release-checklist).
+Sign in at `https://<host>/login` as the administrator's address (it becomes the first administrator), follow **Admin → Settings → Set up sending** (the mail service, Connect, the sending domain, a test message), and go through the README's [release checklist](../../README.md#release-checklist).
 
 Mail from the pod: the server's mail server is at `10.0.2.2`, but its certificate names the server's host name, so with TLS use that name (`smtps://USER:PASS@mail.example.org:465`); the pod reaches the server's public address too.
 

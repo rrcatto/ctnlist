@@ -3,7 +3,7 @@
 {% block title %}Connect the mail service{% endblock %}
 
 {% block content %}
-{% embed 'layout/_page_header.html.twig' with {title: 'Connect the mail service', description: 'Enter the address of the mail service. You sign in there and approve the connection; this site then receives its API key and webhook secret by itself and stores them encrypted.'} %}
+{% embed 'layout/_page_header.html.twig' with {title: 'Connect the mail service', description: 'You sign in at the mail service and approve the connection there; this site then receives its own key and webhook secret by itself and stores them encrypted.'} %}
   {% block actions %}
     <a class="btn-outline theme-secondary" href="{{ path('admin_delivery') }}">Back to Delivery</a>
   {% endblock %}
@@ -14,6 +14,7 @@
     {% if obstacle %}
       <div class="alert theme-warning small" role="note"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div>{{ obstacle }}</div></div>
     {% endif %}
+    {% if address %}<p class="small">Mail service: {% include 'layout/_copy.html.twig' with {value: address, id: 'connect-address', label: 'the mail service\'s address'} %}</p>{% endif %}
     {% include 'admin/_delivery_connect_form.html.twig' with {form: form, obstacle: obstacle} %}
   </div>
 </div>

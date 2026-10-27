@@ -215,7 +215,7 @@ final class CattoMailClientTest extends TestCase
 
         // The key works like any other, lists the sending domains, and ends its own connection.
         $connected = new CattoMailClient(new MockHttpClient($fake->handler(), FakeCattoMail::BASE), new CattoMailConfig('https://cattomail.test', $credentials['api_key'], ''), $this->logger());
-        self::assertSame(['domain' => 'ctnlist.test', 'status' => 'verified', 'dkim_status' => 'active', 'can_send' => true], $connected->listSendingDomains()[0]);
+        self::assertSame(['domain' => 'ctnlist.test', 'status' => 'verified', 'dkim_status' => 'active', 'can_send' => true], array_diff_key($connected->listSendingDomains()[0], ['setup_url' => 1]));
         $client->deleteConnection(FakeCattoMail::BASE, $credentials['api_key']);
         self::assertSame('Bearer ' . $credentials['api_key'], $fake->requests[3]['headers']['authorization'], 'the connection\'s key, not the configured one');
         self::assertSame(401, $connected->probe()['status'], 'the key ended with its connection');

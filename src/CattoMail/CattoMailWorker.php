@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\CattoMail;
 
+use App\Repository\CattoMailBlockRepository;
 use App\Repository\CattoMailOptOutRepository;
 use App\Repository\CattoMailSendRepository;
 use App\Repository\CattoMailValidationRepository;
@@ -55,6 +56,8 @@ final class CattoMailWorker
         private readonly AddressValidation $validation,
         private readonly CattoMailOptOutRepository $optOuts,
         private readonly GlobalOptOut $globalOptOut,
+        private readonly CattoMailBlockRepository $blockRecords,
+        private readonly AccountBlocks $accountBlocks,
         private readonly ClockInterface $clock,
         private readonly LoggerInterface $logger,
         private readonly DatabaseLock $lock,
@@ -105,6 +108,14 @@ final class CattoMailWorker
         foreach ($this->optOuts->unreported() as $optOut) {
             if ($this->globalOptOut->report($optOut)) {
                 $report['opt-outs reported']++;
+            } else {
+                $this->failures++;
+            }
+        }
+        $report['blocks reported'] = 0;
+        foreach ($this->blockRecords->unreported() as $block) {
+            if ($this->accountBlocks->report($block)) {
+                $report['blocks reported']++;
             } else {
                 $this->failures++;
             }

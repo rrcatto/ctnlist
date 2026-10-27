@@ -1,0 +1,14 @@
+{# Until sending is set up, administrators see where it stands on every administration page
+   (owner decision 2026-10-27: ctnlist has no administration home page; this notice stands in for one).
+   Not on Set up sending itself, nor on the pages of a connection under way. #}
+{% set route = app.request.attributes.get('_route') ?? '' %}
+{% if app.user and app.user.administrator and route starts with 'admin_' and route != 'admin_sending_setup' and not (route starts with 'admin_delivery_connect') %}
+  {% set setup = sending_setup() %}
+  {% if setup.current is not null %}
+    <div class="alert theme-info d-flex flex-row flex-wrap align-items-center gap-3 small" role="note">
+      <i class="bi bi-envelope-exclamation" aria-hidden="true"></i>
+      <div class="flex-grow-1">Sending is not set up yet: {{ setup.done }} of {{ setup.total }} steps done. Campaign mail goes out only once it is.</div>
+      <a class="btn-solid theme-primary btn-sm" href="{{ path('admin_sending_setup') }}">Set up sending</a>
+    </div>
+  {% endif %}
+{% endif %}

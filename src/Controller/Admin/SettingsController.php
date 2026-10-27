@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller\Admin;
 
+use App\CattoMail\ConnectionStore;
 use App\Config\RuntimeSettings;
 use App\Config\SettingsCatalogue;
 use App\Config\SettingsCipherException;
@@ -34,13 +35,17 @@ final class SettingsController extends AbstractController
 {
     /**
      * Groups only administrators may see or change: the transactional SMTP server receives every
-     * sign-in link, so whoever can point it elsewhere can sign in as anyone, administrators included.
+     * sign-in link, so whoever can point it elsewhere can sign in as anyone, administrators included;
+     * the mail service receives every campaign and every recipient's address (as Connect is).
      */
-    private const ADMINISTRATOR_ONLY = ['smtp'];
+    private const ADMINISTRATOR_ONLY = ['smtp', 'mail_service'];
+    /** The mail service's address, which a stored connection keeps (ConnectionStore). */
+    private const MAIL_SERVICE = 'CATTOMAIL_API_BASE_URL';
 
     public function __construct(
         private readonly RuntimeSettings $settings,
         private readonly FormFactoryInterface $forms,
+        private readonly ConnectionStore $connection,
     ) {
     }
 
@@ -64,6 +69,15 @@ final class SettingsController extends AbstractController
             try {
                 /** @var array<string, mixed> $data */
                 $data = $form->getData();
+                if (SettingsCatalogue::names()[self::MAIL_SERVICE] === $group && $this->connection->isConnected()) {
+                    // A connection's key belongs to the address it was made with: that stays as it is.
+                    if (trim((string) ($data[self::MAIL_SERVICE] ?? '')) !== $this->connection->address()) {
+                        $form->get(self::MAIL_SERVICE)->addError(new FormError(self::connectedMessage($this->connection->address())));
+                        return $this->page($user, $group, $form);
+                    }
+                    $this->addFlash('info', $label . ': no changes to save.');
+                    return $this->redirect($this->generateUrl('admin_settings') . '#' . $group);
+                }
                 $changed = $this->settings->save($group, SettingsFormData::toInput($group, $data), $user->id);
                 $this->addFlash('info', $changed === [] ? $label . ': no changes to save.' : $label . ' settings saved.');
                 return $this->redirect($this->generateUrl('admin_settings') . '#' . $group);
@@ -81,6 +95,10 @@ final class SettingsController extends AbstractController
     {
         $label = $this->groupLabel($group);
         $this->denyUnlessAllowed($group, $user);
+        if (array_key_exists(self::MAIL_SERVICE, SettingsCatalogue::GROUPS[$group]['settings']) && $this->connection->isConnected()) {
+            $this->addFlash('danger', self::connectedMessage($this->connection->address()));
+            return $this->redirect($this->generateUrl('admin_settings') . '#' . $group);
+        }
         $this->settings->resetGroup($group, $user->id);
         $this->addFlash('info', $label . ': every setting now comes from .env or its default.');
         return $this->redirect($this->generateUrl('admin_settings') . '#' . $group);
@@ -93,6 +111,10 @@ final class SettingsController extends AbstractController
     {
         $group = SettingsCatalogue::names()[$name] ?? throw $this->createNotFoundException('Unknown setting.');
         $this->denyUnlessAllowed($group, $user);
+        if ($name === self::MAIL_SERVICE && $this->connection->isConnected()) {
+            $this->addFlash('danger', self::connectedMessage($this->connection->address()));
+            return $this->redirect($this->generateUrl('admin_settings') . '#' . $group);
+        }
         $this->settings->resetSetting($name, $user->id);
         $this->addFlash('info', SettingsCatalogue::GROUPS[$group]['settings'][$name]['label'] . ' now comes from ' . ($this->settings->source($name) === RuntimeSettings::SOURCE_ENV ? '.env.' : 'its default.'));
         return $this->redirect($this->generateUrl('admin_settings') . '#' . $group);
@@ -123,6 +145,8 @@ final class SettingsController extends AbstractController
             'fields' => $fields,
             'active' => $active ?? array_key_first($groups),
             'cipher_problem' => $this->settings->cipherProblem(),
+            // While a connection is stored, its address is shown but not changed here.
+            'mail_service_connected' => $this->connection->isConnected() ? $this->connection->address() : null,
         ], new Response(status: $submitted !== null ? Response::HTTP_UNPROCESSABLE_ENTITY : Response::HTTP_OK));
     }
 
@@ -155,6 +179,11 @@ final class SettingsController extends AbstractController
             'default' => $secret ? '' : ($setting['default'] ?? ''),
             'dsn' => $setting['type'] === 'dsn' ? RuntimeSettings::dsnParts($effective) : null,
         ];
+    }
+
+    private static function connectedMessage(string $address): string
+    {
+        return 'This site is connected to the mail service at ' . $address . ', and its key works only there: disconnect on the Delivery page before changing the address.';
     }
 
     private function groupLabel(string $group): string

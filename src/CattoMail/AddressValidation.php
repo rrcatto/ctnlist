@@ -23,6 +23,17 @@ use Doctrine\DBAL\Connection;
  */
 final class AddressValidation
 {
+    /**
+     * Which of a list's members a validation is for (owner decision 2026-10-27): value =>
+     * [label, what it means, the membership condition]. Confirmed members first, the default:
+     * only they receive campaigns.
+     */
+    public const MEMBERS = [
+        'confirmed' => ['Confirmed members', 'Those who confirmed their membership: the ones campaigns go to.', 'ls.ls_confirmed = TRUE AND ls.ls_unsubscribed = FALSE'],
+        'unconfirmed' => ['Unconfirmed members only', 'Those who have not confirmed yet, for example before inviting them again.', 'ls.ls_confirmed = FALSE AND ls.ls_unsubscribed = FALSE'],
+        'everyone' => ['Everyone not unsubscribed', 'Confirmed or not; every address counts against the mail service\'s daily validation limit.', 'ls.ls_unsubscribed = FALSE'],
+    ];
+
     public function __construct(
         private readonly CattoMailValidationRepository $validations,
         private readonly CattoMailClient $client,
@@ -32,13 +43,14 @@ final class AddressValidation
     }
 
     /**
-     * Create (and try to submit) jobs for the members of a list who have not
-     * unsubscribed from it.
+     * Create (and try to submit) jobs for the members of a list: those $members names (MEMBERS),
+     * never one who unsubscribed from it.
      *
      * @return list<int> the local job ids
      */
-    public function createForList(int $listId, string $listName, ?int $createdBy): array
+    public function createForList(int $listId, string $listName, ?int $createdBy, string $members = 'confirmed'): array
     {
+        [$label, , $condition] = self::MEMBERS[$members] ?? throw new \InvalidArgumentException('Choose which members to validate.');
         $problem = $this->config->problem();
         if ($problem !== null) {
             throw new CattoMailRejected($problem, 0, 'not-configured');
@@ -46,10 +58,10 @@ final class AddressValidation
         /** @var list<array{s_uuid: string, s_email: string}> $subscribers */
         $subscribers = array_map(static fn(array $r): array => ['s_uuid' => (string) $r['s_uuid'], 's_email' => (string) $r['s_email']], $this->db->fetchAllAssociative(
             'SELECT s.s_uuid, s.s_email FROM subscribers s JOIN list_subscribers ls ON ls.ls_s_id = s.s_id
-             WHERE ls.ls_l_id = ? AND ls.ls_unsubscribed = FALSE ORDER BY s.s_id',
+             WHERE ls.ls_l_id = ? AND ' . $condition . ' ORDER BY s.s_id',
             [$listId]
         ));
-        return $this->create('List ' . $listName, $subscribers, $createdBy);
+        return $this->create('List ' . $listName . ': ' . lcfirst($label), $subscribers, $createdBy);
     }
 
     /**

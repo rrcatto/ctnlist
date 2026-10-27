@@ -120,7 +120,7 @@ final class RouteSmokeTest extends SmokeTestCase
         '/stop-send', '/sending', '/sendtome/{muid}',
         '/delivery', '/delivery/message/{muid}', '/delivery/job/{jid}', '/delivery/job/{jid}/1', '/delivery/recipient/{ruuid}', '/delivery/run/{runuuid}',
         '/delivery/webhooks', '/delivery/webhooks/1', '/delivery/runs', '/delivery/runs/1', '/delivery/message/{muid}/1', '/address-validation/page/1',
-        '/delivery/connect/callback',
+        '/delivery/connect/callback', '/delivery/setup',
         '/address-validation', '/address-validation/{vid}', '/address-validation/{vid}/1',
         '/sendlog', '/sendlog/1', '/sitelog', '/sitelog/1', '/flagged',
         '/message-views/{muid}', '/message-views/{muid}/1',

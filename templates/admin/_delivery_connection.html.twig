@@ -1,4 +1,4 @@
-{# The mail service connection on the Delivery page: its state, the From address's sending domain,
+{# The mail service connection on the Delivery page: its address and state, the From address's sending domain,
    and Connect, Disconnect and Forget (Admin\DeliveryConnectionController), which only administrators see. #}
 <div class="card{{ configured ? '' : ' border-warning' }}">
   <div class="card-header fw-semibold d-flex flex-row flex-wrap justify-content-between align-items-center gap-3">
@@ -8,32 +8,39 @@
     {% else %}<span class="badge theme-warning">Not connected</span>{% endif %}
   </div>
   <div class="card-body small">
+    {% if address %}
+      <p class="mb-3">Address: {% include 'layout/_copy.html.twig' with {value: address, id: 'mail-service-address', label: 'the mail service\'s address'} %}
+        <span class="fg-2">{{ address_source == 'env' ? '(from .env)' : (address_source == 'settings' ? '(set on the Settings page)' : '') }}</span></p>
+    {% endif %}
     {% if uses_connection and connection %}
-      <p class="mb-1">Connected to <strong>{{ connection.service }}</strong>{% if connection.client_name %} as its client <strong>{{ connection.client_name }}</strong>{% endif %}{% if connection.application_name %}, under the name “{{ connection.application_name }}”{% endif %}.</p>
-      <p class="fg-2">{% if connection.connected_at %}Since {{ connection.connected_at|slice(0, 16) }}{% if connection.connected_by %}, by {{ connection.connected_by }}{% endif %}. {% endif %}The API key and the webhook secret came from the mail service and are stored encrypted; they are never shown.</p>
+      <p class="mb-1">Connected{% if connection.client_name %} with the account <strong>{{ connection.client_name }}</strong>{% endif %}{% if connection.application_name %}, under the name “{{ connection.application_name }}”{% endif %}.</p>
+      <p class="fg-2">{% if connection.connected_at %}Since {{ connection.connected_at|slice(0, 16) }}{% if connection.connected_by %}, by {{ connection.connected_by }}{% endif %}. {% endif %}The key and the webhook secret came from the mail service and are stored encrypted; they are never shown.</p>
     {% elseif configured %}
       <p>The mail service is set in this installation's .env ({{ env_settings|join(', ') }}). A value in .env takes precedence over a connection made here.</p>
       {% if connection %}<div class="alert theme-warning" role="note"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div>A connection to {{ connection.service }} is stored here as well, but .env takes precedence over it. Remove the settings from .env to use it, or disconnect it.</div></div>{% endif %}
     {% elseif connection_problem %}
-      <div class="alert theme-danger" role="alert"><i class="bi bi-exclamation-octagon" aria-hidden="true"></i><div>A connection{% if connection %} to {{ connection.service }}{% endif %} is stored, but its API key cannot be read: {{ connection_problem }} Restore the APP_SETTINGS_KEY it was saved with, or connect again.</div></div>
+      <div class="alert theme-danger" role="alert"><i class="bi bi-exclamation-octagon" aria-hidden="true"></i><div>A connection{% if connection %} to {{ connection.service }}{% endif %} is stored, but its key cannot be read: {{ connection_problem }} Restore the APP_SETTINGS_KEY it was saved with, or connect again.</div></div>
     {% else %}
-      <p>No mail service is connected, so campaign mail cannot be sent. Enter the address of your mail service and approve the connection there: this site then receives its API key and webhook secret by itself and stores them encrypted.</p>
+      <p>No mail service is connected, so campaign mail cannot be sent yet. {% if is_administrator %}<a href="{{ path('admin_sending_setup') }}">Set up sending</a> takes you through it step by step: the mail service account, Connect, the sending domain and a test message.{% else %}An administrator sets it up under Settings › Set up sending.{% endif %}</p>
     {% endif %}
 
     {% if configured %}
       {% if from_domain.state == 'ok' %}
         <p class="mb-0"><i class="bi bi-check-circle fg-success me-1" aria-hidden="true"></i>Mail from <strong>{{ from_domain.domain }}</strong> (the site's From address) can be sent. <span class="fg-2">Checked {{ from_domain.checked_at|slice(0, 16) }}.</span></p>
       {% elseif from_domain.state == 'cannot_send' %}
-        <div class="alert theme-warning mb-0" role="alert"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div><strong>Mail from {{ from_domain.domain }} cannot be sent yet.</strong> The domain of the site's From address is registered at the mail service but not ready (verification: {{ from_domain.status ?: 'unknown' }}; DKIM: {{ from_domain.dkim_status ?: 'unknown' }}). Finish its setup in the mail service's dashboard, then use <strong>Check connection</strong>. <span class="fg-2">Checked {{ from_domain.checked_at|slice(0, 16) }}.</span></div></div>
+        <div class="alert theme-warning mb-0" role="alert"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div><strong>Mail from {{ from_domain.domain }} cannot be sent yet.</strong> The domain of the site's From address is in your account at the mail service, but its DNS records are not all published yet. {% if domain_steps %}<a href="{{ domain_steps }}">Open its DNS steps</a> at the mail service: they show each record with a copy button and check it by themselves.{% else %}Finish its setup in your account at the mail service.{% endif %} <span class="fg-2">Checked {{ from_domain.checked_at|slice(0, 16) }}.</span></div></div>
       {% elseif from_domain.state == 'not_registered' %}
-        <div class="alert theme-warning mb-0" role="alert"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div><strong>Mail from {{ from_domain.domain }} cannot be sent.</strong> The domain of the site's From address is not a sending domain of this client at the mail service. Add and verify it in the mail service's dashboard, or change the From address (Settings), then use <strong>Check connection</strong>. <span class="fg-2">Checked {{ from_domain.checked_at|slice(0, 16) }}.</span></div></div>
+        <div class="alert theme-warning mb-0" role="alert"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div><strong>Mail from {{ from_domain.domain }} cannot be sent.</strong> The domain of the site's From address is not a sending domain of your account at the mail service. Add it there (Settings › Sending domains), or change this site's From address (Settings › Sender); then use <strong>Check connection</strong>. <span class="fg-2">Checked {{ from_domain.checked_at|slice(0, 16) }}.</span></div></div>
       {% elseif from_domain.state == 'no_from_address' %}
-        <div class="alert theme-warning mb-0" role="note"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div>The site has no From address (MAIL_FROM_ADDRESS in Settings), so whether its domain can send is not known.</div></div>
+        <div class="alert theme-warning mb-0" role="note"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><div>The site has no From address (Settings › Sender), so whether its domain can send is not known.</div></div>
       {% else %}
         <p class="mb-0 fg-2">Whether mail from {{ from_domain.domain }} (the site's From address) can be sent has not been checked yet: use <strong>Check connection</strong>.</p>
       {% endif %}
       {% if waiting_for_domain ?? false %}
         <p class="mt-3 mb-0 fg-2"><i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>While the domain is being set up at the mail service, the worker asks it again every minute and this page updates itself.</p>
+      {% endif %}
+      {% if not sending_setup_done and is_administrator %}
+        <p class="mt-3 mb-0"><a href="{{ path('admin_sending_setup') }}"><i class="bi bi-list-check me-1" aria-hidden="true"></i>Set up sending</a> <span class="fg-2">shows what is left to do.</span></p>
       {% endif %}
     {% endif %}
   </div>
@@ -49,9 +56,9 @@
         {% if connection %}
           <form class="d-flex flex-row flex-wrap align-items-center gap-3 mt-5 pt-5 border-top" method="post" action="{{ path('admin_delivery_disconnect') }}">
             <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-            <button class="btn-solid theme-danger" type="submit" data-confirm="Disconnect the mail service? It revokes this site's API key and removes its webhook endpoint; campaign mail cannot be sent until a mail service is connected again."><i class="bi bi-plug me-1" aria-hidden="true"></i>Disconnect</button>
-            <button class="btn-outline theme-secondary" type="submit" name="forget" value="1" data-confirm="Forget the stored connection without telling the mail service? Its API key stays valid there until the connection is ended in its dashboard.">Forget without revoking</button>
-            <span class="fg-2">Disconnect ends the connection at the mail service, then clears what is stored here. Forget only clears what is stored here, for a mail service that no longer answers.</span>
+            <button class="btn-solid theme-danger" type="submit" data-confirm="Disconnect the mail service? It revokes this site's key and removes its webhook endpoint; campaign mail cannot be sent until a mail service is connected again."><i class="bi bi-plug me-1" aria-hidden="true"></i>Disconnect</button>
+            <button class="btn-outline theme-secondary" type="submit" name="forget" value="1" data-confirm="Forget the stored connection without telling the mail service? Its key stays valid there until the connection is ended in your account there.">Forget without revoking</button>
+            <span class="fg-2">Disconnect ends the connection at the mail service, then clears what is stored here; the address is kept. Forget only clears what is stored here, for a mail service that no longer answers.</span>
           </form>
         {% endif %}
       {% endif %}

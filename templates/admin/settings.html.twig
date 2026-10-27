@@ -66,6 +66,9 @@
         <h2 class="h5 mb-1">{{ group.label }}</h2>
         <p class="small fg-2 mb-7">{{ group.description }}</p>
 
+        {% if key == 'mail_service' and mail_service_connected %}
+          <div class="alert theme-secondary small" role="note"><i class="bi bi-plug" aria-hidden="true"></i><div>This site is connected to the mail service at <strong>{{ mail_service_connected }}</strong>, so its address cannot be changed here. To use another mail service, disconnect on the <a href="{{ path('admin_delivery') }}">Delivery</a> page first.</div></div>
+        {% endif %}
         {% if key == 'smtp' and cipher_problem %}
           <div class="alert theme-warning small" role="note"><i class="bi bi-key" aria-hidden="true"></i><div>SMTP settings can only be changed here once an encryption key is configured: {{ cipher_problem }}</div></div>
         {% endif %}
@@ -117,7 +120,7 @@
                     {{ form_label(child, null, {label_attr: {class: 'fw-semibold mb-0 text-truncate'}}) }}
                     {{- s.source(field) -}}
                   </div>
-                  {{ form_widget(child, {attr: field.default and setting.type != 'int' ? {placeholder: 'Default: ' ~ field.default} : {}}) }}
+                  {{ form_widget(child, {attr: (field.default and setting.type != 'int' ? {placeholder: 'Default: ' ~ field.default} : {})|merge(key == 'mail_service' and mail_service_connected ? {readonly: 'readonly'} : {})}) }}
                   {{ form_errors(child) }}
                   {{ form_help(child) }}
                 {% endif %}

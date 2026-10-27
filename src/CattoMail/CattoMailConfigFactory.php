@@ -8,11 +8,12 @@ use App\Util\Duration;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
- * Builds CattoMailConfig from the installation's .env and, for the address, the API key and the
- * webhook secret that .env leaves empty, from the connection made on the Delivery page
- * (ConnectionStore). Infrastructure, not editable Settings. The periods are
- * App\Util\Duration's (1y1w1d1h1m1s); one that is not a period gives the
- * default, and one below its minimum gives the minimum.
+ * Builds CattoMailConfig from the installation's .env and the Settings store (ConnectionStore):
+ * the API key and the webhook secret from .env, or the connection where .env leaves them empty;
+ * the mail service's address from the Settings store (the Settings page, or a connection), else
+ * .env, except that a key set in .env takes the address .env sets with it (a configuration made
+ * in .env stays whole). The periods are App\Util\Duration's (1y1w1d1h1m1s); one that is not a
+ * period gives the default, and one below its minimum gives the minimum.
  */
 final class CattoMailConfigFactory
 {
@@ -42,12 +43,24 @@ final class CattoMailConfigFactory
         $stored = $this->connection?->credentials();
         $values = [];
         $sources = [];
-        // .env wins for each value it sets; the connection supplies the rest.
-        foreach (['base_url' => $this->baseUrl, 'api_key' => $this->apiKey, 'webhook_secret' => $this->webhookSecret] as $name => $env) {
+        // .env wins for the key and the secret it sets; the connection supplies the rest.
+        foreach (['api_key' => $this->apiKey, 'webhook_secret' => $this->webhookSecret] as $name => $env) {
             $env = trim((string) $env);
             $values[$name] = $env !== '' ? $env : trim($stored[$name] ?? '');
             if ($values[$name] !== '') {
                 $sources[$name] = $env !== '' ? CattoMailConfig::SOURCE_ENV : CattoMailConfig::SOURCE_CONNECTION;
+            }
+        }
+        // The address: the stored one (Settings page or connection) wins, unless .env sets the key and an address for it.
+        $envAddress = trim((string) $this->baseUrl);
+        $storedAddress = $this->connection?->address() ?? '';
+        if ($storedAddress !== '' && !(($sources['api_key'] ?? '') === CattoMailConfig::SOURCE_ENV && $envAddress !== '')) {
+            $values['base_url'] = $storedAddress;
+            $sources['base_url'] = $stored !== null ? CattoMailConfig::SOURCE_CONNECTION : CattoMailConfig::SOURCE_SETTINGS;
+        } else {
+            $values['base_url'] = $envAddress;
+            if ($envAddress !== '') {
+                $sources['base_url'] = CattoMailConfig::SOURCE_ENV;
             }
         }
         return new CattoMailConfig(

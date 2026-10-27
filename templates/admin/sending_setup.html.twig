@@ -1,0 +1,13 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Set up sending{% endblock %}
+
+{% block content %}
+{% embed 'layout/_page_header.html.twig' with {title: 'Set up sending', description: 'Four steps take this site to its first message through the mail service, the service that delivers its campaign mail and checks addresses. Each is ticked when it is done.'} %}
+  {% block actions %}
+    <a class="btn-outline theme-secondary" href="{{ path('admin_delivery') }}"><i class="bi bi-truck me-1" aria-hidden="true"></i>Delivery</a>
+  {% endblock %}
+{% endembed %}
+
+{% include 'admin/_sending_setup.html.twig' %}
+{% endblock %}

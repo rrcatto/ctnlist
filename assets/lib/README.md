@@ -6,15 +6,18 @@ unmodified distribution files. Bootstrap's come from the npm package
 `bootstrap@6.0.0-alpha.1`, whose tarball was verified against the registry's
 integrity value
 (`sha512-snAWSjKDVdQAyPOtR69Upy247tZq13gw86SMDMZS4wNfBXGNdzbHdIP6GAyaAVJwTX4LjWowY8YYaJkSDv2wGQ==`)
-when vendored; the Bootstrap Icons stylesheet was verified against its
-jsDelivr Subresource Integrity hash.
+when vendored. Bootstrap Icons' come from the npm package
+`bootstrap-icons@1.13.2` (`font/` in the package), whose tarball was verified
+against the registry's integrity value
+(`sha512-fAU1Ly3dH7hwRg+CB8EZ0Vl0fF80zgXHeUVJyfUOKzoURr+TbwISbCW5tKUoQLERaWYG2emTCybcPbD96hdD1A==`)
+when vendored.
 
 | File | Source | SHA-384 (SRI) |
 |---|---|---|
 | bootstrap/bootstrap.min.css | `dist/css/bootstrap.min.css` in bootstrap@6.0.0-alpha.1 | sha384-B/GM4XqrwHnWXNOWMbloTmrYXZg10cakYGmpfsR/bbzQ6JAJI4ihuyADKLnBgrCe |
 | bootstrap/bootstrap.bundle.min.js | `dist/js/bootstrap.bundle.min.js` in bootstrap@6.0.0-alpha.1 (an ES module that includes Floating UI and Vanilla Calendar Pro) | sha384-1a/pXj49ZQ1aHEmrJ+gMw1otqoVsYwlEnlD8mIfY2TV03r20Y0CN7uqx1tQogjPL |
-| bootstrap-icons/bootstrap-icons.min.css | https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css | sha384-CK2SzKma4jA5H/MXDUU7i1TqZlCFaD4T01vtyDFvPlD97JQyS+IsSh1nI2EFbpyk |
-| bootstrap-icons/fonts/bootstrap-icons.woff2, .woff | https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/fonts/ | see the SHA-256 sums below |
+| bootstrap-icons/bootstrap-icons.min.css | `font/bootstrap-icons.min.css` in bootstrap-icons@1.13.2 | sha384-nWN3KqaaVcbEsCjLSV+2jMjh62Iny/+mN3srM8TZeM8N6aj7eDl5wwYggjAJ4/sJ |
+| bootstrap-icons/fonts/bootstrap-icons.woff2, .woff | `font/fonts/` in bootstrap-icons@1.13.2 | see the SHA-256 sums below |
 | htmx/htmx.esm.min.js | `dist/htmx.esm.min.js` in htmx.org@4.0.0 (an ES module; `assets/app.js` imports it) | sha384-lIFlfAj002Phzxvrea858KMM3/dXelBFF5rq+Oh5lChznUWuVI0mabAEUnsRa/2W |
 
 htmx comes from the npm package `htmx.org@4.0.0`, whose tarball was verified
@@ -33,5 +36,5 @@ To upgrade, replace the files with a newer release's, update this table and
 check every page in a browser (for htmx, every search field, page turn and
 in-place action: `templates/CLAUDE.md`, "htmx"). Bootstrap 6 is an alpha: read its migration
 guide for each new pre-release, since class names and markup can still change.
-    f55513b7b591cb84a3b87ff0e34ea24d4831d6fedc22e54b911ca64b5b544a15  bootstrap-icons/fonts/bootstrap-icons.woff
-    6c75710364a1ca5604267716f6d28997b26319fdb078cf11e0b42ab66ff2ea61  bootstrap-icons/fonts/bootstrap-icons.woff2
+    24929e8a44da027588f833d4e82240ee734bd65bf962b08b0545af58a9ce80fa  bootstrap-icons/fonts/bootstrap-icons.woff
+    2b7689746f87e0beeae25338bc021dd2515c2f6f003f3d3d064d878d380b2150  bootstrap-icons/fonts/bootstrap-icons.woff2

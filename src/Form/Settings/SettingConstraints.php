@@ -35,7 +35,9 @@ final class SettingConstraints
         $singleLine = new Assert\Regex(pattern: '/[\r\n]/', match: false, message: 'Enter this on one line.');
         return [...$constraints, ...match ($setting['type']) {
             'email' => [new EmailAddress()],
-            'url' => [new WebAddress()],
+            'url' => ($setting['https'] ?? false)
+                ? [new WebAddress(), new Assert\Regex(pattern: '#^https://#i', message: 'Enter an address that starts with https://.')]
+                : [new WebAddress()],
             'int' => [new WholeNumber(min: $setting['min'] ?? null)],
             'duration' => [new DurationSetting(shortest: $setting['shortest'] ?? null), $singleLine],
             'text' => [new Assert\Length(max: 2000), $singleLine],

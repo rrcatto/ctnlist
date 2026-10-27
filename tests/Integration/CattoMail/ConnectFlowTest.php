@@ -29,8 +29,9 @@ use Symfony\Component\HttpClient\MockHttpClient;
  * FakeCattoMail's connect page, exchange, connection and sending-domains
  * operations: what is sent and stored when it works, every way it is
  * refused, and that a key or secret is only ever stored encrypted. The
- * installation's .env sets no catto-mail here, so the connection is the only
- * source of the address, the key and the secret.
+ * installation's .env sets no catto-mail here (unless a test passes values),
+ * so the Settings store is the only source of the address, the key and the
+ * secret.
  */
 final class ConnectFlowTest extends IntegrationTestCase
 {
@@ -76,7 +77,7 @@ final class ConnectFlowTest extends IntegrationTestCase
     {
         self::assertNull($this->flow->obstacle());
         self::assertFalse($this->config()->isConfigured());
-        self::assertStringContainsString('connect the mail service on the Delivery page', (string) $this->config()->problem());
+        self::assertStringContainsString('connect the mail service (Settings › Set up sending)', (string) $this->config()->problem());
 
         // 1. The administrator names the mail service (any of its pages will do); the browser is sent to its connect page.
         $address = $this->flow->start('https://CattoMail.test/dashboard/login?next=1', self::CALLBACK, $this->admin);
@@ -88,7 +89,10 @@ final class ConnectFlowTest extends IntegrationTestCase
         self::assertSame('S256', $sent['code_challenge_method']);
         self::assertMatchesRegularExpression('/^[A-Za-z0-9_-]{43}$/', $sent['state']);
         self::assertMatchesRegularExpression('/^[A-Za-z0-9_-]{43}$/', $sent['code_challenge']);
-        self::assertSame(['application_name', 'redirect_uri', 'webhook_url', 'state', 'code_challenge', 'code_challenge_method'], array_keys($sent), 'nothing else, and no verifier');
+        self::assertSame(['application_name', 'redirect_uri', 'webhook_url', 'state', 'code_challenge', 'code_challenge_method', 'sending_domain'], array_keys($sent), 'nothing else, and no verifier');
+        self::assertSame($this->fromDomain(), $sent['sending_domain'], 'the domain of the site\'s From address, which the approval adds to the account');
+        // The address typed while none was known is kept: the next attempt needs no typing.
+        self::assertSame(FakeCattoMail::ORIGIN, $this->service(ConnectionStore::class)->address());
         // What waits here: the state, and the verifier only encrypted.
         $pending = json_decode((string) $this->service(OptionRepository::class)->get('cattomail:connect:pending'), true);
         self::assertIsArray($pending);
@@ -104,7 +108,7 @@ final class ConnectFlowTest extends IntegrationTestCase
 
         // 3. The code is exchanged from this server, without an API key, with the verifier.
         $connected = $this->flow->complete($back['state'], $back['code'], $this->admin);
-        self::assertSame(['service' => FakeCattoMail::ORIGIN, 'client_name' => 'Example Ltd', 'application_name' => $sent['application_name']], $connected);
+        self::assertSame(['service' => FakeCattoMail::ORIGIN, 'client_name' => 'Example Ltd', 'application_name' => $sent['application_name'], 'return' => 'delivery'], $connected);
         self::assertCount(1, $this->fake->requests);
         $exchange = $this->fake->requests[0];
         self::assertSame(['POST', FakeCattoMail::ORIGIN . '/v1/connect/exchange'], [$exchange['method'], $exchange['url']]);
@@ -116,7 +120,7 @@ final class ConnectFlowTest extends IntegrationTestCase
         // The key and the secret are in the Settings store, encrypted; nothing else holds them.
         $issued = $this->fake->connections[$this->fake->lastConnectionId()];
         $stored = $this->service(SettingRepository::class)->all();
-        self::assertSame(FakeCattoMail::BASE, $stored['CATTOMAIL_API_BASE_URL']['value']);
+        self::assertSame(FakeCattoMail::ORIGIN, $stored['CATTOMAIL_API_BASE_URL']['value'], 'the address as a person gives it');
         foreach (['CATTOMAIL_API_KEY' => $issued['api_key'], 'CATTOMAIL_WEBHOOK_SECRET' => $issued['signing_secret']] as $name => $secret) {
             self::assertTrue($stored[$name]['secret'], $name);
             self::assertStringStartsWith('enc:v1:', $stored[$name]['value']);
@@ -265,10 +269,13 @@ final class ConnectFlowTest extends IntegrationTestCase
         self::assertSame(['DELETE', FakeCattoMail::BASE . '/connection'], [$request['method'], $request['url']]);
         self::assertSame('Bearer ' . $issued['api_key'], $request['headers']['authorization'], 'the connection ends itself with its own key');
         self::assertSame('revoked', $this->fake->connections[$issued['id']]['status']);
-        // Nothing of it is left here.
+        // Nothing of it is left here but the address, so connecting again needs no typing.
         self::assertNull($this->service(ConnectionStore::class)->credentials());
         self::assertNull($this->service(ConnectionStore::class)->details());
-        self::assertSame(0, (int) $this->db->fetchOne("SELECT COUNT(*) FROM options WHERE o_key LIKE 'setting:CATTOMAIL_%'"));
+        self::assertSame(['setting:CATTOMAIL_API_BASE_URL'], $this->db->fetchFirstColumn("SELECT o_key FROM options WHERE o_key LIKE 'setting:CATTOMAIL_%'"));
+        self::assertSame(FakeCattoMail::ORIGIN, $this->service(ConnectionStore::class)->address());
+        self::assertSame(FakeCattoMail::ORIGIN, $this->config()->address(), 'the next request connects there again');
+        self::assertFalse($this->service(ConnectionStore::class)->isConnected());
         self::assertNull($this->service(SendingDomainCheck::class)->last());
         self::assertFalse($this->config()->isConfigured());
         // And the key is no longer worth anything at the mail service.
@@ -308,6 +315,34 @@ final class ConnectFlowTest extends IntegrationTestCase
             'service' => FakeCattoMail::ORIGIN, 'webhook_url' => '', 'webhook_endpoint_id' => ''], $this->admin->id);
         $this->assertRefused('did not end the connection', fn() => $this->flow->disconnect($this->admin));
         self::assertNotNull($this->service(ConnectionStore::class)->credentials());
+    }
+
+    public function testAnAddressGivenOnceIsUsedAndKeptWhileConnected(): void
+    {
+        // An address set on the Settings page (or given in Set up sending): Connect needs no typing.
+        $store = $this->service(ConnectionStore::class);
+        $store->rememberAddress(FakeCattoMail::ORIGIN, $this->admin->id);
+        self::assertSame(CattoMailConfig::SOURCE_SETTINGS, $this->config()->source('base_url'));
+        self::assertFalse($this->config()->isConfigured(), 'an address alone is not a configuration');
+        $flow = $this->flowWith($this->config(), 'test');
+        self::assertSame(FakeCattoMail::ORIGIN, $flow->address());
+        $address = $flow->start('', self::CALLBACK, $this->admin);
+        self::assertStringStartsWith(FakeCattoMail::ORIGIN . '/dashboard/connect?', $address);
+        $back = self::query($this->fake->approve($address));
+        $flow->complete($back['state'], $back['code'], $this->admin);
+        self::assertTrue($this->config()->usesConnection());
+
+        // While connected, another address is refused: the key works only at the mail service that issued it.
+        $this->assertRefused('disconnect it on the Delivery page', fn() => $store->rememberAddress('https://other.example', $this->admin->id));
+        // An address in .env alone is only a default: it neither wins over the connection nor blocks Connect.
+        $config = $this->config(['https://env.example']);
+        self::assertSame([FakeCattoMail::BASE, true, []], [$config->apiRoot(), $config->usesConnection(), $config->envSettings()]);
+        self::assertNull($this->flowWith($config, 'test')->obstacle());
+
+        // Without an address anywhere, Connect asks for one.
+        $this->flow->disconnect($this->admin);
+        $this->db->executeStatement("DELETE FROM options WHERE o_key = 'setting:CATTOMAIL_API_BASE_URL'");
+        $this->assertRefused('Enter the mail service', fn() => $this->flowWith($this->config(), 'test')->start('', self::CALLBACK, $this->admin));
     }
 
     public function testEnvWinsOverTheConnectionAndConnectIsThenRefused(): void
@@ -374,7 +409,8 @@ final class ConnectFlowTest extends IntegrationTestCase
         unset($this->fake->domainStates[$domain]);
         self::assertSame(CattoMailHealth::OK, $health->check()['state']);
         self::assertSame(SendingDomainCheck::OK, $check->fromAddress()['state']);
-        self::assertSame(['domain' => $domain, 'status' => 'verified', 'dkim_status' => 'active', 'can_send' => true], $client->listSendingDomains()[0]);
+        self::assertSame(['domain' => $domain, 'status' => 'verified', 'dkim_status' => 'active', 'can_send' => true], array_diff_key($client->listSendingDomains()[0], ['setup_url' => 1]));
+        self::assertStringStartsWith(FakeCattoMail::ORIGIN . '/dashboard/c/', $client->listSendingDomains()[0]['setup_url'], 'the domain\'s page at the mail service');
 
         // The From domain is not one of the client's sending domains at all.
         $this->fake->senderDomains = ['smarthost-dev.test'];

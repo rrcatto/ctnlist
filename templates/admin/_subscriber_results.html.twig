@@ -1,6 +1,7 @@
 {#
   The results of the subscriber search (Admin\SubscriberController::report()): the page includes it,
-  and it is the htmx region subscriber-results that the search field and the pager draw again.
+  and it is the htmx region subscriber-results that the search field, the pager and each row's Actions
+  menu (admin/_subscriber_actions.html.twig) draw again.
 #}
 {% import 'admin/_macros.html.twig' as ui %}
 {% set base = path(active ? 'admin_subscribers_active' : 'admin_subscribers') %}
@@ -22,12 +23,15 @@
           <th scope="col">Last interaction</th>
           <th scope="col">Created</th>
           <th scope="col">Last signed in</th>
+          {% if can_edit %}<th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th>{% endif %}
         </tr>
       </thead>
       <tbody>
       {% for row in rows %}
         <tr>
-          <td>{% if can_edit %}<a href="{{ path('admin_subscriber', {token: row.s_uuid}) }}">{{ row.s_email }}</a>{% else %}{{ row.s_email }}{% endif %}</td>
+          <td>{% if can_edit %}<a href="{{ path('admin_subscriber', {token: row.s_uuid}) }}">{{ row.s_email }}</a>{% else %}{{ row.s_email }}{% endif %}
+            {% if row.address_block or row.domain_block %} <span class="badge theme-danger" title="{{ row.address_block ? 'This address is blocked' : 'Every address at its domain is blocked' }}"><i class="bi bi-slash-circle me-1" aria-hidden="true"></i>Blocked</span>{% endif %}
+            {% if row.s_delivery_state != 'ok' %} <span class="badge theme-warning">{{ row.s_delivery_state == 'complained' ? 'Complained' : 'Hard bounce' }}</span>{% endif %}</td>
           <td>{{ (row.s_fname ~ ' ' ~ row.s_lname)|trim }}</td>
           <td>
             {% for membership in row.memberships %}
@@ -42,6 +46,9 @@
           <td class="text-nowrap">{{ row.s_last_interacted ?: '–' }}</td>
           <td class="text-nowrap">{{ row.s_created_at }}</td>
           <td class="text-nowrap">{{ row.s_last_login_at ?: 'Never' }}</td>
+          {% if can_edit %}<td class="text-end">{% include 'admin/_subscriber_actions.html.twig' with {token: row.s_uuid, email: row.s_email, delivery_state: row.s_delivery_state,
+            has_active: row.memberships|filter(m => m.state != 'unsubscribed')|length > 0, address_block: row.address_block, domain_block: row.domain_block,
+            return: 'list', region: 'subscriber-results'} only %}</td>{% endif %}
         </tr>
       {% endfor %}
       </tbody>

@@ -32,7 +32,7 @@ ETC="/etc/ctnlist"
 BACKUPS="/var/backups/ctnlist"
 # What `composer install --no-dev` requires (ctnlist:diagnose REQUIRED_EXTENSIONS; tests/Unit/PhpExtensionsTest).
 EXTENSIONS="pdo pdo_pgsql openssl gd mbstring fileinfo filter json session dom xml iconv"
-NAME="" VERSION="" HOST="" ADMIN_EMAIL="" LIST_NAME="" ORGANISATION="" MAIL_FROM="" MAILER_DSN=""
+NAME="" VERSION="" HOST="" ADMIN_EMAIL="" LIST_NAME="" ORGANISATION="" MAIL_FROM="" MAILER_DSN="" MAIL_SERVICE=""
 BANLIST_ENV="" CREATE_BANLIST=false CERT="" CERT_KEY=""
 ASSUME_YES=false RECREATE=false SAMPLES=false WEB_SERVER=true BACKUP=true
 LOG="/var/log/ctnlist-install.log"
@@ -54,6 +54,8 @@ usage: sudo ./install-ctnlist --installation NAME [options]
   --mail-from ADDRESS     sender of the site's mail (default: info@<host>)
   --mailer-dsn DSN        the SMTP server for sign-in links and notifications, e.g.
                           smtps://USER:PASS@smtp.example.org:465 (nobody can sign in without one)
+  --mail-service URL      the address of the mail service (catto-mail) the site sends its campaigns
+                          through, e.g. https://mail.example.org (default: none; Set up sending asks)
   --banlist-env FILE      the ban.env of the suppression database this installation shares
   --create-banlist        or: create a suppression database on this server
   --certificate FILE      the site's TLS certificate with its chain, and
@@ -85,6 +87,7 @@ while (($#)); do
     --organisation) ORGANISATION="${2:-}"; shift 2 ;;
     --mail-from) MAIL_FROM="${2:-}"; shift 2 ;;
     --mailer-dsn) MAILER_DSN="${2:-}"; shift 2 ;;
+    --mail-service) MAIL_SERVICE="${2:-}"; shift 2 ;;
     --banlist-env) BANLIST_ENV="${2:-}"; shift 2 ;;
     --create-banlist) CREATE_BANLIST=true; shift ;;
     --certificate) CERT="${2:-}"; shift 2 ;;
@@ -134,6 +137,7 @@ ask() {  # ask VAR "Question" [default]
 }
 valid_host() { [[ "$1" =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ ]]; }
 valid_email() { [[ "$1" =~ ^[A-Za-z0-9._%+-]{1,64}@([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ ]]; }
+valid_service() { [[ "$1" =~ ^https://([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(:[0-9]{1,5})?/?$ ]]; }
 newer() { [[ "$1" != "$2" && "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n1)" == "$1" ]]; }  # newer A B: A > B
 
 # Commands for the installation, as the PHP-FPM user, exactly as cron and the web server run them.
@@ -263,6 +267,9 @@ main() {
     ask MAIL_FROM "Sender of the site's mail" "info@$HOST"
     valid_email "$MAIL_FROM" || fail "'$MAIL_FROM' is not an e-mail address" "pass --mail-from"
     ask MAILER_DSN "SMTP server for sign-in links, e.g. smtps://USER:PASS@smtp.example.org:465 (empty: set it in .env later)"
+    ask MAIL_SERVICE "The address of the mail service (catto-mail) for campaign mail, e.g. https://mail.example.org (empty: Set up sending asks)"
+    MAIL_SERVICE="${MAIL_SERVICE%/}"
+    [[ -z "$MAIL_SERVICE" ]] || valid_service "$MAIL_SERVICE" || fail "'$MAIL_SERVICE' is not the https address of a mail service" "pass --mail-service with an address such as https://mail.example.org, or leave it out"
     if [[ -z "$BANLIST_ENV" && "$CREATE_BANLIST" != true ]]; then
       if [[ -f "$ETC/ban.env" ]]; then BANLIST_ENV="$ETC/ban.env"
       else
@@ -297,6 +304,7 @@ main() {
       APP_ABOUT_US "" DB_HOST 127.0.0.1 DB_PORT 5432 DB_NAME "$db" DB_USER "$db" DB_PASS "$(openssl rand -hex 24)" \
       MAILER_DSN "$MAILER_DSN" MAIL_FROM_ADDRESS "$MAIL_FROM" MAIL_FROM_NAME "$LIST_NAME" MAIL_ADMIN_ADDRESS "$ADMIN_EMAIL" \
       MAIL_BOUNCE_ADDRESS "$MAIL_FROM" MAIL_TEST_ADDRESS "$ADMIN_EMAIL" CONTACT_MAIL_ADDRESS "$ADMIN_EMAIL" CONTACT_MAIL_NAME "$ORGANISATION" \
+      CATTOMAIL_API_BASE_URL "$MAIL_SERVICE" \
       GDB_ENV_DIRECTORY "$(dirname "${BANLIST_ENV:-$ETC/ban.env}")" GDB_ENV_FILE "$(basename "${BANLIST_ENV:-$ETC/ban.env}")" \
       || fail "the configuration could not be written" "see the log"
     chown root:"$FPM_USER" "$INST/.env.new"; chmod 640 "$INST/.env.new"; mv "$INST/.env.new" "$INST/.env"
@@ -521,7 +529,8 @@ Next:
   1. Point $HOST at this server (DNS), and replace a temporary certificate with a real one.
   2. Open https://$HOST/login and ask for a sign-in link as $ADMIN_EMAIL: that address
      becomes the first administrator. It needs the SMTP server (MAILER_DSN in .env).
-  3. Connect the mail service: Admin > Settings > Delivery, enter its address, approve there.
+  3. Set up sending (Settings > Set up sending): the mail service account, Connect, the
+     sending domain's DNS records and a test message, one step at a time.
   4. Go through the README's release checklist ($TREE/README.md).
 NEXT
   fi

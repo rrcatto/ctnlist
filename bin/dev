@@ -91,7 +91,14 @@ cattomail_status() {
     if podman exec "$APP" getent hosts "$host" >/dev/null 2>&1; then say "catto-mail reachable as $host" "yes"
     else say "catto-mail reachable as $host" "NO: catto-mail's pod must be on $CATTOMAIL_NETWORK (catto-mail: smarthostctl recreate, after cattomail-link)"; ok=0; fi
     for key in CATTOMAIL_CA_FILE CATTOMAIL_WEBHOOK_URL; do
-        if present "$key"; then say "$key" "set"; else say "$key" "not set in $env_file"; ok=0; fi
+        if ! present "$key"; then say "$key" "not set in $env_file"; ok=0; continue; fi
+        # The CA file is read in the app container, under the versioned shared-code mount: a new release moves it.
+        local value; value="$(sed -n "s/^$key=//p" "$env_file" | tail -1)"
+        if [ "$key" = CATTOMAIL_CA_FILE ] && ! podman exec "$APP" test -r "$value" 2>/dev/null; then
+            say "$key" "set, but the app container cannot read $value; expected $(shared_code_path)/dev/podman/cattomail-ca.pem (bin/dev cattomail-ca)"; ok=0
+        else
+            say "$key" "set"
+        fi
     done
     local stored; stored="$(psql_db -Atc "SELECT COUNT(*) FROM options WHERE o_key IN ('setting:CATTOMAIL_API_BASE_URL', 'setting:CATTOMAIL_API_KEY', 'setting:CATTOMAIL_WEBHOOK_SECRET')" 2>/dev/null || echo 0)"
     if present CATTOMAIL_API_BASE_URL && present CATTOMAIL_API_KEY && present CATTOMAIL_WEBHOOK_SECRET; then
@@ -116,7 +123,12 @@ cattomail_ca() {
     echo | openssl s_client -connect "$endpoint" -servername localhost -showcerts 2>/dev/null \
         | openssl x509 -outform PEM > dev/podman/cattomail-ca.pem
     openssl x509 -in dev/podman/cattomail-ca.pem -noout -subject -enddate
-    echo "Saved dev/podman/cattomail-ca.pem; set CATTOMAIL_CA_FILE to its path inside the app container: <the compose.yaml shared-code path>/dev/podman/cattomail-ca.pem"
+    echo "Saved dev/podman/cattomail-ca.pem; in dev/podman/ctnlist.env: CATTOMAIL_CA_FILE=$(shared_code_path)/dev/podman/cattomail-ca.pem"
+}
+
+# Where compose.yaml mounts the repository in the app container (the versioned shared-code path).
+shared_code_path() {
+    sed -n 's#^ *- \./:\(/usr/local/lib/php/ctnlist/[^:]*\)$#\1#p' compose.yaml | head -1
 }
 
 # Settings ctnlist no longer reads. ensure-env only warns about them; it never

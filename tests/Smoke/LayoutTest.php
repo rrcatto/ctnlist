@@ -41,6 +41,7 @@ final class LayoutTest extends SmokeTestCase
         '/delivery' => 'logs.view',
         '/roles' => 'roles.manage',
         '/settings' => 'settings.manage',
+        '/delivery/setup' => 'settings.manage',
     ];
 
     private static int $navId;
@@ -157,6 +158,17 @@ final class LayoutTest extends SmokeTestCase
             self::assertStringContainsString('href="' . $href . '"', $body, "admin link {$href}");
         }
         self::assertMatchesRegularExpression('/All subscribers<\/span>\s*<span class="badge[^"]*">\d+</', $body, 'counters');
+        // Every link of the administration bar has its icon (owner decision 2026-10-27), and no two items of a menu share one.
+        $bar = explode('</nav>', explode('aria-label="Administration"', $body, 2)[1], 2)[0];
+        preg_match_all('#<a [^>]*href="([^"]+)"[^>]*>(.*?)</a>#s', $bar, $links, PREG_SET_ORDER);
+        self::assertSame([], array_diff(array_keys(self::ADMIN_LINKS), array_column($links, 1)), 'the bar shows every administration link');
+        foreach ($links as [, $href, $inside]) {
+            self::assertMatchesRegularExpression('#<i class="bi bi-[a-z0-9-]+[^"]*" aria-hidden="true"></i>#', $inside, "icon for {$href}");
+        }
+        foreach (explode('<div class="menu"', $bar) as $menu) {
+            preg_match_all('#<a class="menu-item[^>]*>\s*<span><i class="bi (bi-[a-z0-9-]+)#', $menu, $icons);
+            self::assertSame(array_unique($icons[1]), $icons[1], 'each item of a menu has its own icon');
+        }
         $group = static function (string $icon) use ($body): string {
             foreach (explode('<li class="nav-item">', $body) as $item) {
                 if (str_contains($item, 'class="bi bi-' . $icon . '"')) {

@@ -224,6 +224,35 @@
     transition: opacity 200ms ease-in 300ms;
 }
 
+/* A value with its copy button (layout/_copy.html.twig). */
+.app-copy {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    max-width: 100%;
+}
+
+.app-copy > code {
+    overflow-wrap: anywhere;
+}
+
+/* Set up sending: the steps, one open at a time. */
+.app-steps > li + li {
+    margin-top: 1rem;
+}
+
+.app-steps .app-step-mark {
+    flex: none;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+}
+
 /* A region brought into view after a page turn stays clear of the sticky header. */
 .app-region {
     scroll-margin-top: 8rem;

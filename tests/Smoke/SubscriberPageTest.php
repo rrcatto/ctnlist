@@ -56,7 +56,7 @@ final class SubscriberPageTest extends SmokeTestCase
         $invited = self::region($client, $path . '/invite', 'subscriber-lists', 'POST', ['invitation[listId]' => $listId] + $fields, $path);
         self::assertRegion('subscriber-lists', $invited);
         self::assertStringContainsString('Invited ' . self::EMAIL . ' to Smoke page list', $invited['body'], 'the flash message comes with the card');
-        self::assertMatchesRegularExpression('#Smoke page list ' . self::$suffix . ' <code class="small">' . $code . '</code>\s*</span>\s*<span class="badge theme-warning">pending</span>#', $invited['body']);
+        self::assertMatchesRegularExpression('#Smoke page list ' . self::$suffix . ' <code class="small">' . $code . '</code>\s*</span>\s*<span class="d-flex[^"]*">\s*<span class="badge theme-warning">pending</span>#', $invited['body']);
         self::assertSame(1, (int) self::value("SELECT COUNT(*) FROM sendlog WHERE sl_email = ? AND sl_type = 'SUBSCRIBE'", [self::EMAIL]), 'the invitation was sent');
 
         // Without JavaScript the same form posts and comes back to the page.

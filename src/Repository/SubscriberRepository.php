@@ -165,7 +165,11 @@ final class SubscriberRepository
         [$where, $params] = self::reportFilter($email, $activeOnly, $show, $listId);
         $rows = $this->db->fetchAllAssociative(
             "SELECT s.s_id, s.s_uuid, s.s_email, s.s_fname, s.s_lname, s.s_priority, s.s_last_interacted, s.s_bounces, s.s_emailsleft,
-                    s.s_created_at, s.s_last_login_at,
+                    s.s_created_at, s.s_last_login_at, s.s_delivery_state,
+                    (SELECT b.cbl_uuid::text FROM cattomail_blocks b WHERE b.cbl_status IN ('pending', 'active') AND b.cbl_scope = 'address'
+                        AND lower(b.cbl_value) = lower(s.s_email) LIMIT 1) AS address_block,
+                    (SELECT b.cbl_uuid::text FROM cattomail_blocks b WHERE b.cbl_status IN ('pending', 'active') AND b.cbl_scope = 'domain'
+                        AND b.cbl_value = lower(split_part(s.s_email, '@', 2)) LIMIT 1) AS domain_block,
                     COALESCE(JSON_AGG(JSON_BUILD_OBJECT('name', l.l_name, 'state', CASE
                         WHEN ls.ls_confirmed AND NOT ls.ls_unsubscribed THEN 'confirmed'
                         WHEN ls.ls_unsubscribed THEN 'unsubscribed'

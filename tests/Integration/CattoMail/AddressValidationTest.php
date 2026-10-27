@@ -111,6 +111,27 @@ final class AddressValidationTest extends CattoMailTestCase
         self::assertSame(0, $this->service(CattoMailWorker::class)->run()['validation jobs reconciled'], 'resolved: no more polling');
     }
 
+    /** Which members are validated (owner decision 2026-10-27): confirmed by default, unconfirmed only, or everyone not unsubscribed. */
+    public function testTheChosenMembersAreValidated(): void
+    {
+        [$listId, $subscribers] = $this->members(['con@example.com', 'unc@example.com', 'off@example.com']);
+        $this->setMembership($subscribers['unc@example.com'], $listId, false);
+        $this->setMembership($subscribers['off@example.com'], $listId, true, true);
+        $sent = function (string $members) use ($listId): array {
+            $this->fake->requests = [];
+            $ids = $this->service(AddressValidation::class)->createForList($listId, 'News', null, $members);
+            $scope = $this->service(CattoMailValidationRepository::class)->job($ids[0])['cvj_scope'] ?? '';
+            return [$scope, array_column($this->fake->requestsTo('POST', '/validation-jobs')[0]['body']['addresses'], 'address')];
+        };
+        self::assertSame(['List News: confirmed members', ['con@example.com']], $sent('confirmed'));
+        self::assertSame(['List News: unconfirmed members only', ['unc@example.com']], $sent('unconfirmed'));
+        self::assertSame(['List News: everyone not unsubscribed', ['con@example.com', 'unc@example.com']], $sent('everyone'), 'never one who unsubscribed');
+        self::assertSame(['List News: confirmed members', ['con@example.com']], [$this->service(CattoMailValidationRepository::class)->job(
+            $this->service(AddressValidation::class)->createForList($listId, 'News', null)[0])['cvj_scope'] ?? '', ['con@example.com']], 'confirmed is the default');
+        $this->expectException(\InvalidArgumentException::class);
+        $this->service(AddressValidation::class)->createForList($listId, 'News', null, 'all');
+    }
+
     /**
      * @param list<string> $emails
      * @return array{0: int, 1: array<string, int>} list id and subscriber ids by address

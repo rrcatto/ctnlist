@@ -589,6 +589,36 @@ CREATE INDEX idx_cgo_subscriber ON cattomail_global_optouts (cgo_s_id);
 -- At most one opt-out in progress or in force per subscriber (a double submit
 -- cannot report two); lifted and refused ones are history.
 CREATE UNIQUE INDEX uq_cgo_open_per_subscriber ON cattomail_global_optouts (cgo_s_id) WHERE cgo_status IN ('pending', 'active', 'lift_pending');
+
+-- An administrator's blocks of an address or a whole domain, kept by catto-mail
+-- as account blocks (POST /v1/blocks; owner decision 2026-10-27): reported with
+-- the stored key, retried by the worker, lifted with POST /v1/blocks/{id}/lift.
+-- A pending or active block also stops queueing here (BlockAwareChecker).
+CREATE TABLE cattomail_blocks (
+    cbl_id BIGSERIAL PRIMARY KEY,
+    cbl_uuid UUID NOT NULL DEFAULT ctn_uuid_v7(),
+    cbl_scope VARCHAR(10) NOT NULL,
+    cbl_value VARCHAR(320) NOT NULL,
+    cbl_idempotency_key VARCHAR(64) NOT NULL,
+    cbl_remote_id UUID,
+    cbl_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    cbl_requested_by_s_id BIGINT REFERENCES subscribers (s_id) ON DELETE SET NULL,
+    cbl_requested_at TIMESTAMP WITHOUT TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    cbl_confirmed_at TIMESTAMP WITHOUT TIME ZONE,
+    cbl_lift_requested_by_s_id BIGINT REFERENCES subscribers (s_id) ON DELETE SET NULL,
+    cbl_lift_requested_at TIMESTAMP WITHOUT TIME ZONE,
+    cbl_lifted_at TIMESTAMP WITHOUT TIME ZONE,
+    cbl_attempts INTEGER NOT NULL DEFAULT 0,
+    cbl_error TEXT,
+    CONSTRAINT uq_cbl_uuid UNIQUE (cbl_uuid),
+    CONSTRAINT uq_cbl_idempotency_key UNIQUE (cbl_idempotency_key),
+    CONSTRAINT uq_cbl_remote_id UNIQUE (cbl_remote_id),
+    CONSTRAINT ck_cbl_scope CHECK (cbl_scope IN ('address', 'domain')),
+    CONSTRAINT ck_cbl_value CHECK (cbl_value = btrim(cbl_value) AND (cbl_scope = 'address') = (position('@' IN cbl_value) > 0)),
+    CONSTRAINT ck_cbl_status CHECK (cbl_status IN ('pending', 'active', 'lift_pending', 'lifted', 'rejected'))
+);
+-- One block of a value in progress or in force (a double submit cannot report two).
+CREATE UNIQUE INDEX uq_cbl_open ON cattomail_blocks (cbl_scope, lower(cbl_value)) WHERE cbl_status IN ('pending', 'active', 'lift_pending');
 SQL);
 
         $this->seedSystemData();
@@ -808,6 +838,7 @@ SQL);
         $this->execute('DROP FUNCTION IF EXISTS ctn_uuid_v7() CASCADE');
 
         foreach ([
+            'cattomail_blocks',
             'cattomail_global_optouts',
             'cattomail_webhook_events',
             'cattomail_recipients',

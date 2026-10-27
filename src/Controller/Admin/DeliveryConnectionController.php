@@ -44,14 +44,20 @@ final class DeliveryConnectionController extends AbstractController
     public function connect(Request $request, #[CurrentUser] SubscriberUser $admin): Response
     {
         $this->denyUnlessAdministrator($admin);
-        $form = $this->createForm(MailServiceType::class);
+        // From Set up sending, the administrator comes back there; otherwise to the Delivery page.
+        $return = $request->request->getString('return') === 'setup' ? 'setup' : 'delivery';
+        $form = $this->createForm(MailServiceType::class, null, ['ask_address' => $this->flow->address() === '']);
         $form->handleRequest($request);
         if ($form->isSubmitted() && $form->isValid()) {
             try {
-                $address = $this->flow->start((string) $form->get('service')->getData(),
-                    $this->generateUrl('admin_delivery_connect_callback', [], UrlGeneratorInterface::ABSOLUTE_URL), $admin);
+                $address = $this->flow->start($form->has('service') ? (string) $form->get('service')->getData() : '',
+                    $this->generateUrl('admin_delivery_connect_callback', [], UrlGeneratorInterface::ABSOLUTE_URL), $admin, $return);
                 return $this->render('admin/delivery_connect_continue.html.twig', ['address' => $address, 'service' => (string) parse_url($address, PHP_URL_HOST)]);
             } catch (\InvalidArgumentException $e) {
+                if ($return === 'setup' && !$form->has('service')) {
+                    $this->addFlash('danger', $e->getMessage());
+                    return $this->redirectToRoute('admin_sending_setup');
+                }
                 FormErrors::attach($form, $e);
             }
         }
@@ -84,11 +90,11 @@ final class DeliveryConnectionController extends AbstractController
                 return $this->answer($state, $code, '', '', $admin, $e->getMessage());
             }
             $this->addFlash('danger', $e->getMessage());
-            return $this->redirectToRoute('admin_delivery');
+            return $this->redirectToRoute(($this->flow->pending()['return'] ?? 'delivery') === 'setup' ? 'admin_sending_setup' : 'admin_delivery');
         }
-        $this->addFlash('info', sprintf('The mail service at %s is connected%s. Its API key and webhook secret are stored encrypted.',
-            (string) parse_url($connected['service'], PHP_URL_HOST), $connected['client_name'] !== '' ? ', as its client "' . $connected['client_name'] . '"' : ''));
-        return $this->redirectToRoute('admin_delivery');
+        $this->addFlash('info', sprintf('This site is connected to the mail service at %s%s. Its key and webhook secret are stored encrypted.',
+            (string) parse_url($connected['service'], PHP_URL_HOST), $connected['client_name'] !== '' ? ', with the account "' . $connected['client_name'] . '"' : ''));
+        return $this->redirectToRoute($connected['return'] === 'setup' ? 'admin_sending_setup' : 'admin_delivery');
     }
 
     #[Route('/delivery/disconnect', name: 'admin_delivery_disconnect', methods: ['POST'])]
@@ -119,7 +125,8 @@ final class DeliveryConnectionController extends AbstractController
     /** The connect form by itself, with its errors (the Delivery page shows the same form). */
     private function form(FormInterface $form): Response
     {
-        return $this->render('admin/delivery_connect.html.twig', ['form' => $form, 'obstacle' => $this->flow->obstacle()], new Response(status: Response::HTTP_UNPROCESSABLE_ENTITY));
+        return $this->render('admin/delivery_connect.html.twig', ['form' => $form, 'obstacle' => $this->flow->obstacle(), 'address' => $this->flow->address()],
+            new Response(status: Response::HTTP_UNPROCESSABLE_ENTITY));
     }
 
     private function answer(string $state, string $code, string $error, string $description, SubscriberUser $admin, ?string $failure = null): Response

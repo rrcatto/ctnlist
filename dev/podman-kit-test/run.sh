@@ -127,9 +127,11 @@ for user in "$SITE_USER" "$SITE2"; do as_user "$user" git config --global --add 
 # The kit's images, so that the stand-in need not fetch them (it still builds ctnlist's own).
 podman save -q -m "${IMAGES[@]}" | as_site podman load -q >/dev/null
 
+# The refused run below already writes .env (before it checks the database), and the installation keeps it.
+OPTIONS=(--port "$PORT" --host "$HOST" --admin-email "$ADMIN" --list-name "Podman Kit Test List" --mailer-dsn "smtp://127.0.0.1:1025" --mailpit --sample-templates
+  --mail-service "https://mail.ctnlist-kit.test")
 sql "CREATE TABLE another_application (id int)" >/dev/null
-if kit --version "v$NEXT" --port "$PORT" --host "$HOST" --admin-email "$ADMIN" --list-name "Podman Kit Test List" \
-     --mailer-dsn "smtp://127.0.0.1:1025" --mailpit --sample-templates > "$GEN/refused.log" 2>&1; then
+if kit --version "v$NEXT" "${OPTIONS[@]}" > "$GEN/refused.log" 2>&1; then
   fail "the kit installed into a database holding another application's table"
 else
   grep -q "not this release's schema" "$GEN/refused.log" && [[ "$(sql "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'")" == 1 ]] \
@@ -139,7 +141,6 @@ fi
 sql "DROP TABLE another_application" >/dev/null
 
 echo "== I a new installation of $NEXT"
-OPTIONS=(--port "$PORT" --host "$HOST" --admin-email "$ADMIN" --list-name "Podman Kit Test List" --mailer-dsn "smtp://127.0.0.1:1025" --mailpit --sample-templates)
 if kit --version "v$NEXT" "${OPTIONS[@]}" > "$GEN/install-1.log" 2>&1; then pass "the kit finished (exit 0)"; else fail "kit exit: $(tail -n 25 "$GEN/install-1.log")"; fi
 [[ "$(steps "$GEN/install-1.log")" == 13 ]] && pass "13 numbered steps, each PASS or WARN" || fail "steps: $(grep -E '^\[[0-9]{2}/13\]' "$GEN/install-1.log" | grep -v PASS)"
 if [[ $FAIL -gt 0 ]]; then echo "podman-kit-test: the installation failed, nothing further to test: $PASS passed, $FAIL failed"; exit 1; fi
@@ -147,6 +148,8 @@ secret="$(in_vps sed -n 's/^APP_SECRET=//p' "$KIT/site/.env")"; dbpass="$(in_vps
 [[ "$(in_vps stat -c '%a %U' "$KIT/site/.env")" == "600 $SITE_USER" && ${#secret} == 64 && ${#dbpass} == 48 ]] \
   && ! in_vps grep -qF -e "$secret" -e "$dbpass" "$KIT/install.log" && ! grep -qF -e "$secret" -e "$dbpass" "$GEN/install-1.log" "$GEN/refused.log" \
   && pass ".env is the site user's alone, its secrets are generated, and neither the log nor the output holds them" || fail "secrets"
+[[ "$(in_vps sed -n 's/^CATTOMAIL_API_BASE_URL=//p' "$KIT/site/.env")" == "https://mail.ctnlist-kit.test" ]] \
+  && pass "the mail service's address (--mail-service) is in .env" || fail "CATTOMAIL_API_BASE_URL: $(in_vps sed -n 's/^CATTOMAIL_API_BASE_URL=//p' "$KIT/site/.env")"
 php_writes() { as_site podman exec ctnlist-php sh -c "test -w '$1'"; }
 ! php_writes "/usr/local/lib/php/ctnlist/$NEXT/src" && ! php_writes /var/www/site/.env && ! php_writes /var/www/site/public_html \
   && php_writes /var/www/site/var && php_writes /var/www/site/logs \
@@ -198,12 +201,14 @@ fi
   && pass "the sign-in link is mailed through the pod's SMTP setting, and signs the first administrator in" || fail "sign-in: link '${link:0:40}', sign in $signin"
 # The form's CSRF token belongs to the PHP session this page starts: keep its cookie.
 page="$(in_vps curl -ksS -c "$jar" -b "$jar" --resolve "$HOST:443:127.0.0.1" "https://$HOST/delivery" || true)"
-answer="$(in_vps curl -ksS -c "$jar" -b "$jar" --resolve "$HOST:443:127.0.0.1" --data-urlencode "mail_service[service]=https://mail-service.invalid" \
+# The address is the one --mail-service gave (.env), so Connect asks for none.
+answer="$(in_vps curl -ksS -c "$jar" -b "$jar" --resolve "$HOST:443:127.0.0.1" \
   --data-urlencode "mail_service[csrf]=$(hidden 'mail_service[csrf]' <<<"$page")" "https://$HOST/delivery/connect" || true)"
 # param NAME: a parameter of the address the Connect page sends the browser to, decoded.
 param() { { grep -o "$1=[^&\"]*" <<<"$answer" || true; } | head -n1 | sed "s/^$1=//; s/%3A/:/gi; s/%2F/\\//gi"; }
 [[ "$(param redirect_uri)" == "https://$HOST/delivery/connect/callback" && "$(param webhook_url)" == "https://$HOST/cattomail/webhook" ]] \
-  && pass "the mail service's Connect page is given the site's own callback and webhook addresses (https, not the pod's port)" \
+  && grep -q 'content="0;url=https://mail.ctnlist-kit.test/dashboard/connect?' <<<"$answer" \
+  && pass "Connect goes to the configured mail service with the site's own callback and webhook addresses (https, not the pod's port)" \
   || fail "Connect: callback '$(param redirect_uri)', webhook '$(param webhook_url)'"
 
 [[ "$(as_site systemctl --user is-active ctnlist-worker.timer ctnlist-maintenance.timer | tr '\n' ' ')" == "active active " ]] \

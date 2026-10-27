@@ -1,7 +1,8 @@
 {#
-  The subscriber's list memberships (subscriber page), read-only: only the subscriber confirms one.
-  Administrators invite to a list here (ListInvitationType, Admin\SubscriberController::invite()).
-  The htmx region subscriber-lists, drawn again by Invite.
+  The subscriber's list memberships (subscriber page): only the subscriber confirms one.
+  Administrators invite to a list here (ListInvitationType, Admin\SubscriberController::invite()) and
+  unsubscribe from one (Admin\SubscriberController::unsubscribeFromList()).
+  The htmx region subscriber-lists, drawn again by Invite and Unsubscribe.
 #}
 {% import 'admin/_macros.html.twig' as ui %}
 {% import 'layout/_htmx.html.twig' as hx %}
@@ -11,7 +12,16 @@
     {% for membership in memberships %}
       <li class="list-group-item d-flex justify-content-between align-items-center gap-3">
         <span>{{ membership.l_name }} <code class="small">{{ membership.l_shortcode }}</code></span>
-        {{ ui.membership_badge(ui.membership_state(membership)) }}
+        <span class="d-flex align-items-center gap-3">
+          {{ ui.membership_badge(ui.membership_state(membership)) }}
+          {% if invitation and membership.ls_uuid is not null and not membership.unsubscribed %}
+            {% set action = path('admin_subscriber_unsubscribe_list', {token: token, listId: membership.l_id}) %}
+            <form method="post" action="{{ action }}" data-confirm="Unsubscribe from {{ membership.l_name }}? Only the subscriber can rejoin it." {{ hx.post(action, 'subscriber-lists') }}>
+              <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+              <button class="btn-sm btn-outline theme-danger" type="submit"><i class="bi bi-person-dash me-1" aria-hidden="true"></i>Unsubscribe</button>
+            </form>
+          {% endif %}
+        </span>
       </li>
     {% else %}
       <li class="list-group-item fg-2">There are no active lists.</li>

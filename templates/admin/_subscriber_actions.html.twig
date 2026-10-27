@@ -1,0 +1,61 @@
+{#
+  A subscriber's Actions menu (owner decision 2026-10-27): every administrator action, each with its
+  icon and title, on the Subscribers list's rows and the subscriber page. Links open the subscriber page
+  (invite, one list, roles) or the Send Log; the actions are POST forms with CSRF
+  (Admin\SubscriberController), confirmed where they cannot simply be undone. From the list
+  (`return: 'list'`) they redraw its region with htmx and come back to it without JavaScript too.
+  Expects: token, email, delivery_state, has_active (any membership not unsubscribed), address_block and
+  domain_block (the uuid of a block in force, or null), return ('list' or 'page'), region (list only).
+#}
+{% import 'layout/_htmx.html.twig' as hx %}
+{% set domain = email|split('@')|last %}
+{% set hidden %}<input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">{% if return == 'list' %}<input type="hidden" name="return" value="list">{% endif %}{% endset %}
+{% set page = path('admin_subscriber', {token: token}) %}
+<div class="d-inline-block">
+  {# Fixed positioning: the menu is never clipped by the list's scrolling table. In a row the button is just ⋮, to keep the table narrow. #}
+  <button class="btn-sm btn-outline theme-secondary" type="button" id="actions-{{ token }}" data-bs-toggle="menu" data-bs-placement="bottom-end" data-bs-strategy="fixed" aria-expanded="false"{% if return == 'list' %} title="Actions for {{ email }}"{% endif %}>
+    <i class="bi bi-three-dots-vertical{{ return == 'list' ? '' : ' me-1' }}" aria-hidden="true"></i>{% if return == 'list' %}<span class="visually-hidden">Actions for {{ email }}</span>{% else %}Actions{% endif %}</button>
+  <div class="menu" aria-labelledby="actions-{{ token }}">
+    {% if return == 'list' %}<a class="menu-item" href="{{ page }}"><i class="bi bi-pencil-square" aria-hidden="true"></i>Edit details</a>{% endif %}
+    <a class="menu-item" href="{{ page }}#subscriber-lists"><i class="bi bi-envelope-plus" aria-hidden="true"></i>Invite to a list</a>
+    {% if has_active %}
+      <a class="menu-item" href="{{ page }}#subscriber-lists"><i class="bi bi-person-dash" aria-hidden="true"></i>Unsubscribe from a list…</a>
+      {% set action = path('admin_subscriber_unsubscribe_all', {token: token}) %}
+      <form class="d-contents" method="post" action="{{ action }}" data-confirm="Unsubscribe {{ email }} from every list? Only they can rejoin a list."{% if return == 'list' %} {{ hx.post(action, region) }}{% endif %}>{{ hidden }}
+        <button class="menu-item" type="submit"><i class="bi bi-person-x" aria-hidden="true"></i>Unsubscribe from all lists</button>
+      </form>
+    {% endif %}
+    <hr class="menu-divider">
+    {% if address_block %}
+      {% set action = path('admin_subscriber_unblock', {token: token}) %}
+      <form class="d-contents" method="post" action="{{ action }}"{% if return == 'list' %} {{ hx.post(action, region) }}{% endif %}>{{ hidden }}<input type="hidden" name="scope" value="address">
+        <button class="menu-item" type="submit"><i class="bi bi-unlock" aria-hidden="true"></i>Unblock this address</button>
+      </form>
+    {% else %}
+      {% set action = path('admin_subscriber_block', {token: token}) %}
+      <form class="d-contents" method="post" action="{{ action }}" data-confirm="Block {{ email }}? The mail service never sends to it again from this account, and it leaves every list."{% if return == 'list' %} {{ hx.post(action, region) }}{% endif %}>{{ hidden }}
+        <button class="menu-item" type="submit"><i class="bi bi-person-slash" aria-hidden="true"></i>Block this address</button>
+      </form>
+    {% endif %}
+    {% if domain_block %}
+      {% set action = path('admin_subscriber_unblock', {token: token}) %}
+      <form class="d-contents" method="post" action="{{ action }}"{% if return == 'list' %} {{ hx.post(action, region) }}{% endif %}>{{ hidden }}<input type="hidden" name="scope" value="domain">
+        <button class="menu-item" type="submit"><i class="bi bi-unlock" aria-hidden="true"></i>Unblock @{{ domain }}</button>
+      </form>
+    {% else %}
+      {% set action = path('admin_subscriber_block_domain', {token: token}) %}
+      <form class="d-contents" method="post" action="{{ action }}" data-confirm="Block every address at {{ domain }}? The mail service never sends to anyone there again from this account (exactly that domain, not its subdomains)."{% if return == 'list' %} {{ hx.post(action, region) }}{% endif %}>{{ hidden }}
+        <button class="menu-item" type="submit"><i class="bi bi-building-slash" aria-hidden="true"></i>Block every address at @{{ domain }}</button>
+      </form>
+    {% endif %}
+    {% if delivery_state != 'ok' %}
+      {% set action = path('admin_subscriber_delivery_ok', {token: token}) %}
+      <form class="d-contents" method="post" action="{{ action }}"{% if return == 'list' %} {{ hx.post(action, region) }}{% endif %}>{{ hidden }}
+        <button class="menu-item" type="submit"><i class="bi bi-envelope-check" aria-hidden="true"></i>Clear the sending problem</button>
+      </form>
+    {% endif %}
+    {% if is_granted('logs.view') or is_granted('roles.manage') %}<hr class="menu-divider">{% endif %}
+    {% if is_granted('logs.view') %}<a class="menu-item" href="{{ path('report_sendlog', {e: email}) }}"><i class="bi bi-clock-history" aria-hidden="true"></i>Send history</a>{% endif %}
+    {% if is_granted('roles.manage') %}<a class="menu-item" href="{{ page }}#subscriber-roles"><i class="bi bi-person-badge" aria-hidden="true"></i>Roles</a>{% endif %}
+  </div>
+</div>

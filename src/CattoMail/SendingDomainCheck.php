@@ -17,7 +17,7 @@ use Psr\Clock\ClockInterface;
  * by the worker on every pass while the From address's domain cannot send
  * (CattoMailWorker).
  *
- * @phpstan-type SendingDomain array{domain: string, status: string, dkim_status: string, can_send: bool}
+ * @phpstan-type SendingDomain array{domain: string, status: string, dkim_status: string, can_send: bool, setup_url: string}
  */
 final class SendingDomainCheck
 {
@@ -77,13 +77,15 @@ final class SendingDomainCheck
      * last answer. A message or list with its own sender needs its domain
      * registered in the same way.
      *
-     * @return array{state: string, domain: string, checked_at: string, status: string, dkim_status: string}
+     * setup_url: the domain's page at the mail service (its DNS records), when the mail service gave one.
+     *
+     * @return array{state: string, domain: string, checked_at: string, status: string, dkim_status: string, setup_url: string}
      */
     public function fromAddress(): array
     {
         $at = strrpos($this->site->fromAddress, '@');
         $domain = $at === false ? '' : strtolower(trim(substr($this->site->fromAddress, $at + 1)));
-        $result = ['state' => self::NO_FROM_ADDRESS, 'domain' => $domain, 'checked_at' => '', 'status' => '', 'dkim_status' => ''];
+        $result = ['state' => self::NO_FROM_ADDRESS, 'domain' => $domain, 'checked_at' => '', 'status' => '', 'dkim_status' => '', 'setup_url' => ''];
         if ($domain === '') {
             return $result;
         }
@@ -94,7 +96,8 @@ final class SendingDomainCheck
         $result['checked_at'] = $last['checked_at'];
         foreach ($last['domains'] as $registered) {
             if ($registered['domain'] === $domain) {
-                return ['state' => $registered['can_send'] ? self::OK : self::CANNOT_SEND, 'status' => $registered['status'], 'dkim_status' => $registered['dkim_status']] + $result;
+                return ['state' => $registered['can_send'] ? self::OK : self::CANNOT_SEND, 'status' => $registered['status'], 'dkim_status' => $registered['dkim_status'],
+                    'setup_url' => $registered['setup_url']] + $result;
             }
         }
         return ['state' => self::NOT_REGISTERED] + $result;

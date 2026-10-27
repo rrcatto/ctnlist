@@ -7,15 +7,17 @@ namespace App\CattoMail;
 use App\Util\Duration;
 
 /**
- * Infrastructure configuration of the catto-mail integration (never an
- * editable Setting, never rendered, never logged). The address, the API key
- * and the webhook signing secret come from the installation's .env, or, for
- * each one .env leaves empty, from the connection an administrator made on
- * the Delivery page (ConnectionStore: the encrypted Settings store). A value
- * in .env always wins. A change takes effect on the next request or worker
+ * Infrastructure configuration of the catto-mail integration (never rendered
+ * or logged; only the address is an editable Setting). The API key and the
+ * webhook signing secret come from the installation's .env, or, for each one
+ * .env leaves empty, from the connection an administrator made (ConnectionStore:
+ * the encrypted Settings store). The address is the mail service's
+ * (owner decision 2026-10-27): the Settings store's (set on the Settings page,
+ * or by a connection) wins over .env, except that a key set in .env takes the
+ * address .env sets with it. A change takes effect on the next request or worker
  * run.
  *
- * - CATTOMAIL_API_BASE_URL: the catto-mail HTTPS origin (the /v1 prefix is added here).
+ * - CATTOMAIL_API_BASE_URL: the mail service's HTTPS address (its origin; the /v1 prefix is added here).
  * - CATTOMAIL_API_KEY: the client API key (Authorization: Bearer).
  * - CATTOMAIL_WEBHOOK_SECRET / CATTOMAIL_WEBHOOK_SECRET_PREVIOUS: the webhook
  *   endpoint's signing secret, and the rotated-out one during the overlap.
@@ -40,7 +42,7 @@ use App\Util\Duration;
  */
 final class CattoMailConfig
 {
-    /** catto-mail contract limits (OpenAPI 1.0.0-draft.10). */
+    /** catto-mail contract limits (OpenAPI 1.0.0-draft.11). */
     public const MAX_BATCH_RECIPIENTS = 500;
     public const MAX_JOB_RECIPIENTS = 10000;
     public const MAX_VALIDATION_ADDRESSES = 10000;
@@ -49,9 +51,10 @@ final class CattoMailConfig
     /** A recipient batch is uploaded before its JSON would pass this (headroom below MAX_REQUEST_BYTES). */
     public const MAX_BATCH_BYTES = 8 * 1024 * 1024;
 
-    /** Where a value comes from: the installation's .env, or the connection made on the Delivery page. */
+    /** Where a value comes from: the installation's .env, the connection made here, or (the address) the Settings page. */
     public const SOURCE_ENV = 'env';
     public const SOURCE_CONNECTION = 'connection';
+    public const SOURCE_SETTINGS = 'settings';
 
     /** @var list<string> */
     private readonly array $webhookSecrets;
@@ -103,7 +106,7 @@ final class CattoMailConfig
         if (trim($this->baseUrl) === '' || trim($this->apiKey) === '') {
             return $this->connectionProblem !== ''
                 ? 'catto-mail is not configured: the stored connection cannot be read (' . $this->connectionProblem . '). Restore the APP_SETTINGS_KEY it was saved with, or connect again on the Delivery page.'
-                : 'catto-mail is not configured: connect the mail service on the Delivery page, or set CATTOMAIL_API_BASE_URL and CATTOMAIL_API_KEY in .env.';
+                : 'catto-mail is not configured: connect the mail service (Settings › Set up sending), or set CATTOMAIL_API_BASE_URL and CATTOMAIL_API_KEY in .env.';
         }
         if (!str_starts_with(strtolower($this->baseUrl), 'https://')) {
             return 'The catto-mail address must be an https:// URL' . ($this->source('base_url') === self::SOURCE_ENV ? ' (CATTOMAIL_API_BASE_URL).' : '.');
@@ -113,7 +116,7 @@ final class CattoMailConfig
 
     /**
      * Where the address ('base_url'), the key ('api_key') or the signing secret ('webhook_secret') comes
-     * from: SOURCE_ENV, SOURCE_CONNECTION, or '' when it is not set at all.
+     * from: SOURCE_ENV, SOURCE_CONNECTION, SOURCE_SETTINGS (the address only), or '' when it is not set at all.
      */
     public function source(string $value): string
     {
@@ -126,11 +129,27 @@ final class CattoMailConfig
         return $this->source('base_url') === self::SOURCE_CONNECTION && $this->source('api_key') === self::SOURCE_CONNECTION;
     }
 
-    /** @return list<string> the .env settings that take precedence over a connection (names only) */
+    /**
+     * The .env settings that take precedence over a connection (names only): the key and the
+     * secret, and the address when the key comes with it. An address in .env alone is only the
+     * default of the mail service's address, which a connection uses.
+     *
+     * @return list<string>
+     */
     public function envSettings(): array
     {
-        $names = ['base_url' => 'CATTOMAIL_API_BASE_URL', 'api_key' => 'CATTOMAIL_API_KEY', 'webhook_secret' => 'CATTOMAIL_WEBHOOK_SECRET'];
+        $names = ['api_key' => 'CATTOMAIL_API_KEY', 'webhook_secret' => 'CATTOMAIL_WEBHOOK_SECRET'];
+        if ($this->source('api_key') === self::SOURCE_ENV) {
+            $names = ['base_url' => 'CATTOMAIL_API_BASE_URL'] + $names;
+        }
         return array_values(array_filter($names, fn(string $name, string $value): bool => $this->source($value) === self::SOURCE_ENV, ARRAY_FILTER_USE_BOTH));
+    }
+
+    /** The mail service's address as a person gives it (its origin, without the API's /v1), or ''. */
+    public function address(): string
+    {
+        $base = rtrim(trim($this->baseUrl), '/');
+        return str_ends_with($base, '/v1') ? substr($base, 0, -3) : $base;
     }
 
     /** The /v1 API root, without a trailing slash. */

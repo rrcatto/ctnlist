@@ -64,8 +64,14 @@ services:
     App\CattoMail\CattoMailConfig:
         factory: '@App\CattoMail\CattoMailConfigFactory'
 
-    App\Suppression\SuppressionChecker:
+    # The provider (SUPPRESSION_PROVIDER), with an administrator's blocks on top (BlockAwareChecker).
+    app.suppression_provider:
+        class: App\Suppression\SuppressionChecker
         factory: ['@App\Suppression\SuppressionCheckerFactory', 'create']
+
+    App\Suppression\SuppressionChecker:
+        class: App\Suppression\BlockAwareChecker
+        arguments: ['@app.suppression_provider', '@App\Repository\CattoMailBlockRepository']
 
     # The application log (README "Logs"): Symfony's minimal logger on standard error, which
     # PHP-FPM (catch_workers_output) and cron keep. Left to Symfony it keeps errors only, and the

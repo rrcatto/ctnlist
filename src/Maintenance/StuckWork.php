@@ -55,6 +55,8 @@ final class StuckWork
                     AND COALESCE(cvj_last_checked_at, cvj_created_at) < :stale) AS validation_unreconciled,
                 (SELECT COUNT(*) FROM cattomail_global_optouts WHERE cgo_status IN ('pending', 'lift_pending')
                     AND COALESCE(cgo_lift_requested_at, cgo_requested_at) < :stale) AS optouts_unreported,
+                (SELECT COUNT(*) FROM cattomail_blocks WHERE cbl_status IN ('pending', 'lift_pending')
+                    AND COALESCE(cbl_lift_requested_at, cbl_requested_at) < :stale) AS blocks_unreported,
                 (SELECT COUNT(*) FROM cattomail_webhook_events WHERE cwe_processed_at IS NULL AND cwe_received_at < :recent) AS webhooks_unprocessed",
             ['stale' => $this->staleBefore(), 'recent' => $this->clock->now()->modify('-600 seconds')->format('Y-m-d H:i:s')]
         ) ?: [];
@@ -64,6 +66,7 @@ final class StuckWork
             'validation jobs not submitted' => (int) ($row['validation_unsubmitted'] ?? 0),
             'validation jobs not reconciled' => (int) ($row['validation_unreconciled'] ?? 0),
             'opt-outs not reported' => (int) ($row['optouts_unreported'] ?? 0),
+            'blocks not reported' => (int) ($row['blocks_unreported'] ?? 0),
             'webhook events not processed' => (int) ($row['webhooks_unprocessed'] ?? 0),
         ];
     }

@@ -18,7 +18,7 @@ final class MailServiceConnectionTest extends SmokeTestCase
 
     protected function tearDown(): void
     {
-        self::$db->prepare("DELETE FROM options WHERE o_key LIKE 'cattomail:connect%' OR o_key LIKE 'cattomail:connection%' OR o_key LIKE 'setting:CATTOMAIL_%'")->execute();
+        self::$db->prepare("DELETE FROM options WHERE o_key LIKE 'cattomail:connect%' OR o_key LIKE 'cattomail:connection%' OR o_key LIKE 'setting:CATTOMAIL_%' OR o_key = 'cattomail:sending-domains'")->execute();
         parent::tearDown();
     }
 
@@ -67,7 +67,11 @@ final class MailServiceConnectionTest extends SmokeTestCase
         self::assertStringContainsString('<a class="btn-solid theme-primary" href="' . htmlspecialchars($address) . '" rel="noreferrer">', $started['body'], 'and a link, should the browser not forward');
         parse_str((string) parse_url($address, PHP_URL_QUERY), $query);
         $sent = array_map(static fn(mixed $value): string => is_string($value) ? $value : '', $query);
-        self::assertSame(['application_name', 'redirect_uri', 'webhook_url', 'state', 'code_challenge', 'code_challenge_method'], array_keys($sent));
+        self::assertSame(['application_name', 'redirect_uri', 'webhook_url', 'state', 'code_challenge', 'code_challenge_method', 'sending_domain'], array_keys($sent));
+        self::assertMatchesRegularExpression('/^([a-z0-9-]+\.)+[a-z0-9-]+$/', $sent['sending_domain'], 'the domain of the site\'s From address');
+        // The address typed while none was known is kept (its origin), so the next Connect needs no typing.
+        self::assertSame(self::SERVICE, self::value("SELECT o_value FROM options WHERE o_key = 'setting:CATTOMAIL_API_BASE_URL'"));
+        self::assertStringNotContainsString('name="mail_service[service]"', self::request($admin, 'GET', '/delivery')['body']);
         self::assertStringEndsWith('/delivery/connect/callback', $sent['redirect_uri']);
         self::assertStringEndsWith('/cattomail/webhook', $sent['webhook_url']);
         self::assertMatchesRegularExpression('/^[A-Za-z0-9_-]{43}$/', $sent['state']);
@@ -93,7 +97,7 @@ final class MailServiceConnectionTest extends SmokeTestCase
         self::assertSame(200, $approved['status']);
         self::assertStringContainsString('<form class="card app-narrow ms-0" method="post" action="/delivery/connect/complete" data-autosubmit>', $approved['body']);
         self::assertStringContainsString('<input type="hidden" name="code" value="the-code">', $approved['body']);
-        self::assertFalse(self::value("SELECT 1 FROM options WHERE o_key LIKE 'setting:CATTOMAIL_%'"), 'opening the answer stores nothing');
+        self::assertFalse(self::value("SELECT 1 FROM options WHERE o_key LIKE 'setting:CATTOMAIL_%' AND o_key <> 'setting:CATTOMAIL_API_BASE_URL'"), 'opening the answer stores nothing');
 
         // Finishing asks the mail service, which here does not exist: said so, Finish stays possible, nothing is stored.
         self::assertSame(403, self::request($admin, 'POST', '/delivery/connect/complete', ['state' => $state, 'code' => 'the-code'])['status'], 'not without the CSRF token');
@@ -101,7 +105,7 @@ final class MailServiceConnectionTest extends SmokeTestCase
         self::assertSame(422, $finished['status']);
         self::assertStringContainsString('could not be reached to finish the connection', $finished['body']);
         self::assertStringContainsString('action="/delivery/connect/complete">', $finished['body'], 'the form again, not submitted by itself this time');
-        self::assertFalse(self::value("SELECT 1 FROM options WHERE o_key LIKE 'setting:CATTOMAIL_%'"));
+        self::assertFalse(self::value("SELECT 1 FROM options WHERE o_key LIKE 'setting:CATTOMAIL_%' AND o_key <> 'setting:CATTOMAIL_API_BASE_URL'"));
         self::assertStringContainsString('Not connected', self::request($admin, 'GET', '/delivery')['body']);
     }
 
@@ -121,12 +125,19 @@ final class MailServiceConnectionTest extends SmokeTestCase
         $insert->execute(['setting:CATTOMAIL_CONNECTION', (string) json_encode(['service' => self::SERVICE, 'client_name' => 'Example Ltd', 'application_name' => 'Smoke']), 'false']);
 
         $page = self::request($admin, 'GET', '/delivery')['body'];
-        self::assertStringContainsString('A connection to ' . self::SERVICE . ' is stored, but its API key cannot be read', $page);
+        self::assertStringContainsString('A connection to ' . self::SERVICE . ' is stored, but its key cannot be read', $page);
         self::assertStringContainsString('different APP_SETTINGS_KEY', $page);
         self::assertDoesNotMatchRegularExpression('/enc:v1:|shk_[A-Za-z0-9]|whsec_[A-Za-z0-9]/', $page, 'neither a secret nor its stored form is shown');
         self::assertStringContainsString('action="/delivery/disconnect"', $page);
-        // The Settings page neither lists nor changes these values.
-        self::assertStringNotContainsString('CATTOMAIL_', self::request($admin, 'GET', '/settings')['body']);
+        // The Settings page shows the address but does not change it while a connection is stored, and never shows the rest.
+        $settings = self::request($admin, 'GET', '/settings')['body'];
+        self::assertStringContainsString('This site is connected to the mail service at <strong>' . self::SERVICE . '/v1</strong>', $settings);
+        self::assertMatchesRegularExpression('#<input type="url"[^>]*id="settings_mail_service_CATTOMAIL_API_BASE_URL"[^>]*readonly#', $settings);
+        self::assertDoesNotMatchRegularExpression('/CATTOMAIL_(API_KEY|WEBHOOK_SECRET|CONNECTION)/', $settings);
+        $changed = self::submitForm($admin, '/settings', 'settings_mail_service', ['settings_mail_service[CATTOMAIL_API_BASE_URL]' => 'https://other.example']);
+        self::assertSame(422, $changed['status']);
+        self::assertStringContainsString('disconnect on the Delivery page before changing the address', $changed['body']);
+        self::assertSame(self::SERVICE . '/v1', self::value("SELECT o_value FROM options WHERE o_key = 'setting:CATTOMAIL_API_BASE_URL'"));
 
         // It cannot be ended at the mail service with a key that cannot be read; it can be forgotten.
         self::request($admin, 'POST', '/delivery/disconnect', ['csrf' => self::csrfToken($page)]);
@@ -137,7 +148,55 @@ final class MailServiceConnectionTest extends SmokeTestCase
         $page = self::request($admin, 'GET', '/delivery')['body'];
         self::assertStringContainsString('The stored connection was forgotten.', $page);
         self::assertStringContainsString('<span class="badge theme-warning">Not connected</span>', $page);
-        self::assertSame(0, (int) self::value("SELECT COUNT(*) FROM options WHERE o_key LIKE 'setting:CATTOMAIL_%'"));
+        self::assertSame([['o_key' => 'setting:CATTOMAIL_API_BASE_URL']], self::rows("SELECT o_key FROM options WHERE o_key LIKE 'setting:CATTOMAIL_%'"), 'the address is kept for the next connection');
+        // Now the Settings page can change it (administrators only).
+        self::assertSame(302, self::submitForm($admin, '/settings', 'settings_mail_service', ['settings_mail_service[CATTOMAIL_API_BASE_URL]' => 'https://other.example'])['status']);
+        self::assertSame('https://other.example', self::value("SELECT o_value FROM options WHERE o_key = 'setting:CATTOMAIL_API_BASE_URL'"));
+        self::assertSame(422, self::submitForm($admin, '/settings', 'settings_mail_service', ['settings_mail_service[CATTOMAIL_API_BASE_URL]' => 'http://other.example'])['status'], 'https only');
+    }
+
+    /** Settings › Set up sending (owner decision 2026-10-27): the steps, who may take them, the address given once, the notice. */
+    public function testSetUpSendingGuidesStepByStep(): void
+    {
+        $admin = self::client();
+        self::loginAsAdmin($admin);
+        // Until sending is set up, administration pages say so and link here.
+        self::assertStringContainsString('Sending is not set up yet: 0 of 4 steps done.', self::request($admin, 'GET', '/messages')['body']);
+        $page = self::request($admin, 'GET', '/delivery/setup')['body'];
+        // An answer about the From domain left by an earlier connection does not count without a connection.
+        $domain = html_entity_decode(self::match('#the domain of this site\'s From address \(([^)]+)\)#', $page, 'the From domain')[1]);
+        self::$db->prepare("INSERT INTO options (o_key, o_value) VALUES ('cattomail:sending-domains', ?)")->execute([(string) json_encode(['checked_at' => '2026-10-27 09:00:00',
+            'domains' => [['domain' => $domain, 'status' => 'verified', 'dkim_status' => 'active', 'can_send' => true, 'setup_url' => '']]])]);
+        $page = self::request($admin, 'GET', '/delivery/setup')['body'];
+        self::assertStringContainsString('<strong>0 of 4</strong> steps done.', $page);
+        self::assertDoesNotMatchRegularExpression('#id="step-domain".*?<span class="badge theme-success ms-1">Done</span>.*?id="step-test"#s', $page);
+        self::assertStringNotContainsString('Sending is not set up yet', $page, 'not on the page itself');
+        self::assertStringContainsString('aria-current="step"', $page);
+        self::assertMatchesRegularExpression('#id="step-account" aria-current="step"#', $page, 'the first step is open');
+        self::assertStringContainsString('ask the people who run it for an invitation', $page);
+        self::assertNoNestedForms('/delivery/setup', $page);
+
+        // Step 1: the address, given once and kept.
+        $refused = self::request($admin, 'POST', '/delivery/setup/address', self::formFields($page, 'mail_service', ['mail_service[service]' => 'http://mail.example.org']));
+        self::assertSame(302, $refused['status']);
+        self::assertFalse(self::value("SELECT 1 FROM options WHERE o_key = 'setting:CATTOMAIL_API_BASE_URL'"), 'not https: not kept');
+        $kept = self::region($admin, '/delivery/setup/address', 'sending-setup', 'POST', self::formFields($page, 'mail_service', ['mail_service[service]' => self::SERVICE . '/dashboard']), '/delivery/setup');
+        self::assertRegion('sending-setup', $kept);
+        self::assertStringContainsString('address is kept: ' . self::SERVICE, $kept['body']);
+        self::assertStringContainsString('<strong>1 of 4</strong> steps done.', $kept['body']);
+        self::assertMatchesRegularExpression('#id="step-connect" aria-current="step"#', $kept['body']);
+        // Step 2: Connect without typing, coming back here.
+        self::assertStringNotContainsString('name="mail_service[service]"', $kept['body']);
+        self::assertStringContainsString('<input type="hidden" name="return" value="setup">', $kept['body']);
+        self::assertStringContainsString('data-copy="setup-address"', $kept['body'], 'the address has a copy button');
+
+        // Someone with settings.manage but not an administrator follows the steps without the buttons.
+        $manager = self::withRole('smoke-setup-manager@ctnlist.test', ['settings.manage']);
+        $followed = self::request($manager, 'GET', '/delivery/setup')['body'];
+        self::assertStringContainsString('An administrator takes these steps', $followed);
+        self::assertStringNotContainsString('name="mail_service"', $followed);
+        self::assertSame(403, self::request($manager, 'POST', '/delivery/setup/test', ['csrf' => self::csrfToken($followed)])['status']);
+        self::assertStringNotContainsString('id="pane-mail_service"', self::request($manager, 'GET', '/settings')['body'], 'the mail service\'s address is an administrator\'s setting');
     }
 
     /** @param list<string> $permissions */

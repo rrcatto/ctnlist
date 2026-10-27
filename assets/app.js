@@ -39,6 +39,33 @@ htmx.onLoad((root) => {
         window.setTimeout(() => Alert.getOrCreateInstance(alert).close(), 5000);
     });
 
+    // A value to copy elsewhere (layout/_copy.html.twig): its button copies the text of the
+    // element it names (data-copy) and says so; where the browser refuses the clipboard the
+    // text is selected instead. Without JavaScript the button stays hidden.
+    root.querySelectorAll('button[data-copy]:not([data-copy-ready])').forEach((button) => {
+        button.dataset.copyReady = '';
+        button.hidden = false;
+        const label = button.querySelector('[data-copy-label]') ?? button;
+        const original = label.textContent;
+        button.addEventListener('click', async () => {
+            const source = document.getElementById(button.dataset.copy);
+            if (!source) {
+                return;
+            }
+            try {
+                await navigator.clipboard.writeText(source.textContent.trim());
+                label.textContent = 'Copied';
+            } catch {
+                const range = document.createRange();
+                range.selectNodeContents(source);
+                window.getSelection()?.removeAllRanges();
+                window.getSelection()?.addRange(range);
+                label.textContent = 'Selected: press Ctrl+C';
+            }
+            window.setTimeout(() => { label.textContent = original; }, 2000);
+        });
+    });
+
     // A menu of checkboxes (data-checklist) names the ticked choices on its toggle:
     // the data-checklist-summary inside the element before the menu. With none
     // ticked it shows data-checklist-empty.

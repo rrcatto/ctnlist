@@ -66,7 +66,8 @@ podman run -d --name "$VPS" --hostname ctnlist-server --systemd=always \
   -v "$RELEASE:/src/ctnlist.git:ro" -v "$REPO/install-ctnlist:/root/install-ctnlist:ro" "$IMAGE" >/dev/null
 in_vps systemctl is-system-running --wait >/dev/null 2>&1 || true
 for _ in $(seq 1 30); do in_vps runuser -u postgres -- psql -Atc 'SELECT 1' >/dev/null 2>&1 && break; sleep 2; done
-NEW_OPTIONS=(--host "$HOST" --admin-email "admin@ctnlist-installer.test" --list-name "Installer Test List" --mailer-dsn "smtp://127.0.0.1:1025" --create-banlist)
+NEW_OPTIONS=(--host "$HOST" --admin-email "admin@ctnlist-installer.test" --list-name "Installer Test List" --mailer-dsn "smtp://127.0.0.1:1025" --create-banlist
+  --mail-service "https://mail.ctnlist-installer.test")
 
 echo "== I a new installation of $LAST"
 if installer --installation lists --version "v$LAST" "${NEW_OPTIONS[@]}" > "$GEN/install-1.log" 2>&1; then pass "the installer finished (exit 0)"; else fail "installer exit: $(tail -n 20 "$GEN/install-1.log")"; fi
@@ -75,6 +76,8 @@ if [[ $FAIL -gt 0 ]]; then echo "installer-test: the installation failed, nothin
 [[ "$(in_vps stat -c '%a %U:%G' /var/www/lists/.env)" == "640 root:www-data" && "$(in_vps stat -c '%a %U' /var/www/lists/logs)" == "750 www-data" ]] \
   && ! in_vps runuser -u www-data -- test -w "/usr/local/lib/php/ctnlist/$LAST/src" \
   && pass ".env is 640 root:www-data, logs/ is private, and the code is read-only to PHP" || fail "permissions"
+[[ "$(in_vps sed -n 's/^CATTOMAIL_API_BASE_URL=//p' /var/www/lists/.env)" == "https://mail.ctnlist-installer.test" ]] \
+  && pass "the mail service's address (--mail-service) is in .env" || fail "CATTOMAIL_API_BASE_URL: $(in_vps sed -n 's/^CATTOMAIL_API_BASE_URL=//p' /var/www/lists/.env)"
 secret="$(in_vps sed -n 's/^APP_SECRET=//p' /var/www/lists/.env)"; dbpass="$(in_vps sed -n 's/^DB_PASS=//p' /var/www/lists/.env)"
 [[ ${#secret} == 64 && ${#dbpass} == 48 ]] && ! in_vps grep -qF -e "$secret" -e "$dbpass" /var/log/ctnlist-install.log && ! grep -qF -e "$secret" -e "$dbpass" "$GEN/install-1.log" \
   && pass "secrets are generated, and neither the log nor the output holds them" || fail "secrets"

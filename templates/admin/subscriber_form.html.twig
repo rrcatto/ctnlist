@@ -12,9 +12,18 @@
 {% block content %}
 {% embed 'layout/_page_header.html.twig' with {title: 'Subscriber', description: email} %}
   {% block actions %}
+    {% if is_granted('subscribers.manage') %}{% include 'admin/_subscriber_actions.html.twig' with {token: token, email: email, delivery_state: delivery.state,
+      has_active: memberships|filter(m => m.ls_uuid is not null and not m.unsubscribed)|length > 0,
+      address_block: blocks.address.cbl_uuid ?? null, domain_block: blocks.domain.cbl_uuid ?? null, return: 'page'} only %}{% endif %}
     {% if is_granted('subscribers.view') %}<a class="btn-outline theme-secondary" href="{{ path('admin_subscribers') }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>All subscribers</a>{% endif %}
   {% endblock %}
 {% endembed %}
+
+{% if is_granted('subscribers.manage') and (blocks.address or blocks.domain) %}
+  <div class="alert theme-danger" role="note"><i class="bi bi-slash-circle" aria-hidden="true"></i><div>
+    {% if blocks.address %}This address is blocked{% else %}Every address at {{ blocks.domain.cbl_value }} is blocked{% endif %}: nothing is sent to it from this site{% if (blocks.address ?? blocks.domain).cbl_status == 'pending' %} (the mail service is told as soon as it can be reached){% else %}, and the mail service refuses it for every application on the account{% endif %}. Unblock it from Actions.
+  </div></div>
+{% endif %}
 
 <div class="row g-7">
   <div class="lg:col-7">

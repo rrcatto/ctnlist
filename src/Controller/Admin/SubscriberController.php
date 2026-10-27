@@ -24,11 +24,16 @@ use App\Repository\RoleRepository;
 use App\Repository\SubscriberRepository;
 use App\Security\Csrf;
 use App\Security\SubscriberUser;
+use App\Repository\QueueRepository;
+use App\Subscriber\Blocking;
+use App\Subscriber\EmailNormaliser;
 use App\Subscriber\SubscriberAdmin;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\FormError;
 use Symfony\Component\Form\FormInterface;
+use Psr\Clock\ClockInterface;
+use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -51,6 +56,7 @@ final class SubscriberController extends AbstractController
         private readonly MembershipRepository $memberships,
         private readonly CattoMailValidationRepository $validations,
         private readonly RoleRepository $roles,
+        private readonly Blocking $blocking,
     ) {
     }
 
@@ -137,7 +143,90 @@ final class SubscriberController extends AbstractController
             $this->addFlash('info', 'The ' . str_replace('_', ' ', $cleared) . ' block is cleared: this subscriber can be selected for campaigns again. '
                 . 'Their list memberships and consent are unchanged' . ($cleared === 'complained' ? ' (the lists they were unsubscribed from stay unsubscribed; only they can rejoin)' : '') . '.');
         }
-        return $this->redirectAfterAction($request, 'admin_subscriber', ['token' => $identity['s_uuid']]);
+        return $this->back($request, $identity['s_uuid']);
+    }
+
+    /** Unsubscribe the subscriber from one list (an administrator's action; consent is recorded with the reason). */
+    #[Route('/subscribers/{token}/lists/{listId}/unsubscribe', name: 'admin_subscriber_unsubscribe_list', requirements: ['token' => self::UUID, 'listId' => '\d+'], methods: ['POST'])]
+    #[IsGranted('subscribers.manage')]
+    #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
+    public function unsubscribeFromList(string $token, int $listId, Request $request, #[CurrentUser] SubscriberUser $user, ClockInterface $clock, LoggerInterface $logger): Response
+    {
+        $identity = $this->subscribers->findIdentityByUuid($token) ?? throw $this->createNotFoundException('The subscriber does not exist.');
+        $list = $this->lists->findById($listId) ?? throw $this->createNotFoundException('The list does not exist.');
+        if ($this->memberships->unsubscribe($identity['s_id'], $listId, 'Unsubscribed by an administrator', $clock->now()->format('Y-m-d H:i:s'))) {
+            $logger->notice('Subscriber {subscriber} unsubscribed from list {list} by {admin}.', ['subscriber' => $identity['s_uuid'], 'list' => $list['l_shortcode'], 'admin' => $user->uuid]);
+            $this->addFlash('info', $identity['s_email'] . ' is unsubscribed from ' . $list['l_name'] . '.');
+        } else {
+            $this->addFlash('info', $identity['s_email'] . ' was not subscribed to ' . $list['l_name'] . '.');
+        }
+        return $this->back($request, $identity['s_uuid']);
+    }
+
+    /** Unsubscribe the subscriber from every list, and take their queued sends out of the queue. */
+    #[Route('/subscribers/{token}/unsubscribe-all', name: 'admin_subscriber_unsubscribe_all', requirements: ['token' => self::UUID], methods: ['POST'])]
+    #[IsGranted('subscribers.manage')]
+    #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
+    public function unsubscribeAll(string $token, Request $request, #[CurrentUser] SubscriberUser $user, ClockInterface $clock, QueueRepository $queue, LoggerInterface $logger): Response
+    {
+        $identity = $this->subscribers->findIdentityByUuid($token) ?? throw $this->createNotFoundException('The subscriber does not exist.');
+        $count = $this->memberships->unsubscribeAll($identity['s_id'], 'Unsubscribed from every list by an administrator', $clock->now()->format('Y-m-d H:i:s'));
+        $queue->deleteForSubscriber($identity['s_uuid']);
+        $logger->notice('Subscriber {subscriber} unsubscribed from every list by {admin}.', ['subscriber' => $identity['s_uuid'], 'admin' => $user->uuid]);
+        $this->addFlash('info', $count > 0 ? $identity['s_email'] . ' is unsubscribed from every list (' . $count . ').' : $identity['s_email'] . ' had no list to leave.');
+        return $this->back($request, $identity['s_uuid']);
+    }
+
+    /** Block the address: the mail service never sends to it again from this account, and it leaves every list. */
+    #[Route('/subscribers/{token}/block', name: 'admin_subscriber_block', requirements: ['token' => self::UUID], methods: ['POST'])]
+    #[IsGranted('subscribers.manage')]
+    #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
+    public function block(string $token, Request $request, #[CurrentUser] SubscriberUser $user, LoggerInterface $logger): Response
+    {
+        $identity = $this->subscribers->findIdentityByUuid($token) ?? throw $this->createNotFoundException('The subscriber does not exist.');
+        $block = $this->blocking->blockAddress($identity['s_email'], $user->id);
+        $logger->notice('Subscriber {subscriber} blocked by {admin} (block {block}).', ['subscriber' => $identity['s_uuid'], 'admin' => $user->uuid, 'block' => $block['cbl_uuid']]);
+        $this->addFlash($block['cbl_status'] === 'rejected' ? 'danger' : 'info', self::blockOutcome($block, $identity['s_email'] . ' is blocked and unsubscribed from every list'));
+        return $this->back($request, $identity['s_uuid']);
+    }
+
+    /** Block every address at the subscriber's domain (exactly that domain). */
+    #[Route('/subscribers/{token}/block-domain', name: 'admin_subscriber_block_domain', requirements: ['token' => self::UUID], methods: ['POST'])]
+    #[IsGranted('subscribers.manage')]
+    #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
+    public function blockDomain(string $token, Request $request, #[CurrentUser] SubscriberUser $user, LoggerInterface $logger): Response
+    {
+        $identity = $this->subscribers->findIdentityByUuid($token) ?? throw $this->createNotFoundException('The subscriber does not exist.');
+        try {
+            $block = $this->blocking->blockDomain(EmailNormaliser::domain($identity['s_email']), $user->id);
+        } catch (\InvalidArgumentException $e) {
+            $this->addFlash('danger', $e->getMessage());
+            return $this->back($request, $identity['s_uuid']);
+        }
+        $logger->notice('Domain block {block} made by {admin} from subscriber {subscriber}.', ['block' => $block['cbl_uuid'], 'admin' => $user->uuid, 'subscriber' => $identity['s_uuid']]);
+        $this->addFlash($block['cbl_status'] === 'rejected' ? 'danger' : 'info', self::blockOutcome($block,
+            'Every address at ' . $block['cbl_value'] . ' is blocked; its subscribers leave their lists when the queue is next built'));
+        return $this->back($request, $identity['s_uuid']);
+    }
+
+    /** Lift one of the blocks that stop the subscriber's address (the address's own, or its domain's). */
+    #[Route('/subscribers/{token}/unblock', name: 'admin_subscriber_unblock', requirements: ['token' => self::UUID], methods: ['POST'])]
+    #[IsGranted('subscribers.manage')]
+    #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
+    public function unblock(string $token, Request $request, #[CurrentUser] SubscriberUser $user, LoggerInterface $logger): Response
+    {
+        $identity = $this->subscribers->findIdentityByUuid($token) ?? throw $this->createNotFoundException('The subscriber does not exist.');
+        $covering = $this->blocking->covering($identity['s_email']);
+        $block = $request->request->getString('scope') === 'domain' ? $covering['domain'] : $covering['address'];
+        if ($block === null) {
+            $this->addFlash('info', 'There was no such block to lift.');
+            return $this->back($request, $identity['s_uuid']);
+        }
+        $state = $this->blocking->unblock($block['cbl_uuid'], $user->id);
+        $logger->notice('Block {block} lifted by {admin}.', ['block' => $block['cbl_uuid'], 'admin' => $user->uuid]);
+        $this->addFlash('info', 'The block of ' . $block['cbl_value'] . ($state === 'lifted' ? ' is lifted' : ' is lifted here; the mail service is told when it can be reached')
+            . '. Nobody is re-subscribed: only the subscriber can rejoin a list.');
+        return $this->back($request, $identity['s_uuid']);
     }
 
     #[Route('/bulk-subscribe', name: 'admin_bulk_subscribe', methods: ['GET', 'POST'])]
@@ -161,7 +250,7 @@ final class SubscriberController extends AbstractController
 
     #[Route('/bulk-unsubscribe', name: 'admin_bulk_unsubscribe', methods: ['GET', 'POST'])]
     #[IsGranted('subscribers.manage')]
-    public function bulkUnsubscribe(Request $request): Response
+    public function bulkUnsubscribe(Request $request, #[CurrentUser] SubscriberUser $user): Response
     {
         $form = $this->createForm(BulkUnsubscribeType::class, new BulkUnsubscription(), ['lists' => $this->lists->all()]);
         $form->handleRequest($request);
@@ -169,7 +258,7 @@ final class SubscriberController extends AbstractController
             /** @var BulkUnsubscription $data */
             $data = $form->getData();
             try {
-                return $this->result('Bulk unsubscribe', 'Number unsubscribed: ' . $this->admin->bulkUnsubscribe($data->emails, (int) $data->listId, $data->reason, $data->scope));
+                return $this->result('Bulk unsubscribe', 'Number unsubscribed: ' . $this->admin->bulkUnsubscribe($data->emails, (int) $data->listId, $data->reason, $data->scope, $user->id));
             } catch (\InvalidArgumentException $e) {
                 FormErrors::attach($form, $e);
             }
@@ -320,7 +409,26 @@ final class SubscriberController extends AbstractController
             'roles' => $roles,
             'delivery' => $this->subscribers->deliveryState($identity['s_id']),
             'validation' => $this->validations->latestForSubscriber($identity['s_uuid']),
+            'blocks' => $this->blocking->covering($identity['s_email']),
         ], new Response(status: $status));
+    }
+
+    /** After an action: the page the button was on (htmx), else the list when the form says so, else the subscriber's page. */
+    private function back(Request $request, string $token): RedirectResponse
+    {
+        return $request->request->getString('return') === 'list'
+            ? $this->redirectAfterAction($request, 'admin_subscribers')
+            : $this->redirectAfterAction($request, 'admin_subscriber', ['token' => $token]);
+    }
+
+    /** @param array{cbl_status: string, cbl_error: ?string} $block */
+    private static function blockOutcome(array $block, string $done): string
+    {
+        return match ($block['cbl_status']) {
+            'active' => $done . ': the mail service will not send to it from this account.',
+            'pending' => $done . ' here; the mail service is told as soon as it can be reached.',
+            default => 'The mail service refused the block: ' . ($block['cbl_error'] ?? 'no reason given') . '. Nothing was blocked there.',
+        };
     }
 
     private function bulkSubscribeForm(bool $import): FormInterface

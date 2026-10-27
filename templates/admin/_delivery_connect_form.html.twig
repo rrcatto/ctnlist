@@ -1,7 +1,10 @@
 {# The form that starts a connection to the mail service (Admin\DeliveryConnectionController::connect).
-   `form` is a MailServiceType view; `label` the button's text; `obstacle` why it cannot be used, if so. #}
+   `form` is a MailServiceType view: with an address field only while no address is known, otherwise
+   the Connect button alone. `label` the button's text; `obstacle` why it cannot be used, if so;
+   `return` 'setup' to come back to Set up sending afterwards. #}
 {{ form_start(form, {action: path('admin_delivery_connect'), attr: {class: 'app-narrow ms-0'}}) }}
   {{ form_errors(form) }}
-  {{ form_row(form.service) }}
+  {% if form.service is defined %}{{ form_row(form.service) }}{% endif %}
+  {% if return is defined and return %}<input type="hidden" name="return" value="{{ return }}">{% endif %}
   <button class="btn-solid theme-primary" type="submit"{{ obstacle ? ' disabled' }}><i class="bi bi-plug me-1" aria-hidden="true"></i>{{ label|default('Connect') }}</button>
 {{ form_end(form) }}

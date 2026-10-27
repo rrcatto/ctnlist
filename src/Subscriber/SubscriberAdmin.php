@@ -11,7 +11,6 @@ use App\Mail\TransactionalMailer;
 use App\Repository\ListRepository;
 use App\Repository\MembershipRepository;
 use App\Repository\SubscriberRepository;
-use App\Suppression\SuppressionChecker;
 use App\Validator\InvalidField;
 use Psr\Clock\ClockInterface;
 use Psr\Log\LoggerInterface;
@@ -33,7 +32,7 @@ final class SubscriberAdmin
         private readonly ListRepository $lists,
         private readonly MembershipRepository $memberships,
         private readonly SubscriptionService $subscriptions,
-        private readonly SuppressionChecker $suppression,
+        private readonly Blocking $blocking,
         private readonly Engagement $engagement,
         private readonly MessageLog $messageLog,
         private readonly TransactionalMailer $mailer,
@@ -131,19 +130,17 @@ final class SubscriberAdmin
     }
 
     /**
-     * Unsubscribe from one list, or record global suppressions: whole
-     * domains (SPAM), bounces (BOUNCE-ADMIN) or spam complaints (SPAM-ADMIN).
+     * Unsubscribe from one list, or block: whole domains, bounces or spam complaints. A block
+     * is kept by the mail service (an account block, Blocking) and, where the installation keeps
+     * the banlist, recorded there too as v5 did (SPAM, BOUNCE-ADMIN, SPAM-ADMIN).
      *
      * @return int the number processed
      * @throws \InvalidArgumentException for an unknown list or scope
      */
-    public function bulkUnsubscribe(string $input, int $listId, string $reason, string $scope): int
+    public function bulkUnsubscribe(string $input, int $listId, string $reason, string $scope, ?int $adminId = null): int
     {
         if (!in_array($scope, self::UNSUBSCRIBE_SCOPES, true)) {
             throw new \InvalidArgumentException('Unknown scope.');
-        }
-        if ($scope !== 'list' && !$this->suppression->keepsGlobalList()) {
-            throw new InvalidField('scope', 'This site keeps no global suppression list: the mail service suppresses bounced and complaining addresses itself.');
         }
         if ($scope === 'list' && $this->lists->findById($listId) === null) {
             throw new InvalidField('listId', 'The selected list does not exist.');
@@ -156,14 +153,20 @@ final class SubscriberAdmin
         $now = $this->clock->now()->format('Y-m-d H:i:s');
         foreach ($emails as $email) {
             $done = match ($scope) {
-                'domain' => $this->suppression->suppressDomain(EmailNormaliser::domain($email), 'SPAM'),
-                'bounce' => $this->suppression->suppressEmail($email, 'BOUNCE-ADMIN', $reason),
-                'spam' => $this->suppression->suppressEmail($email, 'SPAM-ADMIN', $reason),
+                'domain' => self::stands($this->blocking->blockDomain(EmailNormaliser::domain($email), $adminId)),
+                'bounce' => self::stands($this->blocking->blockAddress($email, $adminId, 'BOUNCE-ADMIN', $reason)),
+                'spam' => self::stands($this->blocking->blockAddress($email, $adminId, 'SPAM-ADMIN', $reason)),
                 default => $this->unsubscribeFromList($email, $listId, $reason, $now),
             };
             $count += $done ? 1 : 0;
         }
         return $count;
+    }
+
+    /** @param array{cbl_status: string} $block whether a block stands (pending or accepted, not refused by the mail service) */
+    private static function stands(array $block): bool
+    {
+        return $block['cbl_status'] !== 'rejected';
     }
 
     /**

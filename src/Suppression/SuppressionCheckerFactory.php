@@ -16,6 +16,8 @@ use Symfony\Component\Dotenv\Dotenv;
  * (development and tests only). The banlist connection settings come from
  * the external ban.env (GDB_ENV_DIRECTORY / GDB_ENV_FILE, default
  * config/phinx/ban.env), read without touching the process environment.
+ * The service SuppressionChecker wraps the provider in BlockAwareChecker
+ * (config/services.yaml): an administrator's blocks suppress here too.
  */
 final class SuppressionCheckerFactory
 {

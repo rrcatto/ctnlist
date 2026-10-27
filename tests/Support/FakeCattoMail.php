@@ -8,7 +8,7 @@ use Symfony\Component\HttpClient\Response\MockResponse;
 
 /**
  * A stateful stand-in for catto-mail's public /v1 API (OpenAPI
- * 1.0.0-draft.10) at the HTTP boundary, for Symfony's MockHttpClient. It
+ * 1.0.0-draft.11) at the HTTP boundary, for Symfony's MockHttpClient. It
  * enforces what ctnlist relies on: Bearer authentication, Idempotency-Key
  * semantics (same key + same body replays with Idempotent-Replayed, same key
  * + different body is 422), batch, job and request-size (413) limits, duplicate addresses,
@@ -16,15 +16,16 @@ use Symfony\Component\HttpClient\Response\MockResponse;
  * global-opt-out capability. Faults can be injected, including "processed
  * but the response was lost", to prove that retries never duplicate work.
  *
- * The connect flow (draft.10): approve() and decline() stand in for
- * catto-mail's connect page and the person at it, with that page's parameter
- * rules; POST /v1/connect/exchange (the one operation without an API key)
- * checks the single-use code, its 10 minutes, the redirect URI and the PKCE
- * verifier, and answers every code it does not accept with the same
+ * The connect flow, with draft.11's optional sending_domain (approving adds it
+ * to the client as a domain still to be set up): approve() and decline() stand
+ * in for catto-mail's connect page and the person at it, with that page's
+ * parameter rules; POST /v1/connect/exchange (the one operation without an
+ * API key) checks the single-use code, its 10 minutes, the redirect URI and
+ * the PKCE verifier, and answers every code it does not accept with the same
  * invalid-connect-code; DELETE /v1/connection ends the connection of the key
- * that asks; GET /v1/sending-domains lists the client's domains with
- * can_send. A key issued by a connection works on every operation until its
- * connection ends.
+ * that asks; GET /v1/sending-domains lists the client's domains with can_send
+ * and setup_url (draft.11: the domain's page in the dashboard). A key issued
+ * by a connection works on every operation until its connection ends.
  */
 final class FakeCattoMail
 {
@@ -51,6 +52,10 @@ final class FakeCattoMail
     /** @var array<string, array<string, true>> job id => accepted normalised addresses */
     private array $addresses = [];
     public bool $optOutCapability = true;
+    /** @var array<string, array<string, mixed>> the account's blocks (catto-mail 2.13, /v1/blocks), by id */
+    public array $blocks = [];
+    /** Whether the client is active or throttled: lifting a block needs it (403 otherwise). */
+    public bool $clientMayLift = true;
     /** Finish sealed send jobs and validation jobs when they are read (a catto-mail that works instantly). */
     public bool $finishOnRead = false;
     /** @var list<string> registered sender domains */
@@ -214,6 +219,10 @@ final class FakeCattoMail
                 : self::problem(403, 'forbidden', 'This client is not permitted to report recipient global opt-outs (an operator grants this capability).'),
             $method === 'GET' && preg_match("#^/global-suppressions/$id$#", $path, $m) === 1 => $this->found($this->optOuts[$m[1]] ?? null),
             $method === 'POST' && preg_match("#^/global-suppressions/$id/lift$#", $path, $m) === 1 => $this->lift($m[1]),
+            $method === 'GET' && $path === '/blocks' => $this->listBlocks(),
+            $method === 'POST' && $path === '/blocks' => $this->idempotent('blocks', $headers, $body, fn() => $this->createBlock($body), replayResult: true),
+            $method === 'GET' && preg_match("#^/blocks/$id$#", $path, $m) === 1 => $this->found($this->blocks[$m[1]] ?? null),
+            $method === 'POST' && preg_match("#^/blocks/$id/lift$#", $path, $m) === 1 => $this->liftBlock($m[1]),
             $method === 'DELETE' && $path === '/connection' => $this->endOwnConnection(),
             $method === 'GET' && $path === '/sending-domains' => new MockResponse((string) json_encode(['data' => $this->sendingDomains()]), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]),
             default => self::problem(404, 'not-found', 'No such endpoint.'),
@@ -235,6 +244,11 @@ final class FakeCattoMail
     public function approve(string $connectUrl): string
     {
         $request = $this->connectRequest($connectUrl);
+        // Approving adds the domain the application sends from, when the client does not have it: added, not yet verified.
+        $domain = $request['sending_domain'];
+        if ($domain !== '' && !in_array($domain, $this->senderDomains, true) && !isset($this->domainStates[$domain])) {
+            $this->domainStates[$domain] = ['status' => 'pending', 'dkim_status' => 'not_configured', 'can_send' => false];
+        }
         $id = $this->uuid();
         $code = rtrim(strtr(base64_encode(hash('sha256', 'code|' . $id, true)), '+/', '-_'), '=');
         $this->connections[$id] = ['id' => $id, 'status' => 'pending', 'code' => $code, 'expired' => false, 'api_key' => null, 'signing_secret' => null,
@@ -274,7 +288,7 @@ final class FakeCattoMail
      * request the page would answer with 400 is a defect in ctnlist, so it
      * fails the test instead of sending the browser anywhere.
      *
-     * @return array{application_name: string, redirect_uri: string, webhook_url: string, state: string, code_challenge: string}
+     * @return array{application_name: string, redirect_uri: string, webhook_url: string, state: string, code_challenge: string, sending_domain: string}
      */
     private function connectRequest(string $connectUrl): array
     {
@@ -284,7 +298,7 @@ final class FakeCattoMail
         }
         parse_str((string) parse_url($connectUrl, PHP_URL_QUERY), $query);
         $text = static fn(string $name): string => is_string($query[$name] ?? null) ? $query[$name] : '';
-        if (array_diff(array_keys($query), ['application_name', 'redirect_uri', 'webhook_url', 'state', 'code_challenge', 'code_challenge_method']) !== []) {
+        if (array_diff(array_keys($query), ['application_name', 'redirect_uri', 'webhook_url', 'state', 'code_challenge', 'code_challenge_method', 'sending_domain']) !== []) {
             $refuse('unknown parameters');
         }
         if (mb_strlen(trim($text('application_name'))) < 1 || mb_strlen($text('application_name')) > 100) {
@@ -302,8 +316,11 @@ final class FakeCattoMail
         if (preg_match('/^[A-Za-z0-9_-]{43}$/', $text('code_challenge')) !== 1 || $text('code_challenge_method') !== 'S256') {
             $refuse('code_challenge must be 43 base64url characters with code_challenge_method=S256');
         }
+        if (isset($query['sending_domain']) && preg_match('/^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9-]{2,63}$/', $text('sending_domain')) !== 1) {
+            $refuse('sending_domain, when given, must be a domain name');
+        }
         return ['application_name' => trim($text('application_name')), 'redirect_uri' => $text('redirect_uri'), 'webhook_url' => $text('webhook_url'),
-            'state' => $text('state'), 'code_challenge' => $text('code_challenge')];
+            'state' => $text('state'), 'code_challenge' => $text('code_challenge'), 'sending_domain' => $text('sending_domain')];
     }
 
     /** @param array<string, mixed> $body */
@@ -381,9 +398,11 @@ final class FakeCattoMail
         foreach (array_values(array_unique([...$this->senderDomains, ...array_keys($this->domainStates)])) as $n => $domain) {
             $state = $this->domainStates[$domain] ?? [];
             $verified = ($state['status'] ?? 'verified') === 'verified';
-            $domains[] = ['id' => sprintf('0199b000-0000-7000-8000-%012x', $n + 1), 'domain' => $domain, 'status' => $state['status'] ?? 'verified',
+            $id = sprintf('0199b000-0000-7000-8000-%012x', $n + 1);
+            $domains[] = ['id' => $id, 'domain' => $domain, 'status' => $state['status'] ?? 'verified',
                 'dkim_status' => $state['dkim_status'] ?? 'active', 'verified_at' => $verified ? '2026-10-06T09:00:00.000000+02:00' : null,
-                'can_send' => $state['can_send'] ?? $verified];
+                'can_send' => $state['can_send'] ?? $verified,
+                'setup_url' => self::ORIGIN . '/dashboard/c/0199a000-0000-7000-8000-000000000001/sending-domains/' . $id];
         }
         return $domains;
     }
@@ -557,6 +576,69 @@ final class FakeCattoMail
         $this->optOuts[$id]['status'] = 'lifted';
         $this->optOuts[$id]['lifted_at'] ??= '2026-10-06T11:00:00Z';
         return new MockResponse((string) json_encode($this->optOuts[$id]), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]);
+    }
+
+    /**
+     * POST /v1/blocks: exactly one of address and domain (the schema allows nothing else);
+     * the value normalised like catto-mail does; 200 with the active block of the same value.
+     *
+     * @param array<string, mixed> $body
+     * @return array{0: int, 1: array<string, mixed>}
+     */
+    private function createBlock(array $body): array
+    {
+        if (array_diff(array_keys($body), ['address', 'domain', 'external_reference']) !== [] || isset($body['address']) === isset($body['domain'])) {
+            return [422, self::problemBody(422, 'validation-error', 'Give exactly one of address and domain.')];
+        }
+        if (isset($body['address'])) {
+            $value = self::normalise((string) $body['address']);
+            if (preg_match('/^[^@\s]+@[a-z0-9.-]+\.[a-z]{2,}$/', $value) !== 1) {
+                return [422, self::problemBody(422, 'validation-error', 'Not a usable email address.')];
+            }
+            $scope = 'address';
+        } else {
+            $value = strtolower(rtrim(trim((string) $body['domain']), '.'));
+            if (preg_match('/^([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/', $value) !== 1) {
+                return [422, self::problemBody(422, 'validation-error', 'Not a domain name such as example.org.')];
+            }
+            $scope = 'domain';
+        }
+        foreach ($this->blocks as $block) {
+            if ($block['scope'] === $scope && $block['value'] === $value && $block['status'] === 'active') {
+                return [200, $block];
+            }
+        }
+        $id = $this->uuid();
+        $this->blocks[$id] = ['id' => $id, 'scope' => $scope, 'value' => $value, 'status' => 'active',
+            'external_reference' => $body['external_reference'] ?? null, 'created_at' => '2026-10-27T21:00:00+02:00', 'lifted_at' => null];
+        return [201, $this->blocks[$id]];
+    }
+
+    /** GET /v1/blocks: the account's own blocks, newest first, filtered by status (default active) and exact value. */
+    private function listBlocks(): MockResponse
+    {
+        $status = (string) ($this->lastQuery['status'] ?? 'active');
+        if (!in_array($status, ['active', 'lifted', 'all'], true)) {
+            return self::problem(400, 'invalid-query-parameter', 'status must be active, lifted or all.');
+        }
+        $value = isset($this->lastQuery['value']) ? (string) $this->lastQuery['value'] : null;
+        $blocks = array_values(array_filter(array_reverse($this->blocks), static fn(array $b): bool => ($status === 'all' || $b['status'] === $status)
+            && ($value === null || $b['value'] === (str_contains($value, '@') ? self::normalise($value) : strtolower($value)))));
+        return $this->page($blocks);
+    }
+
+    /** POST /v1/blocks/{id}/lift: naturally idempotent; needs an active or throttled client. */
+    private function liftBlock(string $id): MockResponse
+    {
+        if (!isset($this->blocks[$id])) {
+            return self::problem(404, 'not-found', 'The resource does not exist.');
+        }
+        if (!$this->clientMayLift) {
+            return self::problem(403, 'forbidden', 'An account that is "suspended" may not lift a block: lifting makes mail sendable again.');
+        }
+        $this->blocks[$id]['status'] = 'lifted';
+        $this->blocks[$id]['lifted_at'] ??= '2026-10-27T22:00:00+02:00';
+        return new MockResponse((string) json_encode($this->blocks[$id]), ['http_code' => 200, 'response_headers' => ['Content-Type' => 'application/json']]);
     }
 
     /** @return list<array<string, mixed>>|null */

@@ -3,7 +3,7 @@
 {% block title %}Delivery{% endblock %}
 
 {% block content %}
-{% embed 'layout/_page_header.html.twig' with {title: 'catto-mail integration', description: 'Campaign content (queue sends, resends and forwards, and proofs unless they are sent to Mailpit) is rendered here and delivered by catto-mail. Transactional mail (sign-in links, invitations, notifications) goes through ctnlist\'s own SMTP server.'} %}
+{% embed 'layout/_page_header.html.twig' with {title: 'Delivery', description: 'This site\'s campaign mail (queue sends, resends, forwards, and proofs unless they go to Mailpit) is delivered by its mail service, catto-mail; this page shows the connection and what happened to the mail. Sign-in links and notifications go through the site\'s own SMTP server.'} %}
   {% block actions %}
     {% import 'layout/_htmx.html.twig' as hx %}
     <form method="post" action="{{ path('admin_delivery_check') }}" {{ hx.post(path('admin_delivery_check'), 'delivery-status') }}>

@@ -44,7 +44,7 @@ USER_UNITS="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 LOG="$KIT/install.log"
 
 COMMAND="${1:-}"; [[ $# -gt 0 ]] && shift
-NAME="" VERSION="" PORT="" HOST="" ADMIN_EMAIL="" LIST_NAME="" ORGANISATION="" MAIL_FROM="" MAILER_DSN=""
+NAME="" VERSION="" PORT="" HOST="" ADMIN_EMAIL="" LIST_NAME="" ORGANISATION="" MAIL_FROM="" MAILER_DSN="" MAIL_SERVICE=""
 MAILPIT="" BANLIST="" ASSUME_YES=false RECREATE=false SAMPLES=false BACKUP=true
 ARGS="$*"
 
@@ -69,6 +69,8 @@ usage: ctnlist-podman.sh install [options]       (as the site's own user)
                           smtps://USER:PASS@mail.example.org:465 (nobody can sign in without one)
   The database is the one in ~/ctnlist/config/database.env (root-prepare.sh --database), or asked for. The
   suppression database is ~/ctnlist/config/ban.env when root gave one (root-prepare.sh --banlist-env or
+  --mail-service URL      the address of the mail service (catto-mail) the site sends its campaigns
+                          through, e.g. https://mail.example.org (default: none; Set up sending asks)
   --create-banlist); without it, global suppression is catto-mail's (SUPPRESSION_PROVIDER=cattomail).
 
  an existing installation:
@@ -96,6 +98,7 @@ while [[ "$COMMAND" == install ]] && (($#)); do
     --organisation) ORGANISATION="${2:-}"; shift 2 ;;
     --mail-from) MAIL_FROM="${2:-}"; shift 2 ;;
     --mailer-dsn) MAILER_DSN="${2:-}"; shift 2 ;;
+    --mail-service) MAIL_SERVICE="${2:-}"; shift 2 ;;
     --mailpit) MAILPIT=yes; shift ;;
     --no-mailpit) MAILPIT=no; shift ;;
     --recreate-database) RECREATE=true; shift ;;
@@ -142,6 +145,7 @@ ask() {  # ask VAR "Question" [default]
 }
 valid_host() { [[ "$1" =~ ^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ ]]; }
 valid_email() { [[ "$1" =~ ^[A-Za-z0-9._%+-]{1,64}@([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$ ]]; }
+valid_service() { [[ "$1" =~ ^https://([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(:[0-9]{1,5})?/?$ ]]; }
 newer() { [[ "$1" != "$2" && "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n1)" == "$1" ]]; }  # newer A B: A > B
 
 # ------------------------------------------------------------------------- containers
@@ -331,6 +335,9 @@ install_main() {
     ask MAIL_FROM "Sender of the site's mail" "info@$HOST"
     valid_email "$MAIL_FROM" || fail "'$MAIL_FROM' is not an e-mail address" "pass --mail-from"
     ask MAILER_DSN "SMTP server for sign-in links, e.g. smtps://USER:PASS@mail.example.org:465 (empty: set it in Settings later)"
+    ask MAIL_SERVICE "The address of the mail service (catto-mail) for campaign mail, e.g. https://mail.example.org (empty: Set up sending asks)"
+    MAIL_SERVICE="${MAIL_SERVICE%/}"
+    [[ -z "$MAIL_SERVICE" ]] || valid_service "$MAIL_SERVICE" || fail "'$MAIL_SERVICE' is not the https address of a mail service" "pass --mail-service with an address such as https://mail.example.org, or leave it out"
     if [[ -f "$CONFIG/database.env" ]]; then
       DB_NAME="$(envget "$CONFIG/database.env" DB_NAME)"; DB_USER="$(envget "$CONFIG/database.env" DB_USER)"; DB_PASS="$(envget "$CONFIG/database.env" DB_PASS)"
       DB_HOST="$(envget "$CONFIG/database.env" DB_HOST)"; DB_PORT="$(envget "$CONFIG/database.env" DB_PORT)"
@@ -391,7 +398,7 @@ install_main() {
       DB_HOST "$DB_HOST" DB_PORT "${DB_PORT:-5432}" DB_NAME "$DB_NAME" DB_USER "$DB_USER" DB_PASS "$DB_PASS" \
       MAILER_DSN "$MAILER_DSN" MAIL_FROM_ADDRESS "$MAIL_FROM" MAIL_FROM_NAME "$LIST_NAME" MAIL_ADMIN_ADDRESS "$ADMIN_EMAIL" \
       MAIL_BOUNCE_ADDRESS "$MAIL_FROM" MAIL_TEST_ADDRESS "$ADMIN_EMAIL" MAIL_PROOF_SMTP "$proof" CONTACT_MAIL_ADDRESS "$ADMIN_EMAIL" \
-      CONTACT_MAIL_NAME "$ORGANISATION" "${suppression[@]}" \
+      CONTACT_MAIL_NAME "$ORGANISATION" CATTOMAIL_API_BASE_URL "$MAIL_SERVICE" "${suppression[@]}" \
       | envset "$SITE/.env.new" || fail "the configuration could not be written" "see the log"
     chmod 600 "$SITE/.env.new" && mv "$SITE/.env.new" "$SITE/.env" || fail "the configuration could not be written" "see the log"
     pass "secrets generated; mode 600"
@@ -542,7 +549,8 @@ Next:
      ($TREE/deploy/podman/host-nginx.conf.example), then nginx -t and a reload.
   2. Open https://$HOST/login and ask for a sign-in link as $ADMIN_EMAIL: that address
      becomes the first administrator. It needs the SMTP server (MAILER_DSN, or Settings).
-  3. Connect the mail service: Admin > Settings > Delivery, enter its address, approve there.
+  3. Set up sending (Settings > Set up sending): the mail service account, Connect, the
+     sending domain's DNS records and a test message, one step at a time.
   4. Go through the README's release checklist ($TREE/README.md).
 NEXT
   fi
