@@ -75,14 +75,17 @@ final class RoleRepository
         return $counts;
     }
 
-    public function memberCount(int $roleId): int
+    /** Members of the role; with $search, those whose email, first or last name contains it. */
+    public function memberCount(int $roleId, string $search = ''): int
     {
-        return (int) $this->db->fetchOne('SELECT COUNT(*) FROM subscriber_roles WHERE sr_r_id = ?', [$roleId]);
+        [$where, $params] = self::memberFilter($roleId, $search);
+        return (int) $this->db->fetchOne('SELECT COUNT(*) FROM subscriber_roles sr JOIN subscribers s ON s.s_id = sr.sr_s_id WHERE ' . $where, $params);
     }
 
-    /** @return list<RoleMember> subscribers holding the role, by email */
-    public function members(int $roleId, int $offset, int $limit): array
+    /** @return list<RoleMember> subscribers holding the role (with $search, as memberCount()), by email */
+    public function members(int $roleId, int $offset, int $limit, string $search = ''): array
     {
+        [$where, $params] = self::memberFilter($roleId, $search);
         return array_map(static fn(array $row): array => [
             's_id' => (int) $row['s_id'],
             's_uuid' => (string) $row['s_uuid'],
@@ -93,11 +96,21 @@ final class RoleRepository
         ], $this->db->fetchAllAssociative(
             'SELECT s.s_id, s.s_uuid, s.s_email, s.s_fname, s.s_lname, sr.sr_assigned_at
              FROM subscriber_roles sr JOIN subscribers s ON s.s_id = sr.sr_s_id
-             WHERE sr.sr_r_id = ?
+             WHERE ' . $where . '
              ORDER BY s.s_email
              LIMIT ' . max(1, $limit) . ' OFFSET ' . max(0, $offset),
-            [$roleId]
+            $params
         ));
+    }
+
+    /** @return array{string, array<string, int|string>} */
+    private static function memberFilter(int $roleId, string $search): array
+    {
+        if (trim($search) === '') {
+            return ['sr.sr_r_id = :role', ['role' => $roleId]];
+        }
+        return ["sr.sr_r_id = :role AND (s.s_email ILIKE :like OR COALESCE(s.s_fname, '') ILIKE :like OR COALESCE(s.s_lname, '') ILIKE :like)",
+            ['role' => $roleId, 'like' => Like::contains($search)]];
     }
 
     /**

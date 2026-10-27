@@ -1,0 +1,41 @@
+{#
+  A message's readers (Admin\ReportController::messageViews()): the page includes it, and it is the
+  htmx region message-views-results that the search form and the pager draw again.
+#}
+{% set base = path('report_message_views', {muid: muid}) %}
+<div id="message-views-results" class="app-region">
+{% if rows is empty %}
+  {% include 'layout/_empty_state.html.twig' with {icon: 'eye', message: 'No matching subscriber has read this message yet.'} %}
+{% else %}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead class="">
+        <tr>
+          <th scope="col">Email</th><th scope="col">List</th>
+          <th scope="col" class="text-end">Reads</th><th scope="col">Last read</th>
+          <th scope="col" class="text-end">Likes</th><th scope="col">Last like</th>
+          <th scope="col" class="text-end">Dislikes</th><th scope="col">Last dislike</th>
+          <th scope="col" class="text-end">Forwards</th>
+          <th scope="col" class="text-end">Contact forms</th><th scope="col">Last contact form</th>
+          <th scope="col">Subscribed</th><th scope="col">Unsubscribed</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <td>{{ row.sml_email }}</td><td>{% if row.sml_list_shortcode %}<code>{{ row.sml_list_shortcode }}</code>{% endif %}</td>
+          <td class="text-end">{{ row.sml_reads }}</td><td class="text-nowrap">{{ row.sml_last_read ?: '–' }}</td>
+          <td class="text-end">{{ row.sml_likes }}</td><td class="text-nowrap">{{ row.sml_last_like ?: '–' }}</td>
+          <td class="text-end">{{ row.sml_dislikes }}</td><td class="text-nowrap">{{ row.sml_last_dislike ?: '–' }}</td>
+          <td class="text-end">{{ row.sml_forwards }}</td>
+          <td class="text-end">{{ row.sml_bookings }}</td><td class="text-nowrap">{{ row.sml_last_booking ?: '–' }}</td>
+          <td>{% if row.sml_subscribe > 0 %}<span class="badge theme-success">Yes</span>{% endif %}</td>
+          <td>{% if row.sml_unsubscribe > 0 %}<span class="badge theme-secondary">Yes</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include '_pagination.html.twig' with {base: base, query: query, region: 'message-views-results'} %}
+{% endif %}
+</div>

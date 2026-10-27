@@ -1,0 +1,52 @@
+{#
+  The current or last queue run (App\Queue\QueueRun::view()) on the Sending page: the htmx region
+  queue-run, drawn again every 3 seconds while it is starting or sending, and by Stop sending.
+#}
+{% import 'layout/_htmx.html.twig' as hx %}
+{% set labels = {starting: ['Starting', 'theme-info'], running: ['Sending', 'theme-primary'], finished: ['Finished', 'theme-success'],
+    interrupted: ['Stopped before it finished', 'theme-warning'], not_started: ['Did not start', 'theme-warning']} %}
+<div id="queue-run" class="app-region"{% if live %} {{ hx.refresh(path('admin_queue_sending'), 'queue-run', '3s') }}{% endif %}>
+{% if run is null %}
+  {% include 'layout/_empty_state.html.twig' with {icon: 'send', message: 'Nothing has been sent from here yet.', hint: 'Queue a message, then start sending.'} %}
+  <p class="mt-5"><a class="btn-solid theme-success" href="{{ path('admin_queue_process') }}"><i class="bi bi-send me-1" aria-hidden="true"></i>Start sending</a></p>
+{% else %}
+  {% set label = labels[run.state] ?? [run.state, 'theme-secondary'] %}
+  <div class="card app-narrow ms-0">
+    <div class="card-header fw-semibold d-flex flex-row flex-wrap justify-content-between align-items-center gap-3">
+      <span>{{ run.subject ?: 'Every queued message' }}</span>
+      <span class="badge {{ label[1] }}">{{ label[0] }}</span>
+    </div>
+    <div class="card-body">
+      <dl class="row mb-0">
+        <dt class="sm:col-5">Prepared so far</dt>
+        <dd class="sm:col-7"><strong>{{ run.staged|number_format }}</strong> of at most {{ run.limit|number_format }}</dd>
+        <dt class="sm:col-5">Still in the queue</dt>
+        <dd class="sm:col-7">{{ queued|number_format }}{{ run.muid ? ' for this message' }}</dd>
+        <dt class="sm:col-5">Started</dt>
+        <dd class="sm:col-7">{{ run.started_at ?? 'not yet' }}</dd>
+        {% if run.finished_at %}<dt class="sm:col-5">Finished</dt><dd class="sm:col-7">{{ run.finished_at }}</dd>{% endif %}
+      </dl>
+      {% if run.state in ['starting', 'running'] %}
+        <p class="small fg-2 mt-3 mb-0">Each message is prepared for its subscriber and goes to the mail service in batches of up to 500. This page updates itself every few seconds.</p>
+      {% elseif run.state == 'finished' %}
+        <p class="mt-3 mb-0">{{ run.outcome }}</p>
+      {% elseif run.state == 'interrupted' %}
+        <p class="mt-3 mb-0">The server ended the run before it finished, after {{ run.staged|number_format }} message(s). Those are not sent twice; the rest are still queued. Start sending again to continue.</p>
+      {% else %}
+        <p class="mt-3 mb-0">The run was recorded at {{ run.requested_at }} but never began. Start sending again; if it happens again, the server does not finish requests after answering them (PHP-FPM is needed).</p>
+      {% endif %}
+    </div>
+    <div class="card-footer d-flex flex-wrap gap-3">
+      {% if run.state in ['starting', 'running'] %}
+        <form method="post" action="{{ path('admin_queue_stop_submit') }}" {{ hx.post(path('admin_queue_stop_submit'), 'queue-run') }}>
+          <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+          <button class="btn-solid theme-warning" type="submit"><i class="bi bi-pause-circle me-1" aria-hidden="true"></i>Stop sending</button>
+        </form>
+      {% else %}
+        <a class="btn-solid theme-success" href="{{ path('admin_queue_process', {muid: run.muid}) }}"><i class="bi bi-send me-1" aria-hidden="true"></i>Start sending</a>
+        {% if run.muid and is_granted('logs.view') %}<a class="btn-outline theme-secondary" href="{{ path('admin_delivery_message', {muid: run.muid}) }}">Its delivery at the mail service</a>{% endif %}
+      {% endif %}
+    </div>
+  </div>
+{% endif %}
+</div>

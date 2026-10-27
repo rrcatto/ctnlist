@@ -46,14 +46,26 @@ final class SubscriberAdminTest extends IntegrationTestCase
         $news = $this->createList('NEWS', 'News');
         $muid = $this->createMessage('Offer');
 
-        $message = $this->service(SubscriberAdmin::class)->save($uuid, ['s_fname' => ' Jane ', 's_country' => 'Zambia', 's_priority' => '50', 'list_id' => (string) $news], $muid, true);
+        $message = $this->service(SubscriberAdmin::class)->save($uuid, ['s_fname' => ' Jane ', 's_country' => 'Zambia', 's_priority' => '50'], $muid, true);
 
         self::assertSame('Subscriber saved.', $message);
         $row = $this->db->fetchAssociative('SELECT s_fname, s_country, s_priority FROM subscribers WHERE s_id = ?', [$id]);
         self::assertSame(['s_fname' => 'Jane', 's_country' => 'Zambia', 's_priority' => 150], $row, 'v5: saving adds 100 to the priority');
-        self::assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM list_subscribers WHERE ls_s_id = ? AND ls_l_id = ?', [$id, $news]));
-        self::assertSame(['SUBSCRIBE', 'UPDATE-PROFILE'], array_map('strval', $this->db->fetchFirstColumn('SELECT sl_type FROM sendlog ORDER BY sl_id')));
+        self::assertSame(['UPDATE-PROFILE'], array_map('strval', $this->db->fetchFirstColumn('SELECT sl_type FROM sendlog ORDER BY sl_id')));
         self::assertTrue($this->service(MessageLog::class)->hasRecord($uuid, $muid), 'smlog update recorded');
+
+        // Inviting to a list is its own action (the subscriber page's Invite): a pending membership and the invitation.
+        self::assertSame('Invited jane@example.com to News: the membership is pending until they confirm it.', $this->service(SubscriberAdmin::class)->invite($uuid, $news));
+        self::assertSame([false], array_map('boolval', $this->db->fetchFirstColumn('SELECT ls_confirmed FROM list_subscribers WHERE ls_s_id = ? AND ls_l_id = ?', [$id, $news])));
+        self::assertSame(['UPDATE-PROFILE', 'SUBSCRIBE'], array_map('strval', $this->db->fetchFirstColumn('SELECT sl_type FROM sendlog ORDER BY sl_id')));
+        self::assertSame('jane@example.com already has a membership of News, so no invitation was sent.', $this->service(SubscriberAdmin::class)->invite($uuid, $news));
+        self::assertSame(2, (int) $this->db->fetchOne('SELECT COUNT(*) FROM sendlog'), 'not invited twice');
+        try {
+            $this->service(SubscriberAdmin::class)->invite($uuid, 999999);
+            self::fail('an unknown list is refused');
+        } catch (InvalidField $e) {
+            self::assertSame('listId', $e->field);
+        }
 
         $this->service(SubscriberAdmin::class)->save($uuid, ['s_priority' => '999'], '', false);
         self::assertSame(100, (int) $this->db->fetchOne('SELECT s_priority FROM subscribers WHERE s_id = ?', [$id]), 'subscribers cannot set their priority');

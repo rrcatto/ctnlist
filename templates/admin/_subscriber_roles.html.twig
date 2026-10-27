@@ -1,0 +1,49 @@
+{#
+  The roles the subscriber holds (subscriber page, holders of roles.manage): assign another, remove a
+  custom one (system roles stay: RoleManager). Posts to Admin\RoleController's assign and unassign,
+  which come back here. The htmx region subscriber-roles.
+#}
+{% import 'layout/_htmx.html.twig' as hx %}
+{% set back = path('admin_subscriber', {token: token}) %}
+<div id="subscriber-roles" class="card app-region">
+  <div class="card-header fw-semibold d-flex flex-row justify-content-between align-items-center gap-3">
+    <span>Roles</span>
+    <a class="small fw-normal" href="{{ path('admin_roles') }}">Roles &amp; ACL</a>
+  </div>
+  <ul class="list-group list-group-flush">
+    {% for role in roles.held %}
+      <li class="list-group-item d-flex justify-content-between align-items-center gap-3">
+        <span><span class="badge {{ role.r_system ? 'theme-inverse' : 'theme-info' }}">{{ role.r_name }}</span>{% if role.r_system %} <span class="small fg-2">system role</span>{% endif %}</span>
+        {% if not role.r_system %}
+          <form method="post" action="{{ path('admin_roles_unassign') }}" data-confirm="Remove {{ role.r_name }} from {{ email }}?" {{ hx.post(path('admin_roles_unassign'), 'subscriber-roles') }}>
+            <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+            <input type="hidden" name="subscriber_id" value="{{ roles.subscriber_id }}">
+            <input type="hidden" name="role_id" value="{{ role.r_id }}">
+            <input type="hidden" name="back" value="{{ back }}">
+            <button class="btn-sm btn-outline theme-danger" type="submit" aria-label="Remove {{ role.r_name }} from {{ email }}"><i class="bi bi-x-lg" aria-hidden="true"></i><span class="ms-1">Remove</span></button>
+          </form>
+        {% endif %}
+      </li>
+    {% else %}
+      <li class="list-group-item fg-2">No roles.</li>
+    {% endfor %}
+  </ul>
+  {% if roles.assignable is not empty %}
+    <div class="card-body border-top">
+      <form method="post" action="{{ path('admin_roles_assign') }}" class="d-flex flex-wrap align-items-end gap-3" {{ hx.post(path('admin_roles_assign'), 'subscriber-roles') }}>
+        <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+        <input type="hidden" name="subscriber_id" value="{{ roles.subscriber_id }}">
+        <input type="hidden" name="back" value="{{ back }}">
+        <div class="flex-grow-1">
+          <label class="form-label" for="subscriber-role">Assign a role</label>
+          <select class="form-control" id="subscriber-role" name="role_key" required>
+            <option value="" selected disabled>Choose a role…</option>
+            {% for role in roles.assignable %}<option value="{{ role.r_key }}">{{ role.r_name }}{{ role.r_system ? ' (system)' }}</option>{% endfor %}
+          </select>
+        </div>
+        <button class="btn-sm btn-solid theme-primary mb-1" type="submit"><i class="bi bi-person-check me-1" aria-hidden="true"></i>Assign</button>
+      </form>
+      <div class="form-text">Administrator gives every permission. You can assign a role only if you hold all of its permissions.</div>
+    </div>
+  {% endif %}
+</div>

@@ -32,6 +32,9 @@
       {% else %}
         <p class="mb-0 fg-2">Whether mail from {{ from_domain.domain }} (the site's From address) can be sent has not been checked yet: use <strong>Check connection</strong>.</p>
       {% endif %}
+      {% if waiting_for_domain ?? false %}
+        <p class="mt-3 mb-0 fg-2"><i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>While the domain is being set up at the mail service, the worker asks it again every minute and this page updates itself.</p>
+      {% endif %}
     {% endif %}
   </div>
   {% if is_administrator %}

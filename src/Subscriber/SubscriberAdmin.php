@@ -46,9 +46,10 @@ final class SubscriberAdmin
 
     /**
      * Save the subscriber form. An empty token adds a new subscriber
-     * (administrators only). Administrators may also set the priority and add
-     * a list membership (inviting the subscriber when it is new). As in v5 the
-     * save counts as engagement: priority becomes the given priority + 100.
+     * (administrators only), subscribed to `list_id` if given. Administrators
+     * may also set the priority; inviting an existing subscriber to a list is
+     * invite(). As in v5 the save counts as engagement: priority becomes the
+     * given priority + 100.
      *
      * @param array<string, mixed> $input
      * @return string the outcome shown to the user
@@ -79,10 +80,6 @@ final class SubscriberAdmin
             static fn(string $field): string => trim((string) ($input[$field] ?? '')),
             ['s_fname' => 's_fname', 's_lname' => 's_lname', 's_gender' => 's_gender', 's_province' => 's_province', 's_country' => 's_country']
         ));
-        if ($administrator && $listId > 0 && ($list = $this->lists->findById($listId)) !== null
-            && $this->memberships->ensure($identity['s_id'], $listId)) {
-            $this->mailer->sendListConfirmationInvitation($identity['s_email'], $identity['s_uuid'], $list['l_shortcode'], $list['l_name']);
-        }
         $this->engagement->set($identity['s_uuid'], ($administrator ? $priority : 0) + 100);
 
         if (!$new) {
@@ -92,6 +89,25 @@ final class SubscriberAdmin
             $this->notifyProfileUpdate($identity['s_uuid'], $muid);
         }
         return 'Subscriber saved.';
+    }
+
+    /**
+     * Invite a subscriber to a list (an administrator's action on the subscriber page): a pending
+     * membership, if they have none of that list yet, and the invitation to confirm it. Only the
+     * subscriber confirms; an existing membership, whatever its state, is left as it is.
+     *
+     * @return string the outcome shown to the administrator
+     * @throws \InvalidArgumentException for an unknown subscriber or list
+     */
+    public function invite(string $token, int $listId): string
+    {
+        $identity = $this->subscribers->findIdentityByUuid($token) ?? throw new \InvalidArgumentException('Invalid subscriber identifier.');
+        $list = $this->lists->findById($listId) ?? throw new InvalidField('listId', 'Choose one of the lists.');
+        if (!$this->memberships->ensure($identity['s_id'], $listId)) {
+            return $identity['s_email'] . ' already has a membership of ' . $list['l_name'] . ', so no invitation was sent.';
+        }
+        $this->mailer->sendListConfirmationInvitation($identity['s_email'], $identity['s_uuid'], $list['l_shortcode'], $list['l_name']);
+        return 'Invited ' . $identity['s_email'] . ' to ' . $list['l_name'] . ': the membership is pending until they confirm it.';
     }
 
     /**

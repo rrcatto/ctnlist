@@ -1,0 +1,37 @@
+{#
+  The subscriber's delivery state at the mail service (subscriber page): a hard bounce or complaint
+  block, which holders of subscribers.manage can clear (Admin\SubscriberController::clearDeliveryProblem()),
+  and the last address validation. The htmx region subscriber-delivery.
+#}
+{% import 'layout/_htmx.html.twig' as hx %}
+<div id="subscriber-delivery" class="card app-region">
+  <div class="card-header fw-semibold">Delivery (catto-mail)</div>
+  <div class="card-body small">
+    {% if delivery.state == 'ok' %}
+      <p class="mb-3"><i class="bi bi-check-circle fg-success me-1" aria-hidden="true"></i>No hard bounce or complaint recorded.</p>
+    {% else %}
+      <p class="mb-1"><span class="badge theme-danger">{{ delivery.state == 'complained' ? 'Spam complaint' : 'Hard bounce' }}</span>{% if delivery.at %} <span class="fg-2">since {{ delivery.at|slice(0, 16) }}</span>{% endif %}</p>
+      <p class="mb-3">
+        {% if delivery.state == 'complained' %}
+          catto-mail reported that this subscriber marked a campaign as spam. They were unsubscribed from every list and are left out of campaigns.
+        {% else %}
+          catto-mail reported that the receiving server permanently refused a campaign to this address. They are left out of campaigns; their list memberships are unchanged.
+        {% endif %}
+      </p>
+      {% if is_granted('subscribers.manage') %}
+        {% set action = path('admin_subscriber_delivery_ok', {token: token}) %}
+        <form method="post" action="{{ action }}" class="mb-3" {{ hx.post(action, 'subscriber-delivery') }}
+              data-confirm="Clear the {{ delivery.state == 'complained' ? 'complaint' : 'hard bounce' }} block? This only lets the subscriber be selected for campaigns again; it does not restore list memberships or consent.">
+          <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+          <button class="btn-sm btn-outline theme-secondary" type="submit"><i class="bi bi-unlock me-1" aria-hidden="true"></i>Clear the sending block</button>
+        </form>
+        <p class="form-text mb-3">Clearing affects the sending block only. It does not re-subscribe anyone{{ delivery.state == 'complained' ? ' (lists left because of the complaint stay left)' }}, and catto-mail may still suppress the address on its side.</p>
+      {% endif %}
+    {% endif %}
+    {% if validation %}
+      {% import 'admin/_cattomail_macros.html.twig' as cm %}
+      <p class="mb-0">Last validation: {{ cm.classification(validation.cva_classification) }} <span class="fg-2">{{ validation.cva_checked_at|slice(0, 10) }}</span>
+        {% if validation.cva_suggested_address %}<br>Suggested address (not applied): <span class="text-break">{{ validation.cva_suggested_address }}</span>{% endif %}</p>
+    {% endif %}
+  </div>
+</div>

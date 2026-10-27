@@ -1,7 +1,8 @@
 {#
   Pager (v5 semantics: pages are base/N, ?r= rows per page kept in the query).
-  Variables: pagination (App\Http\Pagination), base (list URL), query (appended, e.g. "?e=x").
-  On narrow screens only the current page and its neighbours are listed.
+  Variables: pagination (App\Http\Pagination), base (list URL), query (appended, e.g. "?e=x"),
+  region (optional: the id of the htmx region the pager belongs to, whose links then fetch that
+  region alone: layout/_htmx.html.twig). On narrow screens only the current page and its neighbours are listed.
 #}
 {% set query = query ?? '' %}
 {% set current = pagination.page %}
@@ -26,10 +27,11 @@
   </li>
 {%- endmacro %}
 {% import _self as pager %}
+{% import 'layout/_htmx.html.twig' as hx %}
 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mt-5">
   <p class="small fg-2 mb-0">Page {{ current }} of {{ last }} &middot; {{ pagination.total }} {{ pagination.total == 1 ? 'record' : 'records' }}</p>
   {% if last > 1 %}
-    <nav aria-label="Pagination">
+    <nav aria-label="Pagination"{% if region is defined %} {{ hx.pager(region) }}{% endif %}>
       <ul class="pagination pagination-sm mb-0">
         {{ pager.step('First page', 'chevron-double-left', 1, base, query, current > 1) }}
         {{ pager.step('Previous page', 'chevron-left', current - 1, base, query, current > 1) }}

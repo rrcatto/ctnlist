@@ -13,17 +13,22 @@ final class TemplateRepository
     {
     }
 
-    public function count(): int
+    /** Templates; with $search, those whose name contains it. */
+    public function count(string $search = ''): int
     {
-        return (int) $this->db->fetchOne('SELECT COUNT(*) FROM templates');
+        return trim($search) === ''
+            ? (int) $this->db->fetchOne('SELECT COUNT(*) FROM templates')
+            : (int) $this->db->fetchOne('SELECT COUNT(*) FROM templates WHERE t_name ILIKE ?', [Like::contains($search)]);
     }
 
-    /** @return list<array{t_id: int, t_name: string}> by name */
-    public function page(int $offset, int $limit): array
+    /** @return list<array{t_id: int, t_name: string}> by name; with $search, as count() */
+    public function page(int $offset, int $limit, string $search = ''): array
     {
+        $filtered = trim($search) !== '';
         return array_map(
             static fn(array $row): array => ['t_id' => (int) $row['t_id'], 't_name' => (string) $row['t_name']],
-            $this->db->fetchAllAssociative('SELECT t_id, t_name FROM templates ORDER BY t_name LIMIT ' . max(1, $limit) . ' OFFSET ' . max(0, $offset))
+            $this->db->fetchAllAssociative('SELECT t_id, t_name FROM templates' . ($filtered ? ' WHERE t_name ILIKE ?' : '')
+                . ' ORDER BY t_name LIMIT ' . max(1, $limit) . ' OFFSET ' . max(0, $offset), $filtered ? [Like::contains($search)] : [])
         );
     }
 

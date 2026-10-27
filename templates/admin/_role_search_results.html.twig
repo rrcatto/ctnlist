@@ -1,0 +1,46 @@
+{#
+  The subscribers found for role assignment (Admin\RoleController::overview()): the page includes it,
+  and it is the htmx region role-search-results, drawn again as you type and by Assign.
+#}
+{% import 'layout/_htmx.html.twig' as hx %}
+<div id="role-search-results" class="app-region">
+    {% if search %}
+      {% if results is empty %}
+        {% include 'layout/_empty_state.html.twig' with {icon: 'person', message: 'No subscriber matches “' ~ search ~ '”.'} %}
+      {% else %}
+        {% set back = path('admin_roles', {q: search}) %}
+        <ul class="list-group">
+          {% for subscriber in results %}
+            {% set current = held[subscriber.s_id] ?? [] %}
+            {% set current_keys = current|map(role => role.r_key) %}
+            {% set assignable = roles|filter(role => role.r_key not in current_keys) %}
+            <li class="list-group-item d-flex flex-column md:flex-row justify-content-between md:align-items-center gap-3 py-5">
+              <div class="md:me-5 text-break">
+                <div class="fw-semibold">{{ subscriber.s_email }}</div>
+                {% if (subscriber.s_fname ~ subscriber.s_lname)|trim %}<div class="small fg-2">{{ (subscriber.s_fname ~ ' ' ~ subscriber.s_lname)|trim }}</div>{% endif %}
+                <div class="mt-1"><span class="visually-hidden">Current roles:</span>{% for role in current %}<span class="badge {{ role.r_system ? 'theme-inverse' : 'theme-info' }} me-1">{{ role.r_name }}</span>{% else %}<span class="small fg-2">No roles</span>{% endfor %}</div>
+              </div>
+              {% if assignable is empty %}
+                <span class="small fg-2">Holds every role</span>
+              {% else %}
+                <form method="post" action="{{ path('admin_roles_assign') }}" class="d-flex gap-3 flex-shrink-0" {{ hx.post(path('admin_roles_assign'), 'role-search-results') }}>
+                  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+                  <input type="hidden" name="subscriber_id" value="{{ subscriber.s_id }}">
+                  <input type="hidden" name="back" value="{{ back }}">
+                  <label class="visually-hidden" for="assign-role-{{ subscriber.s_id }}">Role for {{ subscriber.s_email }}</label>
+                  <select class="form-control form-control-sm" id="assign-role-{{ subscriber.s_id }}" name="role_key" required>
+                    <option value="" selected disabled>Choose a role…</option>
+                    {% for role in assignable|sort((a, b) => a.r_system <=> b.r_system) %}<option value="{{ role.r_key }}">{{ role.r_name }}{{ role.r_system ? ' (system)' }}</option>{% endfor %}
+                  </select>
+                  <button class="btn-sm btn-solid theme-primary" type="submit">Assign</button>
+                </form>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+        {% if more_results %}<p class="small fg-2 mt-3 mb-0">More subscribers match; refine the search to see them.</p>{% endif %}
+      {% endif %}
+    {% else %}
+      <p class="small fg-2 mb-0">Search for a subscriber to see the roles they hold and assign another. To remove a custom role from someone, open the role.</p>
+    {% endif %}
+</div>

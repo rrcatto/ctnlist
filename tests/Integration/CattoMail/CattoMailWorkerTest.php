@@ -7,6 +7,8 @@ namespace App\Tests\Integration\CattoMail;
 use App\CattoMail\CattoMailActivity;
 use App\CattoMail\CattoMailWorker;
 use App\CattoMail\GlobalOptOut;
+use App\CattoMail\SendingDomainCheck;
+use App\Config\SiteConfig;
 use App\Command\CattoMailWorkCommand;
 use Doctrine\DBAL\DriverManager;
 use Symfony\Component\Console\Command\Command;
@@ -52,5 +54,27 @@ final class CattoMailWorkerTest extends CattoMailTestCase
         self::assertSame(Command::SUCCESS, $command->execute([]), 'reported on the next pass');
         self::assertStringContainsString('opt-outs reported 1', $command->getDisplay());
         self::assertNotNull($this->service(CattoMailActivity::class)->snapshot()['last_ok']);
+    }
+
+    /** While the From address's domain cannot send, each pass asks again; the pass that finds it ready says so, once. */
+    public function testTheWorkerAsksAgainWhileTheFromDomainCannotSend(): void
+    {
+        $from = $this->service(SiteConfig::class)->fromAddress;
+        $domain = strtolower(substr($from, (int) strrpos($from, '@') + 1));
+        $check = $this->service(SendingDomainCheck::class);
+        $worker = $this->service(CattoMailWorker::class);
+
+        $ready = static function (array $report): ?int {
+            return $report['sending domain ready'] ?? null;
+        };
+        $this->fake->domainStates[$domain] = ['status' => 'verified', 'dkim_status' => 'pending_dns', 'can_send' => false];
+        self::assertSame(0, $ready($worker->run()), 'asked: not ready yet');
+        self::assertSame(SendingDomainCheck::CANNOT_SEND, $check->fromAddress()['state']);
+        self::assertSame(0, $ready($worker->run()), 'asked again on the next pass');
+
+        unset($this->fake->domainStates[$domain]); // its DKIM record is published and the key active
+        self::assertSame(1, $ready($worker->run()));
+        self::assertSame(SendingDomainCheck::OK, $check->fromAddress()['state']);
+        self::assertArrayNotHasKey('sending domain ready', $worker->run(), 'not asked again once it can send');
     }
 }

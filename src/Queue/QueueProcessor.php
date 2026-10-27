@@ -54,7 +54,8 @@ final class QueueProcessor
     ) {
     }
 
-    public function process(string $muid = '', int $limit = 250000): SendOutcome
+    /** @param (\Closure(int): void)|null $progress told the number staged so far after each staged message */
+    public function process(string $muid = '', int $limit = 250000, ?\Closure $progress = null): SendOutcome
     {
         $problem = $this->sender->problem();
         if ($problem !== null) {
@@ -74,7 +75,7 @@ final class QueueProcessor
             $problem = null;
             $retryable = true;
             try {
-                $staged = $this->stage($run, $muid, max(0, $limit), $problem);
+                $staged = $this->stage($run, $muid, max(0, $limit), $problem, $progress);
                 // The message itself stopped the run (no content, maximum reached): nothing to retry.
                 $retryable = $problem === null;
             } catch (CattoMailException $e) {
@@ -101,8 +102,11 @@ final class QueueProcessor
         $this->options->set(self::SEND_QUEUE, 'N');
     }
 
-    /** @return int recipients staged */
-    private function stage(int $run, string $muid, int $limit, ?string &$problem): int
+    /**
+     * @param (\Closure(int): void)|null $progress
+     * @return int recipients staged
+     */
+    private function stage(int $run, string $muid, int $limit, ?string &$problem, ?\Closure $progress): int
     {
         $staged = 0;
         while ($staged < $limit) {
@@ -165,6 +169,9 @@ final class QueueProcessor
                     continue;
                 }
                 $staged++;
+                if ($progress !== null) {
+                    $progress($staged);
+                }
             }
         }
         return $staged;

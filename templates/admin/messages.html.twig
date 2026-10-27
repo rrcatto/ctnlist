@@ -3,6 +3,7 @@
 {% block title %}Messages{% endblock %}
 
 {% block content %}
+{% import 'layout/_htmx.html.twig' as hx %}
 {% embed 'layout/_page_header.html.twig' with {title: 'Messages', description: 'Campaign messages, newest first. Send a proof to check a message, queue it to add its audience to the delivery queue, then start sending.'} %}
   {% block actions %}
     <a class="btn-solid theme-primary" href="{{ path('admin_message') }}"><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>New message</a>
@@ -10,53 +11,14 @@
   {% endblock %}
 {% endembed %}
 
-{% if messages is empty %}
-  {% include 'layout/_empty_state.html.twig' with {icon: 'envelope', message: 'There are no messages.', hint: 'Create a message to get started.'} %}
-{% else %}
-  {% set can_queue = is_granted('messages.queue') %}
-  {% set can_send = is_granted('queue.process') %}
-  {% set can_view_activity = is_granted('logs.view') %}
-  <div class="table-responsive">
-    <table class="table table-hover align-middle">
-      <thead class="">
-        <tr>
-          <th scope="col">Subject</th>
-          <th scope="col">Lists</th>
-          <th scope="col">First sent</th>
-          <th scope="col" class="text-end" title="Queued : sent">Q:S</th>
-          <th scope="col">Last read</th>
-          <th scope="col">Last like</th>
-          <th scope="col" class="text-end">Reads</th>
-          <th scope="col" class="text-end">Likes</th>
-          <th scope="col" class="text-end">Dislikes</th>
-          <th scope="col" class="text-end">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-      {% for message in messages %}
-        <tr>
-          <td><a class="fw-semibold" href="{{ path('admin_message', {muid: message.m_uniqid}) }}" title="{{ message.m_subject }}">{{ message.m_subject|length > 60 ? message.m_subject|slice(0, 60) ~ '…' : message.m_subject }}</a></td>
-          <td>{% if message.list_names is empty %}<span class="fg-2"><em>None selected</em></span>{% else %}{{ message.list_names }}{% endif %}</td>
-          <td class="text-nowrap">{{ message.m_datesent ?: '–' }}</td>
-          <td class="text-end text-nowrap">{{ message.m_queued }}:{{ message.m_sent }}</td>
-          <td class="text-nowrap">{{ message.m_last_read ?: '–' }}</td>
-          <td class="text-nowrap">{{ message.m_last_like ?: '–' }}</td>
-          <td class="text-end">{% if can_view_activity %}<a href="{{ path('report_message_views', {muid: message.m_uniqid}) }}" title="Message activity">{{ message.m_reads }}</a>{% else %}{{ message.m_reads }}{% endif %}</td>
-          <td class="text-end">{{ message.m_likes }}</td>
-          <td class="text-end">{{ message.m_dislikes }}</td>
-          <td class="text-end">
-            <div class="btn-group btn-group-sm" role="group" aria-label="Actions for {{ message.m_subject }}">
-              <a class="btn-outline theme-secondary" href="{{ path('admin_proof', {muid: message.m_uniqid}) }}">Proof</a>
-              {% if can_queue %}<a class="btn-outline theme-primary" href="{{ path('admin_queue_message', {muid: message.m_uniqid}) }}">Queue</a>{% endif %}
-              {% if can_send %}<a class="btn-outline theme-success" href="{{ path('admin_queue_process', {muid: message.m_uniqid}) }}" title="Send this message's queued entries">Send</a>{% endif %}
-              {% if can_view_activity %}<a class="btn-outline theme-secondary" href="{{ path('admin_delivery_message', {muid: message.m_uniqid}) }}" title="catto-mail send jobs and delivery states">Delivery</a>{% endif %}
-            </div>
-          </td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
+<form method="get" action="{{ path('admin_messages') }}" class="card card-body bg-1 mb-7" role="search" aria-label="Find a message" {{ hx.search(path('admin_messages'), 'message-results') }}>
+  <div class="d-flex flex-wrap align-items-end gap-3">
+    <div class="flex-grow-1"><label class="form-label" for="f-q">Subject contains</label><input class="form-control" id="f-q" type="search" name="q" value="{{ search }}" maxlength="200"></div>
+    <noscript><button class="btn-solid theme-primary" type="submit"><i class="bi bi-search me-1" aria-hidden="true"></i>Search</button></noscript>
+    {% if search %}<a class="btn-outline theme-secondary" href="{{ path('admin_messages') }}">Clear</a>{% endif %}
+    <span class="small fg-2 htmx-indicator pb-3" role="status">Searching…</span>
   </div>
-  {% include '_pagination.html.twig' with {base: path('admin_messages')} %}
-{% endif %}
+</form>
+
+{% include 'admin/_message_results.html.twig' %}
 {% endblock %}

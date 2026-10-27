@@ -25,6 +25,7 @@ final class LayoutTest extends SmokeTestCase
         '/queue' => 'queue.process',
         '/advanced-queue' => 'messages.queue',
         '/processqueue' => 'queue.process',
+        '/sending' => 'queue.process',
         '/stop-send' => 'queue.process',
         '/subscribers' => 'subscribers.view',
         '/activesubscribers' => 'subscribers.view',

@@ -81,7 +81,7 @@ final class AdminScreensTest extends SmokeTestCase
         self::$db->exec("INSERT INTO sendlog (sl_type, sl_email) VALUES ('SMOKE-PAGE', 'one@example.com'), ('SMOKE-PAGE', 'two@example.com'), ('SMOKE-PAGE', 'three@example.com')");
         $body = self::request($client, 'GET', '/sendlog/2?r=1')['body'];
 
-        self::assertStringContainsString('<nav aria-label="Pagination">', $body);
+        self::assertStringContainsString('<nav aria-label="Pagination" hx-boost:inherited="true" hx-target:inherited="#sendlog-results"', $body, 'the pager turns the region\'s pages');
         self::assertMatchesRegularExpression('#<span class="page-link" aria-current="page">2</span>#', $body);
         self::assertMatchesRegularExpression('#href="/sendlog/1\?r=1" aria-label="Previous page"#', $body, 'filters kept');
         self::assertMatchesRegularExpression('#href="/sendlog/3\?r=1" aria-label="Next page"#', $body);

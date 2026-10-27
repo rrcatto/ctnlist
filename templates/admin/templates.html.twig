@@ -3,28 +3,21 @@
 {% block title %}Templates{% endblock %}
 
 {% block content %}
+{% import 'layout/_htmx.html.twig' as hx %}
 {% embed 'layout/_page_header.html.twig' with {title: 'Templates', description: 'Layouts that wrap a message: the message body replaces {content}.'} %}
   {% block actions %}
     <a class="btn-solid theme-primary" href="{{ path('admin_template') }}"><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>New template</a>
   {% endblock %}
 {% endembed %}
 
-{% if templates is empty %}
-  {% include 'layout/_empty_state.html.twig' with {icon: 'file-earmark-text', message: 'There are no templates.', hint: 'Messages can be sent without a template.'} %}
-{% else %}
-  <div class="table-responsive">
-    <table class="table table-hover align-middle">
-      <thead class=""><tr><th scope="col">Name</th><th scope="col" class="text-end">Actions</th></tr></thead>
-      <tbody>
-      {% for template in templates %}
-        <tr>
-          <td><a class="fw-semibold" href="{{ path('admin_template', {id: template.t_id}) }}">{{ template.t_name }}</a></td>
-          <td class="text-end"><a class="btn-sm btn-outline theme-secondary" href="{{ path('admin_template', {id: template.t_id}) }}"><i class="bi bi-pencil me-1" aria-hidden="true"></i>Edit</a></td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
+<form method="get" action="{{ path('admin_templates') }}" class="card card-body bg-1 mb-7" role="search" aria-label="Find a template" {{ hx.search(path('admin_templates'), 'template-results') }}>
+  <div class="d-flex flex-wrap align-items-end gap-3">
+    <div class="flex-grow-1"><label class="form-label" for="f-q">Name contains</label><input class="form-control" id="f-q" type="search" name="q" value="{{ search }}" maxlength="200"></div>
+    <noscript><button class="btn-solid theme-primary" type="submit"><i class="bi bi-search me-1" aria-hidden="true"></i>Search</button></noscript>
+    {% if search %}<a class="btn-outline theme-secondary" href="{{ path('admin_templates') }}">Clear</a>{% endif %}
+    <span class="small fg-2 htmx-indicator pb-3" role="status">Searching…</span>
   </div>
-  {% include '_pagination.html.twig' with {base: path('admin_templates')} %}
-{% endif %}
+</form>
+
+{% include 'admin/_template_results.html.twig' %}
 {% endblock %}

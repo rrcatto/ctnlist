@@ -32,27 +32,33 @@ final class MessageRepository
         return $row === false ? null : self::hydrate($row);
     }
 
-    public function count(): int
+    /** Messages; with $search, those whose subject contains it. */
+    public function count(string $search = ''): int
     {
-        return (int) $this->db->fetchOne('SELECT COUNT(*) FROM messages');
+        return trim($search) === ''
+            ? (int) $this->db->fetchOne('SELECT COUNT(*) FROM messages')
+            : (int) $this->db->fetchOne('SELECT COUNT(*) FROM messages WHERE m_subject ILIKE ?', [Like::contains($search)]);
     }
 
     /**
      * The administrator's message list, newest first, with delivery and
-     * reaction statistics and the selected lists' names.
+     * reaction statistics and the selected lists' names; with $search, the
+     * messages whose subject contains it.
      *
      * @return list<array<string, mixed>>
      */
-    public function adminPage(int $offset, int $limit): array
+    public function adminPage(int $offset, int $limit, string $search = ''): array
     {
+        $filtered = trim($search) !== '';
         return $this->db->fetchAllAssociative(
             "SELECT m.m_id, m.m_uniqid, m.m_subject, m.m_datesent, m.m_queued, m.m_sent, m.m_last_read, m.m_last_like,
                     m.m_reads, m.m_likes, m.m_dislikes,
                     COALESCE((SELECT string_agg(l.l_name, ', ' ORDER BY l.l_system DESC, l.l_name)
                               FROM message_lists ml JOIN lists l ON l.l_id = ml.ml_l_id WHERE ml.ml_m_id = m.m_id), '') AS list_names
-             FROM messages m
+             FROM messages m" . ($filtered ? ' WHERE m.m_subject ILIKE ?' : '') . '
              ORDER BY m.m_id DESC
-             LIMIT " . max(1, $limit) . ' OFFSET ' . max(0, $offset)
+             LIMIT ' . max(1, $limit) . ' OFFSET ' . max(0, $offset),
+            $filtered ? [Like::contains($search)] : []
         );
     }
 

@@ -1,0 +1,32 @@
+{#
+  The subscriber's list memberships (subscriber page), read-only: only the subscriber confirms one.
+  Administrators invite to a list here (ListInvitationType, Admin\SubscriberController::invite()).
+  The htmx region subscriber-lists, drawn again by Invite.
+#}
+{% import 'admin/_macros.html.twig' as ui %}
+{% import 'layout/_htmx.html.twig' as hx %}
+<div id="subscriber-lists" class="card app-region">
+  <div class="card-header fw-semibold">List memberships</div>
+  <ul class="list-group list-group-flush">
+    {% for membership in memberships %}
+      <li class="list-group-item d-flex justify-content-between align-items-center gap-3">
+        <span>{{ membership.l_name }} <code class="small">{{ membership.l_shortcode }}</code></span>
+        {{ ui.membership_badge(ui.membership_state(membership)) }}
+      </li>
+    {% else %}
+      <li class="list-group-item fg-2">There are no active lists.</li>
+    {% endfor %}
+  </ul>
+  {% if invitation %}
+    <div class="card-body border-top">
+      {% set action = path('admin_subscriber_invite', {token: token}) %}
+      {{ form_start(invitation, {attr: {'hx-post': action, 'hx-target': '#subscriber-lists', 'hx-swap': 'outerHTML', 'hx-disable': 'find button'}}) }}
+        {{ form_errors(invitation) }}
+        {{ form_row(invitation.listId) }}
+        <button class="btn-sm btn-solid theme-primary" type="submit"><i class="bi bi-envelope-plus me-1" aria-hidden="true"></i>Invite</button>
+      {{ form_end(invitation) }}
+    </div>
+  {% else %}
+    <div class="card-footer small fg-2">Only the subscriber can confirm a membership.</div>
+  {% endif %}
+</div>

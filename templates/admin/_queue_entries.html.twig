@@ -1,0 +1,60 @@
+{#
+  The queue's entries (Admin\QueueController::list()): the page includes it, and it is the htmx region
+  queue-entries, drawn again by the pager, Remove and Clear queue.
+#}
+{% import 'layout/_htmx.html.twig' as hx %}
+<div id="queue-entries" class="app-region">
+{% if rows is empty %}
+  {% include 'layout/_empty_state.html.twig' with {icon: 'send', message: 'There is nothing in the queue.', hint: 'Queue a message from the message list to add its audience.'} %}
+{% else %}
+  {% set can_edit_subscribers = is_granted('subscribers.manage') %}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead class="">
+        <tr>
+          <th scope="col">Message</th>
+          <th scope="col">Subscriber</th>
+          <th scope="col">List</th>
+          <th scope="col">Added</th>
+          <th scope="col">Last interaction</th>
+          <th scope="col" class="text-end" title="Message priority : subscriber priority">MP:SP</th>
+          <th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <td><a href="{{ path('admin_message', {muid: row.q_muid}) }}" title="{{ row.q_subject }}">{{ row.q_subject|length > 80 ? row.q_subject|slice(0, 80) ~ '…' : row.q_subject }}</a></td>
+          <td>{% if can_edit_subscribers %}<a href="{{ path('admin_subscriber', {token: row.q_s_uuid}) }}">{{ row.q_email }}</a>{% else %}{{ row.q_email }}{% endif %}</td>
+          <td><code>{{ row.q_list_shortcode }}</code></td>
+          <td class="text-nowrap">{{ row.q_date_added }}</td>
+          <td class="text-nowrap">{{ row.q_last_interacted ?: '–' }}</td>
+          <td class="text-end">{{ row.q_mpriority }}:{{ row.q_spriority }}</td>
+          <td class="text-end">
+            <form method="post" action="{{ path('admin_queue_delete') }}" {{ hx.post(path('admin_queue_delete'), 'queue-entries') }}>
+              <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+              <input type="hidden" name="queue_id" value="{{ row.q_id }}">
+              <button class="btn-sm btn-outline theme-danger" type="submit" aria-label="Remove {{ row.q_email }} from the queue"><i class="bi bi-x-lg" aria-hidden="true"></i><span class="d-none md:d-inline ms-1">Remove</span></button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include '_pagination.html.twig' with {base: path('admin_queue'), region: 'queue-entries'} %}
+
+  <div class="card border-subtle-danger mt-7">
+    <div class="card-body d-flex flex-row flex-wrap align-items-center justify-content-between gap-5">
+      <div>
+        <h2 class="h6 mb-1">Clear the queue</h2>
+        <p class="small fg-2 mb-0">Removes all {{ pagination.total }} queued entries. Messages can be queued again afterwards.</p>
+      </div>
+      <form method="post" action="{{ path('admin_queue_clear') }}" data-confirm="Clear the entire queue?" {{ hx.post(path('admin_queue_clear'), 'queue-entries') }}>
+        <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+        <button class="btn-outline theme-danger" type="submit"><i class="bi bi-trash me-1" aria-hidden="true"></i>Clear queue</button>
+      </form>
+    </div>
+  </div>
+{% endif %}
+</div>

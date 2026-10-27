@@ -16,10 +16,11 @@
     {label: 'All templates', route: 'admin_templates', permission: 'templates.manage', counter: 'templates'},
     {label: 'New template', route: 'admin_template', permission: 'templates.manage'},
   ]},
-  {label: 'Sending', icon: 'send', routes: ['admin_queue', 'admin_queue_message', 'admin_queue_rotation', 'admin_queue_process', 'admin_queue_stop'], items: [
+  {label: 'Sending', icon: 'send', routes: ['admin_queue', 'admin_queue_message', 'admin_queue_rotation', 'admin_queue_process', 'admin_queue_sending', 'admin_queue_stop'], items: [
     {label: 'Queue', route: 'admin_queue', permission: 'queue.process', counter: 'queue', badge: true},
     {label: 'Queue multiple messages', route: 'admin_queue_rotation', permission: 'messages.queue'},
     {label: 'Start sending', route: 'admin_queue_process', permission: 'queue.process'},
+    {label: 'Sending progress', route: 'admin_queue_sending', permission: 'queue.process'},
     {label: 'Stop sending', route: 'admin_queue_stop', permission: 'queue.process'},
   ]},
   {label: 'Subscribers', icon: 'people', routes: ['admin_subscribers', 'admin_subscribers_active', 'admin_subscriber', 'admin_bulk_subscribe', 'admin_bulk_unsubscribe', 'admin_import', 'admin_export', 'admin_sync', 'admin_validation', 'admin_validation_job'], items: [

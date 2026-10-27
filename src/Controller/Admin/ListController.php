@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller\Admin;
 
+use App\Controller\RendersRegions;
 use App\Form\FormErrors;
 use App\Form\Model\ListDetails;
 use App\Form\Type\ListType;
@@ -23,6 +24,8 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('lists.manage')]
 final class ListController extends AbstractController
 {
+    use RendersRegions;
+
     public function __construct(
         private readonly ListRepository $lists,
         private readonly ListManager $manager,
@@ -30,9 +33,9 @@ final class ListController extends AbstractController
     }
 
     #[Route('/lists', name: 'admin_lists', methods: ['GET'])]
-    public function index(): Response
+    public function index(Request $request): Response
     {
-        return $this->indexPage($this->createListForm());
+        return $this->indexPage($request, $this->createListForm());
     }
 
     #[Route('/lists', name: 'admin_lists_create', methods: ['POST'])]
@@ -46,12 +49,12 @@ final class ListController extends AbstractController
             try {
                 $id = $this->manager->create($details->shortcode, $details->name, $details->description);
                 $this->addFlash('info', "List {$details->shortcode} created with ID {$id}.");
-                return $this->redirectToRoute('admin_lists');
+                return $this->redirectAfterAction($request, 'admin_lists');
             } catch (\InvalidArgumentException $e) {
                 FormErrors::attach($form, $e);
             }
         }
-        return $this->indexPage($form, Response::HTTP_UNPROCESSABLE_ENTITY);
+        return $this->indexPage($request, $form, Response::HTTP_UNPROCESSABLE_ENTITY);
     }
 
     #[Route('/lists/{id}/edit', name: 'admin_lists_edit', requirements: ['id' => '\d+'], methods: ['GET', 'POST'])]
@@ -93,7 +96,7 @@ final class ListController extends AbstractController
         } catch (\InvalidArgumentException $e) {
             $this->addFlash('danger', $e->getMessage());
         }
-        return $this->redirectToRoute('admin_lists');
+        return $this->redirectAfterAction($request, 'admin_lists');
     }
 
     private function createListForm(): FormInterface
@@ -101,8 +104,9 @@ final class ListController extends AbstractController
         return $this->createForm(ListType::class, new ListDetails(), ['create' => true, 'action' => $this->generateUrl('admin_lists_create')]);
     }
 
-    private function indexPage(FormInterface $form, int $status = Response::HTTP_OK): Response
+    private function indexPage(Request $request, FormInterface $form, int $status = Response::HTTP_OK): Response
     {
-        return $this->render('admin/lists.html.twig', ['lists' => $this->lists->all(false), 'form' => $form], new Response(status: $status));
+        return $this->renderPage($request, 'admin/lists.html.twig', ['list-admin' => 'admin/_lists.html.twig'],
+            ['lists' => $this->lists->all(false), 'form' => $form], new Response(status: $status));
     }
 }

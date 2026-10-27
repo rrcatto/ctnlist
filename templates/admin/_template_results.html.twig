@@ -1,0 +1,28 @@
+{#
+  The template list (Admin\TemplateController::list()): the page includes it, and it is the htmx region
+  template-results that the name search and the pager draw again.
+#}
+<div id="template-results" class="app-region">
+{% if templates is empty %}
+  {% if search %}
+    {% include 'layout/_empty_state.html.twig' with {icon: 'file-earmark-text', message: 'No template name contains “' ~ search ~ '”.'} %}
+  {% else %}
+    {% include 'layout/_empty_state.html.twig' with {icon: 'file-earmark-text', message: 'There are no templates.', hint: 'Messages can be sent without a template.'} %}
+  {% endif %}
+{% else %}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead class=""><tr><th scope="col">Name</th><th scope="col" class="text-end">Actions</th></tr></thead>
+      <tbody>
+      {% for template in templates %}
+        <tr>
+          <td><a class="fw-semibold" href="{{ path('admin_template', {id: template.t_id}) }}">{{ template.t_name }}</a></td>
+          <td class="text-end"><a class="btn-sm btn-outline theme-secondary" href="{{ path('admin_template', {id: template.t_id}) }}"><i class="bi bi-pencil me-1" aria-hidden="true"></i>Edit</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include '_pagination.html.twig' with {base: path('admin_templates'), query: query, region: 'template-results'} %}
+{% endif %}
+</div>

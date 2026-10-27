@@ -34,4 +34,14 @@ final class DatabaseLock
     {
         $this->db->fetchOne('SELECT pg_advisory_unlock(hashtext(?))', [$name]);
     }
+
+    /** Whether no process holds the lock now (taken and given back at once: only an indication, the next acquire() decides). */
+    public function isFree(string $name): bool
+    {
+        if (!$this->acquire($name)) {
+            return false;
+        }
+        $this->release($name);
+        return true;
+    }
 }

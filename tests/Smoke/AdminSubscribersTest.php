@@ -31,8 +31,7 @@ final class AdminSubscribersTest extends SmokeTestCase
         $edit = '/subscribers/' . self::$admin['s_uuid'];
         $saved = self::submitAndFollow($client, $edit, 'subscriber', ['subscriber[firstName]' => 'Dev', 'subscriber[lastName]' => 'Admin', 'subscriber[priority]' => '0']);
         self::assertStringContainsString('Subscriber saved.', $saved);
-        $select = self::match('#<select id="subscriber_listId"[^>]*>\s*<option value="">No list</option>(.*?)</select>#s', $saved, 'no list invitation unless one is chosen');
-        self::assertStringNotContainsString('selected', $select[1]);
+        self::assertStringNotContainsString('subscriber[listId]', $saved, 'inviting to a list is not part of saving (SubscriberPageTest)');
 
         $invalid = self::submitForm($client, $edit, 'subscriber', ['subscriber[firstName]' => str_repeat('x', 101), 'subscriber[lastName]' => 'Kept', 'subscriber[priority]' => 'high']);
         self::assertSame(422, $invalid['status']);

@@ -4,6 +4,7 @@
 {% block title %}Role: {{ role.r_name }}{% endblock %}
 
 {% block content %}
+{% import 'layout/_htmx.html.twig' as hx %}
 {% set custom = not role.r_system %}
 {% set can_edit_permissions = custom and is_granted('acl.manage') %}
 {% set here = path('admin_role', {id: role.r_id}) %}
@@ -18,7 +19,7 @@
 {% embed 'layout/_page_header.html.twig' with {title: role.r_name, description: role.r_description ?: (custom ? 'Custom role.' : 'System role.')} %}
   {% block actions %}<a class="btn-outline theme-secondary" href="{{ path('admin_roles') }}"><i class="bi bi-arrow-left me-1" aria-hidden="true"></i>All roles</a>{% endblock %}
 {% endembed %}
-<p class="mb-7">{{ ui.system_badge(role.r_system) }} <span class="ms-3 small fg-2">Key <code>{{ role.r_key }}</code> · {{ pagination.total }} {{ pagination.total == 1 ? 'member' : 'members' }} · {{ granted|length }} {{ granted|length == 1 ? 'permission' : 'permissions' }}</span></p>
+<p class="mb-7">{{ ui.system_badge(role.r_system) }} <span class="ms-3 small fg-2">Key <code>{{ role.r_key }}</code> · {{ member_total }} {{ member_total == 1 ? 'member' : 'members' }} · {{ granted|length }} {{ granted|length == 1 ? 'permission' : 'permissions' }}</span></p>
 
 {% if not custom %}
   <div class="alert theme-secondary small" role="note"><i class="bi bi-lock" aria-hidden="true"></i>
@@ -85,48 +86,27 @@
     <span>Members</span>
     <a class="btn-sm btn-outline theme-primary" href="{{ path('admin_roles') }}#assign"><i class="bi bi-person-plus me-1" aria-hidden="true"></i>Assign to a subscriber</a>
   </div>
-  {% if members is empty %}
-    <div class="card-body">{% include 'layout/_empty_state.html.twig' with {icon: 'people', message: 'Nobody holds this role.'} %}</div>
-  {% else %}
-    <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0">
-        <thead class=""><tr><th scope="col">Subscriber</th><th scope="col">Name</th><th scope="col">Assigned</th>{% if custom %}<th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th>{% endif %}</tr></thead>
-        <tbody>
-        {% for member in members %}
-          <tr>
-            <td>{% if is_granted('subscribers.manage') %}<a href="{{ path('admin_subscriber', {token: member.s_uuid}) }}">{{ member.s_email }}</a>{% else %}{{ member.s_email }}{% endif %}</td>
-            <td>{{ (member.s_fname ~ ' ' ~ member.s_lname)|trim }}</td>
-            <td class="text-nowrap">{{ member.sr_assigned_at|slice(0, 16) }}</td>
-            {% if custom %}
-              <td class="text-end">
-                <form method="post" action="{{ path('admin_roles_unassign') }}" data-confirm="Remove {{ role.r_name }} from {{ member.s_email }}?">
-                  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-                  <input type="hidden" name="subscriber_id" value="{{ member.s_id }}">
-                  <input type="hidden" name="role_id" value="{{ role.r_id }}">
-                  <input type="hidden" name="back" value="{{ pagination.page > 1 ? here ~ '/' ~ pagination.page : here }}">
-                  <button class="btn-sm btn-outline theme-danger" type="submit" aria-label="Remove {{ role.r_name }} from {{ member.s_email }}"><i class="bi bi-x-lg" aria-hidden="true"></i><span class="d-none md:d-inline ms-1">Remove</span></button>
-                </form>
-              </td>
-            {% endif %}
-          </tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    <div class="card-body pt-0">{% include '_pagination.html.twig' with {base: here} %}</div>
-  {% endif %}
+  <div class="card-body pb-0">
+    <form method="get" action="{{ here }}" class="d-flex flex-wrap align-items-end gap-3" role="search" aria-label="Find a member" {{ hx.search(here, 'role-members') }}>
+      <div class="flex-grow-1"><label class="form-label" for="m-q">Find a member</label><input class="form-control" id="m-q" type="search" name="q" value="{{ search }}" maxlength="254" placeholder="Email, first or last name"></div>
+      <noscript><button class="btn-solid theme-primary" type="submit"><i class="bi bi-search me-1" aria-hidden="true"></i>Search</button></noscript>
+      {% if search %}<a class="btn-outline theme-secondary" href="{{ here }}">Clear</a>{% endif %}
+      <span class="small fg-2 htmx-indicator pb-3" role="status">Searching…</span>
+    </form>
+  </div>
+  {% include 'admin/_role_members.html.twig' %}
 </div>
 
 {% if custom %}
   <div class="card border-subtle-danger">
     <div class="card-body">
       <h2 class="h6">Delete this role</h2>
-      <p class="small mb-3">Deleting <strong>{{ role.r_name }}</strong> removes it from {{ pagination.total }} {{ pagination.total == 1 ? 'subscriber' : 'subscribers' }}
+      <p class="small mb-3">Deleting <strong>{{ role.r_name }}</strong> removes it from {{ member_total }} {{ member_total == 1 ? 'subscriber' : 'subscribers' }}
         {%- if granted_permissions is empty %} (it grants no permissions).{% else %}, who lose these permissions unless another role grants them:{% endif %}</p>
       {% if granted_permissions is not empty %}
         <p class="small">{% for permission in granted_permissions %}<code class="me-3">{{ permission.ap_key }}</code>{% endfor %}</p>
       {% endif %}
-      <form method="post" action="{{ path('admin_role_delete', {id: role.r_id}) }}" data-confirm="Delete the role {{ role.r_name }} and remove it from {{ pagination.total }} {{ pagination.total == 1 ? 'subscriber' : 'subscribers' }}?">
+      <form method="post" action="{{ path('admin_role_delete', {id: role.r_id}) }}" data-confirm="Delete the role {{ role.r_name }} and remove it from {{ member_total }} {{ member_total == 1 ? 'subscriber' : 'subscribers' }}?">
         <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
         <button class="btn-outline theme-danger" type="submit"><i class="bi bi-trash me-1" aria-hidden="true"></i>Delete role</button>
       </form>

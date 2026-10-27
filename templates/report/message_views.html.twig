@@ -3,6 +3,7 @@
 {% block title %}Message activity{% endblock %}
 
 {% block content %}
+{% import 'layout/_htmx.html.twig' as hx %}
 {% set base = path('report_message_views', {muid: muid}) %}
 {% embed 'layout/_page_header.html.twig' with {title: 'Message activity', description: 'Subscribers who have opened this message, with their reactions and the contact forms they sent from it, most recent read first.'} %}
   {% block actions %}
@@ -10,48 +11,16 @@
   {% endblock %}
 {% endembed %}
 
-<form name="messageviewsform" action="{{ base }}" method="get" class="card card-body bg-1 mb-7" role="search" aria-label="Filter message activity">
+<form name="messageviewsform" action="{{ base }}" method="get" class="card card-body bg-1 mb-7" role="search" aria-label="Filter message activity" {{ hx.search(base, 'message-views-results') }}>
   <div class="row g-5 align-items-end">
     <div class="md:col-6"><label class="form-label" for="f-e">Email address contains</label><input class="form-control" id="f-e" type="search" name="e" value="{{ email }}"></div>
-    <div class="md:col-6 d-flex gap-3">
-      <button class="btn-solid theme-primary" type="submit"><i class="bi bi-search me-1" aria-hidden="true"></i>Search</button>
+    <div class="md:col-6 d-flex align-items-center gap-3">
+      <noscript><button class="btn-solid theme-primary" type="submit"><i class="bi bi-search me-1" aria-hidden="true"></i>Search</button></noscript>
       <a class="btn-outline theme-secondary" href="{{ base }}">Clear</a>
+      <span class="small fg-2 htmx-indicator" role="status">Searching…</span>
     </div>
   </div>
 </form>
 
-{% if rows is empty %}
-  {% include 'layout/_empty_state.html.twig' with {icon: 'eye', message: 'No matching subscriber has read this message yet.'} %}
-{% else %}
-  <div class="table-responsive">
-    <table class="table table-hover align-middle">
-      <thead class="">
-        <tr>
-          <th scope="col">Email</th><th scope="col">List</th>
-          <th scope="col" class="text-end">Reads</th><th scope="col">Last read</th>
-          <th scope="col" class="text-end">Likes</th><th scope="col">Last like</th>
-          <th scope="col" class="text-end">Dislikes</th><th scope="col">Last dislike</th>
-          <th scope="col" class="text-end">Forwards</th>
-          <th scope="col" class="text-end">Contact forms</th><th scope="col">Last contact form</th>
-          <th scope="col">Subscribed</th><th scope="col">Unsubscribed</th>
-        </tr>
-      </thead>
-      <tbody>
-      {% for row in rows %}
-        <tr>
-          <td>{{ row.sml_email }}</td><td>{% if row.sml_list_shortcode %}<code>{{ row.sml_list_shortcode }}</code>{% endif %}</td>
-          <td class="text-end">{{ row.sml_reads }}</td><td class="text-nowrap">{{ row.sml_last_read ?: '–' }}</td>
-          <td class="text-end">{{ row.sml_likes }}</td><td class="text-nowrap">{{ row.sml_last_like ?: '–' }}</td>
-          <td class="text-end">{{ row.sml_dislikes }}</td><td class="text-nowrap">{{ row.sml_last_dislike ?: '–' }}</td>
-          <td class="text-end">{{ row.sml_forwards }}</td>
-          <td class="text-end">{{ row.sml_bookings }}</td><td class="text-nowrap">{{ row.sml_last_booking ?: '–' }}</td>
-          <td>{% if row.sml_subscribe > 0 %}<span class="badge theme-success">Yes</span>{% endif %}</td>
-          <td>{% if row.sml_unsubscribe > 0 %}<span class="badge theme-secondary">Yes</span>{% endif %}</td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% include '_pagination.html.twig' with {base: base, query: query} %}
-{% endif %}
+{% include 'report/_message_views_results.html.twig' %}
 {% endblock %}

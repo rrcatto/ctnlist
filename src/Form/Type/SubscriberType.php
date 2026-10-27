@@ -14,7 +14,7 @@ use Symfony\Component\OptionsResolver\OptionsResolver;
 
 /**
  * The subscriber form. Administrators (option `administrator`) also get the
- * priority and a list to invite the subscriber to.
+ * priority; they invite to a list with ListInvitationType.
  */
 final class SubscriberType extends AbstractType
 {
@@ -29,8 +29,6 @@ final class SubscriberType extends AbstractType
         ProfileChoiceFields::add($builder, $current?->gender, $current?->province, $current?->country);
         if ($options['administrator']) {
             $builder
-                ->add('listId', ListChoiceType::class, ['label' => 'Add to list', 'lists' => $options['lists'], 'required' => false, 'placeholder' => 'No list',
-                    'help' => 'Saving adds a pending membership (if there is none yet) and sends the invitation to confirm.'])
                 ->add('priority', IntegerType::class, ['label' => 'Priority', 'required' => false, 'empty_data' => '0', 'invalid_message' => WholeNumber::NOT_A_NUMBER,
                     'help' => 'Saving sets the priority to this value plus 100 (the v5 engagement rule).']);
         }
@@ -38,9 +36,8 @@ final class SubscriberType extends AbstractType
 
     public function configureOptions(OptionsResolver $resolver): void
     {
-        $resolver->setDefaults(['data_class' => SubscriberProfile::class, 'administrator' => false, 'lists' => []]);
+        $resolver->setDefaults(['data_class' => SubscriberProfile::class, 'administrator' => false]);
         $resolver->setAllowedTypes('administrator', 'bool');
-        $resolver->setAllowedTypes('lists', 'array');
     }
 
     public function getBlockPrefix(): string

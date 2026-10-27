@@ -1,0 +1,59 @@
+{#
+  The message list (Admin\MessageController::list()): the page includes it, and it is the htmx region
+  message-results that the subject search and the pager draw again.
+#}
+<div id="message-results" class="app-region">
+{% if messages is empty %}
+  {% if search %}
+    {% include 'layout/_empty_state.html.twig' with {icon: 'envelope', message: 'No message subject contains “' ~ search ~ '”.'} %}
+  {% else %}
+    {% include 'layout/_empty_state.html.twig' with {icon: 'envelope', message: 'There are no messages.', hint: 'Create a message to get started.'} %}
+  {% endif %}
+{% else %}
+  {% set can_queue = is_granted('messages.queue') %}
+  {% set can_send = is_granted('queue.process') %}
+  {% set can_view_activity = is_granted('logs.view') %}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead class="">
+        <tr>
+          <th scope="col">Subject</th>
+          <th scope="col">Lists</th>
+          <th scope="col">First sent</th>
+          <th scope="col" class="text-end" title="Queued : sent">Q:S</th>
+          <th scope="col">Last read</th>
+          <th scope="col">Last like</th>
+          <th scope="col" class="text-end">Reads</th>
+          <th scope="col" class="text-end">Likes</th>
+          <th scope="col" class="text-end">Dislikes</th>
+          <th scope="col" class="text-end">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for message in messages %}
+        <tr>
+          <td><a class="fw-semibold" href="{{ path('admin_message', {muid: message.m_uniqid}) }}" title="{{ message.m_subject }}">{{ message.m_subject|length > 60 ? message.m_subject|slice(0, 60) ~ '…' : message.m_subject }}</a></td>
+          <td>{% if message.list_names is empty %}<span class="fg-2"><em>None selected</em></span>{% else %}{{ message.list_names }}{% endif %}</td>
+          <td class="text-nowrap">{{ message.m_datesent ?: '–' }}</td>
+          <td class="text-end text-nowrap">{{ message.m_queued }}:{{ message.m_sent }}</td>
+          <td class="text-nowrap">{{ message.m_last_read ?: '–' }}</td>
+          <td class="text-nowrap">{{ message.m_last_like ?: '–' }}</td>
+          <td class="text-end">{% if can_view_activity %}<a href="{{ path('report_message_views', {muid: message.m_uniqid}) }}" title="Message activity">{{ message.m_reads }}</a>{% else %}{{ message.m_reads }}{% endif %}</td>
+          <td class="text-end">{{ message.m_likes }}</td>
+          <td class="text-end">{{ message.m_dislikes }}</td>
+          <td class="text-end">
+            <div class="btn-group btn-group-sm" role="group" aria-label="Actions for {{ message.m_subject }}">
+              <a class="btn-outline theme-secondary" href="{{ path('admin_proof', {muid: message.m_uniqid}) }}">Proof</a>
+              {% if can_queue %}<a class="btn-outline theme-primary" href="{{ path('admin_queue_message', {muid: message.m_uniqid}) }}">Queue</a>{% endif %}
+              {% if can_send %}<a class="btn-outline theme-success" href="{{ path('admin_queue_process', {muid: message.m_uniqid}) }}" title="Send this message's queued entries">Send</a>{% endif %}
+              {% if can_view_activity %}<a class="btn-outline theme-secondary" href="{{ path('admin_delivery_message', {muid: message.m_uniqid}) }}" title="catto-mail send jobs and delivery states">Delivery</a>{% endif %}
+            </div>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include '_pagination.html.twig' with {base: path('admin_messages'), query: query, region: 'message-results'} %}
+{% endif %}
+</div>

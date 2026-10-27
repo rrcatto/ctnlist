@@ -10,6 +10,7 @@ use App\Config\SiteConfig;
 use App\Form\Model\MessageDraft;
 use App\Form\Type\MessageType;
 use App\Http\ContentSecurityPolicy;
+use App\Controller\RendersRegions;
 use App\Http\Pagination;
 use App\Repository\ListRepository;
 use App\Repository\MessageRepository;
@@ -29,6 +30,8 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('messages.manage')]
 final class MessageController extends AbstractController
 {
+    use RendersRegions;
+
     public function __construct(
         private readonly MessageRepository $messages,
         private readonly TemplateRepository $templates,
@@ -39,10 +42,13 @@ final class MessageController extends AbstractController
     #[Route('/messages/{page}', name: 'admin_messages', defaults: ['page' => 1], requirements: ['page' => '\d+'], methods: ['GET'])]
     public function list(int $page, Request $request): Response
     {
-        $pagination = Pagination::fromRequest($request, $page, $this->messages->count());
-        return $this->render('admin/messages.html.twig', [
-            'messages' => $this->messages->adminPage($pagination->offset(), $pagination->perPage),
+        $search = mb_substr(trim($request->query->getString('q')), 0, 200);
+        $pagination = Pagination::fromRequest($request, $page, $this->messages->count($search));
+        return $this->renderPage($request, 'admin/messages.html.twig', ['message-results' => 'admin/_message_results.html.twig'], [
+            'messages' => $this->messages->adminPage($pagination->offset(), $pagination->perPage, $search),
             'pagination' => $pagination,
+            'search' => $search,
+            'query' => $search === '' ? '' : '?' . http_build_query(['q' => $search]),
         ]);
     }
 

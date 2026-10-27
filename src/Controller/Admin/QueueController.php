@@ -8,6 +8,7 @@ use App\Campaign\MessageNotFound;
 use App\Campaign\MessageService;
 use App\CattoMail\SendOutcome;
 use App\Config\SiteConfig;
+use App\Controller\RendersRegions;
 use App\Form\FormErrors;
 use App\Form\Model\QueueRotation;
 use App\Form\Type\ProofType;
@@ -18,14 +19,17 @@ use App\Mail\ProofMailer;
 use App\Queue\QueueBuilder;
 use App\Queue\QueueOutcome;
 use App\Queue\QueueProcessor;
+use App\Queue\QueueRun;
 use App\Repository\MessageRepository;
 use App\Repository\QueueRepository;
 use App\Security\Csrf;
+use App\Security\SubscriberUser;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\FormInterface;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Attribute\CurrentUser;
 use Symfony\Component\Security\Http\Attribute\IsCsrfTokenValid;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
@@ -35,6 +39,8 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  */
 final class QueueController extends AbstractController
 {
+    use RendersRegions;
+
     /** v5 form defaults. */
     private const QUEUE_LIMIT = 500000;
     private const ROTATION_VOLUME = 1000000;
@@ -107,7 +113,7 @@ final class QueueController extends AbstractController
     public function list(int $page, Request $request): Response
     {
         $pagination = Pagination::fromRequest($request, $page, $this->queue->count());
-        return $this->render('admin/queue.html.twig', [
+        return $this->renderPage($request, 'admin/queue.html.twig', ['queue-entries' => 'admin/_queue_entries.html.twig'], [
             'rows' => $this->queue->page($pagination->offset(), $pagination->perPage),
             'pagination' => $pagination,
         ]);
@@ -118,17 +124,19 @@ final class QueueController extends AbstractController
     #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
     public function delete(Request $request): Response
     {
-        $this->queue->delete($request->request->getInt('queue_id'));
-        return $this->redirectToRoute('admin_queue');
+        if ($this->queue->delete($request->request->getInt('queue_id'))) {
+            $this->addFlash('info', 'The entry was removed from the queue.');
+        }
+        return $this->redirectAfterAction($request, 'admin_queue');
     }
 
     #[Route('/queue/clear', name: 'admin_queue_clear', methods: ['POST'])]
     #[IsGranted('queue.process')]
     #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
-    public function clear(): Response
+    public function clear(Request $request): Response
     {
         $this->addFlash('info', 'Cleared ' . $this->queue->clear() . ' queue record(s).');
-        return $this->redirectToRoute('admin_queue');
+        return $this->redirectAfterAction($request, 'admin_queue');
     }
 
     #[Route('/processqueue/{muid}/{limit}', name: 'admin_queue_process', defaults: ['muid' => '', 'limit' => self::SEND_LIMIT], requirements: ['limit' => '\d+'], methods: ['GET'])]
@@ -141,18 +149,30 @@ final class QueueController extends AbstractController
     #[Route('/processqueue', name: 'admin_queue_process_submit', methods: ['POST'])]
     #[IsGranted('queue.process')]
     #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
-    public function process(Request $request, QueueProcessor $processor): Response
+    public function process(Request $request, QueueRun $run, MessageRepository $messages, #[CurrentUser] SubscriberUser $user): Response
     {
-        set_time_limit(86400);
-        $outcome = $processor->process($request->request->getString('muid'), RequestNumber::of($request->request, 'limit') ?: self::SEND_LIMIT);
-        $message = 'Handed ' . $outcome->handedOff . ' message(s) to catto-mail.';
-        if ($outcome->staged > $outcome->handedOff && $outcome->status !== SendOutcome::FAILED) {
-            $message .= ' ' . ($outcome->staged - $outcome->handedOff) . ' more are waiting for catto-mail and will be retried automatically.';
+        $muid = $request->request->getString('muid');
+        $subject = $muid === '' ? '' : (string) ($messages->findByMuid($muid)['m_subject'] ?? '');
+        if ($run->request($muid, $subject, RequestNumber::of($request->request, 'limit') ?: self::SEND_LIMIT, $user->uuid)) {
+            // Sent once this answer has gone (QueueRunListener); the Sending page follows it.
+            $request->attributes->set(QueueRun::START, true);
+        } else {
+            $this->addFlash('info', 'Sending is already under way; its progress is below.');
         }
-        if ($outcome->problem !== null) {
-            $message .= ' ' . ($outcome->status === SendOutcome::DEFERRED ? 'catto-mail could not be reached: ' : 'Problem: ') . $outcome->problem;
-        }
-        return $this->result('Process queue', $message, [self::QUEUE_LINK]);
+        return $this->redirectToRoute('admin_queue_sending');
+    }
+
+    /** The current or last queue run: what it has done so far, and Stop while it is sending. */
+    #[Route('/sending', name: 'admin_queue_sending', methods: ['GET'])]
+    #[IsGranted('queue.process')]
+    public function sending(Request $request, QueueRun $run): Response
+    {
+        $current = $run->view();
+        return $this->renderPage($request, 'admin/queue_sending.html.twig', ['queue-run' => 'admin/_queue_run.html.twig'], [
+            'run' => $current,
+            'queued' => $this->queue->count($current['muid'] ?? ''),
+            'live' => in_array($current['state'] ?? null, [QueueRun::STARTING, QueueRun::RUNNING], true),
+        ]);
     }
 
     #[Route('/stop-send', name: 'admin_queue_stop', methods: ['GET'])]
@@ -165,10 +185,11 @@ final class QueueController extends AbstractController
     #[Route('/stop-send', name: 'admin_queue_stop_submit', methods: ['POST'])]
     #[IsGranted('queue.process')]
     #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
-    public function stop(QueueProcessor $processor): Response
+    public function stop(Request $request, QueueProcessor $processor): Response
     {
         $processor->requestStop();
-        return $this->result('Stop sending', 'The stop request has been recorded.', [self::QUEUE_LINK]);
+        $this->addFlash('info', 'The stop request has been recorded: sending stops before the next message.');
+        return $this->redirectAfterAction($request, 'admin_queue_sending');
     }
 
     /** Proof copy to any address, by default MAIL_TEST_ADDRESS (no subscriber record needed). */

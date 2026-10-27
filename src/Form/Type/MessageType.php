@@ -39,7 +39,9 @@ final class MessageType extends AbstractType
             ->add('muid', HiddenType::class)
             ->add('subject', TextType::class, ['empty_data' => '', 'label' => 'Subject',
                 'attr' => ['class' => 'form-control-lg', 'maxlength' => MessageContent::SUBJECT_MAX, 'placeholder' => 'The subject line of the email']])
-            ->add('html', TextareaType::class, $text + ['label' => 'HTML part', 'attr' => ['rows' => 20, 'data-html-editor' => '', 'placeholder' => 'Write the message here']])
+            ->add('html', TextareaType::class, $text + ['label' => 'HTML part', 'attr' => ['rows' => 20, 'data-html-editor' => '', 'placeholder' => 'Write the message here'],
+                // The editor draws the authored HTML next to the textarea: htmx leaves it alone.
+                'row_attr' => ['hx-ignore' => '']])
             ->add('text', TextareaType::class, $text + ['label' => 'Text part', 'help' => 'Plain-text alternative for mail clients that do not show HTML.', 'attr' => ['rows' => 12, 'class' => 'font-monospace']])
             ->add('listIds', ChoiceType::class, ['label' => 'To lists', 'choices' => $lists, 'multiple' => true, 'expanded' => true, 'required' => false,
                 'invalid_message' => 'Choose lists from the list.'])

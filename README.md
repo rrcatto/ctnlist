@@ -1,4 +1,4 @@
-# ctnlist 6.1.3
+# ctnlist 6.1.4
 
 ctnlist is a web-based mailing-list application created by Richard Royston Catto in 2009. Versions 5.0.x and 6.0.x are an incremental modernisation of the working v5.0 application, not a replacement of its established workflows.
 
@@ -12,6 +12,7 @@ Since 6.0 every route is a Symfony 8.1 controller and the Fat-Free Framework has
 - Symfony Mailer for transactional mail only (`src/Mail/`: sign-in links, invitations, notifications, contact-form mail); campaign content (queue sends, proofs, resends, forwards) is delivered by the catto-mail smarthost through its HTTPS API (`src/CattoMail/`), except proofs when `MAIL_PROOF_SMTP` hands them to a Mailpit instance ([Proofs to Mailpit](#proofs-to-mailpit))
 - Symfony Forms and Validator for every input form; symfony/html-sanitizer (archive pages) and symfony/rate-limiter (contact form, forwards and resends, global opt-out changes)
 - Bootstrap 6 (6.0.0-alpha.1) and Bootstrap Icons served by the site through Symfony AssetMapper (no CDN, no Node or npm), under a strict Content-Security-Policy; Bootstrap 6 needs a recent browser (Chrome or Edge 130, Firefox 132, Safari 18 or later)
+- htmx 4 (4.0.0, served the same way) for the administration pages that update in part: search fields that search as you type, page turns and buttons that redraw only their table or card, and pages that refresh themselves while something is in progress. Every page still works without JavaScript; the server answers the part of a page htmx asks for from the page's own address (`App\Http\Htmx`, `templates/CLAUDE.md` "htmx")
 - PHP `gd` (with JPEG and WebP) and `exif` for profile pictures
 - permanent RFC 9562 UUIDv7 subscriber identifiers
 - `subscribers` as the canonical identity table
@@ -21,7 +22,7 @@ Since 6.0 every route is a Symfony 8.1 controller and the Fat-Free Framework has
 - immutable `ALL` system list as an optional audience
 - profile pictures: on Edit profile a subscriber chooses a picture, positions, zooms and rotates it with a live preview, and saves it; it appears beside their name in the site menu (signed-out visitors see a placeholder) and on their profile
 - a Settings page for overriding selected `.env` settings (site identity, contact details, mail sender, the transactional SMTP server, contact form, subscription messages, archives, sign-in limits), with SMTP secrets encrypted by `APP_SETTINGS_KEY`
-- roles, permissions and ACL: custom roles can be created, renamed, deleted and given permissions; subscribers are found by search to assign roles, and each role lists its members (`roles.manage` manages roles and membership, `acl.manage` additionally changes permissions; system roles are fixed)
+- roles, permissions and ACL: custom roles can be created, renamed, deleted and given permissions; subscribers are found by search (as you type) to assign roles, a subscriber's page shows the roles they hold with Assign and Remove, and each role lists its members, with a search (`roles.manage` manages roles and membership, `acl.manage` additionally changes permissions; system roles are fixed, and Administrator can be assigned but not removed here)
 - CSRF protection for state-changing actions
 - separate PostgreSQL global email/domain suppression database
 - production templates (nginx, PHP-FPM, cron, systemd) and a production preflight, `ctnlist:diagnose --production`
@@ -37,6 +38,7 @@ Messages and templates can be saved as incomplete drafts. A message needs only a
 
 The message list again provides the operational controls used by v5:
 
+- find a message by its subject (as you type)
 - edit message
 - inspect message activity
 - add a message to the queue
@@ -53,6 +55,7 @@ The delivery system restores:
 - ordinary and advanced queueing
 - per-message maximum-send handling (a hard limit, as in v5: 0 sends none, and the queue run says when the maximum stopped it)
 - queue inspection, deletion, clearing, stopping and processing
+- Start sending answers at once and the run goes on after that answer: the Sending progress page (Sending menu) shows how many messages are prepared, how many are still queued and the outcome, refreshes itself while the run lasts, and offers Stop sending; the page can be left. A run that the server ended is shown as such, and its messages are not sent twice (`App\Queue\QueueRun`)
 - delivery through the catto-mail smarthost (see [catto-mail integration](#catto-mail-integration)): ctnlist renders every recipient's message, catto-mail sends it
 - archive creation when a campaign is first queued
 - queue-time subscriber state updates
@@ -84,7 +87,8 @@ Subscriber state-changing actions again send transactional notifications. The ma
 
 Restored administrator workflows include:
 
-- subscriber search, filters and pagination (every record by default, confirmed or not)
+- subscriber search, filters and pagination (every record by default, confirmed or not), searching as you type
+- the subscriber page: the profile form, and cards for list memberships (Invite to a list sends the invitation to confirm one), the roles the subscriber holds and the delivery block, each with its own buttons
 - active-reader views
 - per-list membership display and consent management
 - bulk subscribe and unsubscribe
@@ -100,7 +104,8 @@ The tree includes:
 - immutable campaign archives and archive forwarding
 - message activity reports with search and pagination
 - Send Log reports and filtering
-- Site Log recording (the method, path, answer, IP address and browser of every request) plus an administrator search/filter frontend
+- Site Log recording (the method, path, answer, IP address and browser of every request, except the timed refreshes of an administration page that is kept open) plus an administrator search/filter frontend
+- every search and filter on these pages searches as you type
 - Flagged activity: sign-in and subscribe submissions refused as bots', the IP addresses behind bot-like requests for the form pages, and new records nobody has confirmed
 - roles and ACL administration
 
@@ -122,7 +127,7 @@ install-ctnlist the installer, run as root on a server: a new installation, or a
 bin/            console (Symfony), dev (podman development environment)
 config/         Symfony configuration; phinx/ (migration configs, default ban.env location)
 database/       Phinx migrations (domain/, banlist/), destructive development reset scripts
-assets/         application CSS and JavaScript for Symfony AssetMapper (app.js, styles/app.css, ckeditor/ editor configuration, images/, lib/ vendored Bootstrap and Bootstrap Icons)
+assets/         application CSS and JavaScript for Symfony AssetMapper (app.js, styles/app.css, ckeditor/ editor configuration, images/, lib/ vendored Bootstrap, Bootstrap Icons and htmx)
 importmap.php   AssetMapper import map (entry point: assets/app.js)
 public_html/    per-installation web root: front controller (index.php) and vendor/ckeditor5/ (prebuilt CKEditor 5 bundle and its emoji list)
 deploy/         production templates: nginx server block and FastCGI snippet, PHP-FPM pool, cron entries, systemd units, Mailpit for proofs (mailpit/, nginx/mailpit.location.conf.example); podman/, the kit for running an installation in a rootless Podman pod (Rootless Podman)
@@ -146,7 +151,7 @@ dev/podman-kit-test/ the stand-in server and the test of the Podman kit (bin/dev
 
 ### Layout and permissions
 
-The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.1.3/` (the path is set in `public_html/index.php`): owned by root, read-only to the PHP-FPM user (`www-data`), with `composer install --no-dev --optimize-autoloader` run there. Each installation has its own directory, e.g. `/var/www/<installation>`:
+The repository is a shared code tree installed once per version at `/usr/local/lib/php/ctnlist/6.1.4/` (the path is set in `public_html/index.php`): owned by root, read-only to the PHP-FPM user (`www-data`), with `composer install --no-dev --optimize-autoloader` run there. Each installation has its own directory, e.g. `/var/www/<installation>`:
 
 | Path | Owner, mode | What |
 |---|---|---|
@@ -345,7 +350,7 @@ ctnlist is the first client of the [catto-mail](https://github.com/rrcatto/catto
 2. Sign in there (or open an account, where the service offers that), choose the client to connect and approve. Only an admin of an active client can approve, and the client needs room for one more API key and webhook endpoint.
 3. Your browser comes back, and ctnlist collects from the mail service, server to server, what it hands over once: the API address, an API key named after this site (`APP_LIST_NAME`) and the signing secret of a webhook endpoint for `<APP_BASE_URL>cattomail/webhook`, subscribed to the six events ctnlist handles. They are stored in the Settings store (`options`), the key and the secret encrypted with `APP_SETTINGS_KEY`. Nothing secret passes through the browser, a log or a page.
 
-The page then shows what is connected (the service, the catto-mail client, who connected it and when), and whether the domain of the site's From address (`MAIL_FROM_ADDRESS`) is one of that client's sending domains and can send (`GET /v1/sending-domains`; read when the connection is made and by **Check connection**). A domain that is missing or not yet verified is a warning: catto-mail refuses mail from it. A message or list with its own sender needs that domain registered in the same way.
+The page then shows what is connected (the service, the catto-mail client, who connected it and when), and whether the domain of the site's From address (`MAIL_FROM_ADDRESS`) is one of that client's sending domains and can send (`GET /v1/sending-domains`; read when the connection is made, by **Check connection**, and by the worker on every pass while the domain cannot send yet). A domain that is missing or not yet verified is a warning: catto-mail refuses mail from it. While it is being set up at the mail service, the Delivery page updates itself every 30 seconds, so the warning goes as soon as the worker finds the domain ready. A message or list with its own sender needs that domain registered in the same way.
 
 - **Disconnect** asks the mail service to end the connection (`DELETE /v1/connection`: it revokes the key and removes the webhook endpoint), then clears the stored values. If the service cannot be reached nothing changes, so it can be tried again. **Forget without revoking** only clears the stored values, for a service that no longer answers or a stored key that can no longer be read; the key then stays valid at the service until the connection is ended in its dashboard (Settings › Connected applications).
 - **Connect again** replaces the connection: catto-mail ends the earlier connection to the same webhook address when the new one is collected.
@@ -432,7 +437,8 @@ A job only moves forward, decided in one SQL statement, so a late webhook or a s
 Each pass:
 - processes stored webhook events not yet processed;
 - retries unsealed send jobs, pending opt-outs and withdrawals, and validation submissions (same keys);
-- reconciles by polling jobs without a final state whose last check is older than `CATTOMAIL_RECONCILE_AFTER` (`GET /v1/send-jobs/{id}` with its messages, `GET /v1/validation-jobs/{id}` with its results).
+- reconciles by polling jobs without a final state whose last check is older than `CATTOMAIL_RECONCILE_AFTER` (`GET /v1/send-jobs/{id}` with its messages, `GET /v1/validation-jobs/{id}` with its results);
+- while the domain of the site's From address cannot send (not registered, not verified, no active DKIM key, or never asked about), asks for the client's sending domains again (`GET /v1/sending-domains`), and says so once it can.
 
 Running it every minute keeps retries prompt; polling still waits for the reconciliation interval.
 
@@ -496,7 +502,7 @@ The development stacks are separate (catto-mail's pod is on an internal network,
 3. `bin/dev cattomail-ca` saves catto-mail's self-signed development certificate (read from its public port) to `dev/podman/cattomail-ca.pem` (gitignored). Repeat it when catto-mail's certificate is regenerated.
 4. In `dev/podman/ctnlist.env` (leave `CATTOMAIL_API_BASE_URL`, `CATTOMAIL_API_KEY` and `CATTOMAIL_WEBHOOK_SECRET` empty):
    - `CATTOMAIL_API_CONNECT_HOST=catto-mail:443`: catto-mail's address is `https://localhost:8443`, a port that exists only on your machine; from ctnlist's containers the same service answers at `catto-mail`, port 443. TLS is still verified for `localhost`;
-   - `CATTOMAIL_CA_FILE=/usr/local/lib/php/ctnlist/6.1.3/dev/podman/cattomail-ca.pem`;
+   - `CATTOMAIL_CA_FILE=/usr/local/lib/php/ctnlist/6.1.4/dev/podman/cattomail-ca.pem`;
    - `CATTOMAIL_WEBHOOK_URL=http://ctnlist-web/cattomail/webhook`: where catto-mail's pod can reach ctnlist (plain http is accepted by a development catto-mail);
    - for subscription mail, `APP_BASE_URL=https://localhost:8543/` (ctnlist's development HTTPS listener).
 
@@ -519,7 +525,7 @@ All development mail then ends up in catto-mail's Mailpit (catto-mail's own capt
 
 | Command | When | What |
 |---|---|---|
-| `ctnlist:cattomail:work` | every minute | Moves catto-mail work on: stored webhook events, unsent jobs, opt-outs, validation submissions, polling of jobs without a final state. Webhooks are the primary path; this is the safety net. |
+| `ctnlist:cattomail:work` | every minute | Moves catto-mail work on: stored webhook events, unsent jobs, opt-outs, validation submissions, polling of jobs without a final state, and the sending domains while the From address's domain cannot send. Webhooks are the primary path; this is the safety net. |
 | `ctnlist:maintenance` | hourly | Housekeeping (below) and a count of stuck work. `--dry-run` only counts. |
 | `ctnlist:diagnose` | by hand | Configuration and health: required settings, secrets set or not (never their values), PHP extensions, database (PostgreSQL 16 or later) and suppression database, schema, obsolete settings, writable directories, worker and maintenance heartbeats, whether the worker runs with the web server's configuration, stuck work. With `--production` (automatic under `APP_ENV=prod`) also the production rules: `APP_ENV`/`APP_DEBUG`, secret strength and placeholders, a public https `APP_BASE_URL`, a real mail transport, catto-mail configured, suppression provider, `TRUSTED_PROXIES`, example addresses, the installation's front controller and CKEditor copy, compiled assets, code and `.env` permissions. ERROR lines make the exit status 1. It sends no mail and calls no external service. |
 | `ctnlist:cattomail:check` | by hand | The catto-mail connection check (`--e2e` only in development; its proof always goes through the mail service, whatever `MAIL_PROOF_SMTP` says). |
@@ -564,14 +570,14 @@ Work is **stuck** when the worker should long since have moved it on: twice `CAT
 - opt-outs or withdrawals not reported;
 - webhook events not processed ten minutes after arrival.
 
-A job that is merely slow at catto-mail (dispatched, waiting days for final bounce knowledge) is not stuck while ctnlist keeps checking it. The Delivery pages label jobs Pending, Stuck, Failed, Cancelled, Completed or Awaiting reconciliation.
+A job that is merely slow at catto-mail (dispatched, waiting days for final bounce knowledge) is not stuck while ctnlist keeps checking it. The Delivery pages label jobs Pending, Stuck, Failed, Cancelled, Completed or Awaiting reconciliation. A send job's page, and a validation job's, update themselves every 15 seconds until the job is final (they show what webhooks and the worker have stored; they ask catto-mail nothing).
 
 Recovery actions, all POST + CSRF and recorded in the application log (administrator UUID, action, reference):
 - **Retry sending** an unsealed job (`queue.process`), with its stored keys: never while its run is still staging, and never when catto-mail is not configured.
-- **Check now** for a sealed job (`logs.view`).
+- **Ask catto-mail now** for a sealed job (`logs.view`).
 - **Return to queue** for a refused campaign job (`queue.process`).
 - **Process again** for an unprocessed or failed webhook event whose body is still kept (`queue.process`); its effects are applied at most once.
-- **Retry submission** or **Check now** for a validation job (`subscribers.manage`).
+- **Retry submission** or **Ask catto-mail now** for a validation job (`subscribers.manage`).
 - **Retry** for a pending or refused global opt-out (`subscribers.manage`).
 
 None of them sets a state by hand: each asks catto-mail, or repeats the stored request. There is no "send again" that bypasses the once-only protections.

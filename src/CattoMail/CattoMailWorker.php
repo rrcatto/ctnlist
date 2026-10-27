@@ -26,7 +26,13 @@ use Psr\Log\LoggerInterface;
  * 5. reconciles by polling: send jobs and validation jobs without a final
  *    state (or with results still to fetch) whose last check is older than
  *    CATTOMAIL_RECONCILE_AFTER (GET /v1/send-jobs/{id} and messages,
- *    GET /v1/validation-jobs/{id} and results).
+ *    GET /v1/validation-jobs/{id} and results);
+ * 6. while the domain of the site's From address cannot send yet (not
+ *    registered, not verified or without an active DKIM key, or never asked
+ *    about), asks for the sending domains again (GET /v1/sending-domains), so
+ *    the Delivery page sees the domain become ready while it is being set up
+ *    at the mail service, without anyone pressing Check connection (reported
+ *    once, when it has become ready).
  *
  * Webhooks are the primary path; this pass is the safety net. Only one
  * worker runs at a time (DatabaseLock); the time and summary of each pass are
@@ -54,6 +60,7 @@ final class CattoMailWorker
         private readonly DatabaseLock $lock,
         private readonly CattoMailActivity $activity,
         private readonly ConfigFingerprint $fingerprint,
+        private readonly SendingDomainCheck $sendingDomains,
     ) {
     }
 
@@ -114,6 +121,12 @@ final class CattoMailWorker
         $report['validation jobs reconciled'] = 0;
         foreach ($this->validations->unresolved($before) as $job) {
             $report['validation jobs reconciled'] += $this->attempt(fn() => $this->validation->refresh($job)) ? 1 : 0;
+        }
+        // Counted only when a domain that could not send has become ready, so cron's output (and mail) is one line, not one a minute.
+        $before = $this->sendingDomains->fromAddress()['state'];
+        if (in_array($before, [SendingDomainCheck::UNCHECKED, SendingDomainCheck::NOT_REGISTERED, SendingDomainCheck::CANNOT_SEND], true)) {
+            $report['sending domain ready'] = $this->attempt(fn() => $this->sendingDomains->refresh()) && $before !== SendingDomainCheck::UNCHECKED
+                && $this->sendingDomains->fromAddress()['state'] === SendingDomainCheck::OK ? 1 : 0;
         }
         $report['failures'] = $this->failures;
         return $report;

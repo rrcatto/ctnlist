@@ -15,6 +15,9 @@
   <link rel="stylesheet" href="{{ asset('styles/app.css') }}">
   {% block stylesheets %}{% endblock %}
   {% block head %}{% endblock %}
+  {# htmx 4 (assets/lib/htmx, imported by assets/app.js; templates/CLAUDE.md, "htmx"): its indicator
+     styles are in app.css, and only hx-* attributes count (the data-hx- prefix is off). #}
+  <meta name="htmx-config" content='{"includeIndicatorCSS": false, "prefix": ""}'>
   {{ importmap('app', {nonce: csp_nonce()}) }}
 </head>
 <body class="d-flex flex-column min-vh-100">
@@ -27,7 +30,7 @@
 
   <main id="main" class="flex-grow-1 py-7">
     <div class="container app-content">
-      {% include 'layout/_flash.html.twig' %}
+      <div id="app-flash">{% include 'layout/_flash.html.twig' %}</div>
       {% block content %}{% endblock %}
     </div>
   </main>

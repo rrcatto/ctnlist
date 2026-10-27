@@ -18,9 +18,12 @@ final class QueueRepository
     {
     }
 
-    public function count(): int
+    /** Queued entries: all, or those of the message $muid. */
+    public function count(string $muid = ''): int
     {
-        return (int) $this->db->fetchOne('SELECT COUNT(*) FROM queue');
+        return $muid === ''
+            ? (int) $this->db->fetchOne('SELECT COUNT(*) FROM queue')
+            : (int) $this->db->fetchOne('SELECT COUNT(*) FROM queue WHERE q_muid = ?', [$muid]);
     }
 
     /** Add a row; false when the subscriber is already queued for the message. */

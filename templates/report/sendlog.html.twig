@@ -3,6 +3,7 @@
 {% block title %}Send Log{% endblock %}
 
 {% block content %}
+{% import 'layout/_htmx.html.twig' as hx %}
 {% include 'layout/_page_header.html.twig' with {title: 'Send Log', description: 'Every email handed to the mail server, newest first. Choose a type to filter the log.'} %}
 
 <div class="card mb-7">
@@ -36,7 +37,7 @@
   </div>
 </div>
 
-<form action="{{ path('report_sendlog') }}" method="get" class="card card-body bg-1 mb-7" role="search" aria-label="Filter the Send Log">
+<form action="{{ path('report_sendlog') }}" method="get" class="card card-body bg-1 mb-7" role="search" aria-label="Filter the Send Log" {{ hx.search(path('report_sendlog'), 'sendlog-results') }}>
   <div class="row g-5 align-items-end">
     <div class="md:col-5"><label class="form-label" for="f-e">Email address contains</label><input class="form-control" id="f-e" type="search" name="e" value="{{ filters.e }}"></div>
     <div class="md:col-4"><label class="form-label" for="f-t">Message type</label>
@@ -46,33 +47,13 @@
       </select>
     </div>
     <div class="md:col-3"><label class="form-label" for="f-r">Rows per page</label><input class="form-control" id="f-r" type="number" min="1" max="200" name="r" value="{{ pagination.perPage }}"></div>
-    <div class="col-12 d-flex gap-3">
-      <button class="btn-solid theme-primary" type="submit"><i class="bi bi-search me-1" aria-hidden="true"></i>Search</button>
+    <div class="col-12 d-flex align-items-center gap-3">
+      <noscript><button class="btn-solid theme-primary" type="submit"><i class="bi bi-search me-1" aria-hidden="true"></i>Search</button></noscript>
       <a class="btn-outline theme-secondary" href="{{ path('report_sendlog') }}">Clear</a>
+      <span class="small fg-2 htmx-indicator" role="status">Searching…</span>
     </div>
   </div>
 </form>
 
-{% if rows is empty %}
-  {% include 'layout/_empty_state.html.twig' with {icon: 'envelope', message: 'No emails match that search.'} %}
-{% else %}
-  <div class="table-responsive">
-    <table class="table table-hover align-middle">
-      <thead class=""><tr><th scope="col">Sent</th><th scope="col">Type</th><th scope="col">Email</th><th scope="col">List</th><th scope="col">Subject</th><th scope="col">Subscriber UUID</th></tr></thead>
-      <tbody>
-      {% for row in rows %}
-        <tr>
-          <td class="text-nowrap">{{ row.sl_datesent }}</td>
-          <td>{{ row.sl_type }}</td>
-          <td>{{ row.sl_email }}</td>
-          <td>{% if row.sl_list_shortcode %}<code>{{ row.sl_list_shortcode }}</code>{% endif %}</td>
-          <td>{{ row.sl_subject }}</td>
-          <td><code class="small">{{ row.sl_s_uuid }}</code></td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% include '_pagination.html.twig' with {base: path('report_sendlog'), query: query} %}
-{% endif %}
+{% include 'report/_sendlog_results.html.twig' %}
 {% endblock %}

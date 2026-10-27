@@ -19,7 +19,9 @@ final class TemplateType extends AbstractType
         $text = ['empty_data' => '', 'required' => false];
         $builder
             ->add('name', TextType::class, $text + ['label' => 'Template name', 'attr' => ['maxlength' => 100]])
-            ->add('html', TextareaType::class, $text + ['label' => 'HTML part', 'attr' => ['rows' => 20, 'data-html-editor' => '']])
+            ->add('html', TextareaType::class, $text + ['label' => 'HTML part', 'attr' => ['rows' => 20, 'data-html-editor' => ''],
+                // The editor draws the authored HTML next to the textarea: htmx leaves it alone.
+                'row_attr' => ['hx-ignore' => '']])
             ->add('text', TextareaType::class, $text + ['label' => 'Text part', 'attr' => ['rows' => 15, 'class' => 'font-monospace']]);
     }
 

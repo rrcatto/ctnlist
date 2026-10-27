@@ -1,0 +1,8 @@
+{#
+  The answer to an htmx request for one page region (App\Controller\RendersRegions::renderRegion()):
+  the region's own template (region_view), which draws the element with the region's id, and the
+  flash messages for the page's message area (#app-flash in base.html.twig), so an action that
+  redirected here still shows its outcome.
+#}
+{% include region_view %}
+<hx-partial hx-target="#app-flash" hx-swap="innerHTML">{% include 'layout/_flash.html.twig' %}</hx-partial>

@@ -1,0 +1,39 @@
+{#
+  A role's members (Admin\RoleController::rolePage()): the page includes it, and it is the htmx region
+  role-members, drawn again by the member search, the pager and Remove.
+#}
+{% import 'layout/_htmx.html.twig' as hx %}
+{% set custom = not role.r_system %}
+{% set here = path('admin_role', {id: role.r_id}) %}
+<div id="role-members" class="app-region">
+  {% if members is empty %}
+    <div class="card-body">{% include 'layout/_empty_state.html.twig' with {icon: 'people', message: search ? 'No member matches “' ~ search ~ '”.' : 'Nobody holds this role.'} %}</div>
+  {% else %}
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class=""><tr><th scope="col">Subscriber</th><th scope="col">Name</th><th scope="col">Assigned</th>{% if custom %}<th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th>{% endif %}</tr></thead>
+        <tbody>
+        {% for member in members %}
+          <tr>
+            <td>{% if is_granted('subscribers.manage') %}<a href="{{ path('admin_subscriber', {token: member.s_uuid}) }}">{{ member.s_email }}</a>{% else %}{{ member.s_email }}{% endif %}</td>
+            <td>{{ (member.s_fname ~ ' ' ~ member.s_lname)|trim }}</td>
+            <td class="text-nowrap">{{ member.sr_assigned_at|slice(0, 16) }}</td>
+            {% if custom %}
+              <td class="text-end">
+                <form method="post" action="{{ path('admin_roles_unassign') }}" data-confirm="Remove {{ role.r_name }} from {{ member.s_email }}?" {{ hx.post(path('admin_roles_unassign'), 'role-members') }}>
+                  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+                  <input type="hidden" name="subscriber_id" value="{{ member.s_id }}">
+                  <input type="hidden" name="role_id" value="{{ role.r_id }}">
+                  <input type="hidden" name="back" value="{{ (pagination.page > 1 ? here ~ '/' ~ pagination.page : here) ~ (search ? '?' ~ {q: search}|url_encode : '') }}">
+                  <button class="btn-sm btn-outline theme-danger" type="submit" aria-label="Remove {{ role.r_name }} from {{ member.s_email }}"><i class="bi bi-x-lg" aria-hidden="true"></i><span class="d-none md:d-inline ms-1">Remove</span></button>
+                </form>
+              </td>
+            {% endif %}
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card-body pt-0">{% include '_pagination.html.twig' with {base: here, query: search ? '?' ~ {q: search}|url_encode : '', region: 'role-members'} %}</div>
+  {% endif %}
+</div>

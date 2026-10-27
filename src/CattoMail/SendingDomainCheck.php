@@ -13,7 +13,9 @@ use Psr\Clock\ClockInterface;
  * client's registered sending domains, and tells an application which of
  * them can send now (GET /v1/sending-domains, `can_send`). The last answer is
  * kept, so the Delivery page can warn without calling catto-mail on every
- * view; it is refreshed when a connection is made and by "Check connection".
+ * view; it is refreshed when a connection is made, by "Check connection", and
+ * by the worker on every pass while the From address's domain cannot send
+ * (CattoMailWorker).
  *
  * @phpstan-type SendingDomain array{domain: string, status: string, dkim_status: string, can_send: bool}
  */

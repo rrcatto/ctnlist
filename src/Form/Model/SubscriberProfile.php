@@ -8,9 +8,9 @@ use App\Validator\WholeNumber;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**
- * The subscriber form (SubscriberType): profile fields, plus priority and a
- * list to invite them to for administrators. The address is the identity
- * and is not edited here; memberships are confirmed only by the subscriber.
+ * The subscriber form (SubscriberType): profile fields, plus the priority for
+ * administrators. The address is the identity and is not edited here;
+ * memberships are confirmed only by the subscriber.
  */
 final class SubscriberProfile
 {
@@ -33,9 +33,6 @@ final class SubscriberProfile
     /** Saving sets the priority to this + 100 (v5 engagement rule); the column is an INTEGER. */
     #[WholeNumber(min: -2147483648, max: 2147483547)]
     public int $priority = 0;
-
-    /** A list to add a pending membership to (and invite them), or none. */
-    public ?int $listId = null;
 
     /**
      * @param array{s_fname: string, s_lname: string, s_gender: string, s_province: string, s_country: string} $profile
@@ -62,7 +59,6 @@ final class SubscriberProfile
             's_province' => (string) $this->province,
             's_country' => (string) $this->country,
             's_priority' => (string) $this->priority,
-            'list_id' => (string) ($this->listId ?? 0),
         ];
     }
 }

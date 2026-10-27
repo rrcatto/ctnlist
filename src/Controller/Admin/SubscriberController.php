@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Controller\Admin;
 
 use App\Config\SiteConfig;
+use App\Controller\RendersRegions;
 use App\Form\FormErrors;
 use App\Form\Model\BulkSubscription;
 use App\Form\Model\BulkUnsubscription;
@@ -12,12 +13,14 @@ use App\Form\Model\SubscriberProfile;
 use App\Form\Type\BulkSubscribeType;
 use App\Form\Type\BulkUnsubscribeType;
 use App\Form\Type\ExportType;
+use App\Form\Type\ListInvitationType;
 use App\Form\Type\SubscriberType;
 use App\Http\Pagination;
 use App\Http\RequestNumber;
 use App\Repository\CattoMailValidationRepository;
 use App\Repository\ListRepository;
 use App\Repository\MembershipRepository;
+use App\Repository\RoleRepository;
 use App\Repository\SubscriberRepository;
 use App\Security\Csrf;
 use App\Security\SubscriberUser;
@@ -36,6 +39,8 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 /** Subscriber administration: search, edit, bulk operations, import/export and sync. */
 final class SubscriberController extends AbstractController
 {
+    use RendersRegions;
+
     /** A subscriber UUID in a URL (never confused with a page number of /subscribers/{page}). */
     private const UUID = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}';
 
@@ -45,6 +50,7 @@ final class SubscriberController extends AbstractController
         private readonly SubscriberAdmin $admin,
         private readonly MembershipRepository $memberships,
         private readonly CattoMailValidationRepository $validations,
+        private readonly RoleRepository $roles,
     ) {
     }
 
@@ -63,12 +69,15 @@ final class SubscriberController extends AbstractController
         return $this->report($page, $request, true);
     }
 
-    /** The subscriber form: administrators, or the subscriber themselves. Showing it changes nothing. */
+    /**
+     * The subscriber form: administrators, or the subscriber themselves. Showing it changes nothing.
+     * Its cards for list memberships, roles and delivery are htmx regions (renderPage()).
+     */
     #[Route('/subscribers/{token}/{muid}', name: 'admin_subscriber', defaults: ['muid' => ''], requirements: ['token' => self::UUID, 'muid' => '[0-9a-f]*'], methods: ['GET'])]
-    public function edit(string $token, string $muid, #[CurrentUser] ?SubscriberUser $user): Response
+    public function edit(string $token, string $muid, Request $request, #[CurrentUser] ?SubscriberUser $user): Response
     {
         $identity = $this->identity($token, $user);
-        return $this->subscriberPage($identity, $muid, $this->subscriberForm($identity, $muid));
+        return $this->subscriberPage($request, $identity, $muid, $this->subscriberForm($identity, $muid));
     }
 
     #[Route('/subscribers/{token}/{muid}', name: 'admin_subscriber_save', defaults: ['muid' => ''], requirements: ['token' => self::UUID, 'muid' => '[0-9a-f]*'], methods: ['POST'])]
@@ -87,14 +96,35 @@ final class SubscriberController extends AbstractController
                 FormErrors::attach($form, $e);
             }
         }
-        return $this->subscriberPage($identity, $muid, $form, Response::HTTP_UNPROCESSABLE_ENTITY);
+        return $this->subscriberPage($request, $identity, $muid, $form, Response::HTTP_UNPROCESSABLE_ENTITY);
+    }
+
+    /** Invite the subscriber to a list: a pending membership and the invitation to confirm it (SubscriberAdmin::invite()). */
+    #[Route('/subscribers/{token}/invite', name: 'admin_subscriber_invite', requirements: ['token' => self::UUID], methods: ['POST'])]
+    #[IsGranted('subscribers.manage')]
+    public function invite(string $token, Request $request, #[CurrentUser] SubscriberUser $user): Response
+    {
+        $identity = $this->identity($token, $user);
+        $invitation = $this->invitationForm($identity);
+        $invitation->handleRequest($request);
+        if ($invitation->isSubmitted() && $invitation->isValid()) {
+            /** @var array{listId: int} $data */
+            $data = $invitation->getData();
+            try {
+                $this->addFlash('info', $this->admin->invite($identity['s_uuid'], $data['listId']));
+                return $this->redirectAfterAction($request, 'admin_subscriber', ['token' => $identity['s_uuid']]);
+            } catch (\InvalidArgumentException $e) {
+                FormErrors::attach($invitation, $e);
+            }
+        }
+        return $this->subscriberPage($request, $identity, '', $this->subscriberForm($identity, ''), Response::HTTP_UNPROCESSABLE_ENTITY, $invitation);
     }
 
     /** Return a subscriber whose address hard-bounced or complained to campaign selection (does not re-subscribe them). */
     #[Route('/subscribers/{token}/delivery-ok', name: 'admin_subscriber_delivery_ok', requirements: ['token' => self::UUID], methods: ['POST'])]
     #[IsGranted('subscribers.manage')]
     #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
-    public function clearDeliveryProblem(string $token, #[CurrentUser] SubscriberUser $user, LoggerInterface $logger): Response
+    public function clearDeliveryProblem(string $token, Request $request, #[CurrentUser] SubscriberUser $user, LoggerInterface $logger): Response
     {
         $identity = $this->subscribers->findIdentityByUuid($token) ?? throw $this->createNotFoundException('The subscriber does not exist.');
         $cleared = $this->subscribers->clearDeliveryProblem($identity['s_id']);
@@ -107,7 +137,7 @@ final class SubscriberController extends AbstractController
             $this->addFlash('info', 'The ' . str_replace('_', ' ', $cleared) . ' block is cleared: this subscriber can be selected for campaigns again. '
                 . 'Their list memberships and consent are unchanged' . ($cleared === 'complained' ? ' (the lists they were unsubscribed from stay unsubscribed; only they can rejoin)' : '') . '.');
         }
-        return $this->redirectToRoute('admin_subscriber', ['token' => $identity['s_uuid']]);
+        return $this->redirectAfterAction($request, 'admin_subscriber', ['token' => $identity['s_uuid']]);
     }
 
     #[Route('/bulk-subscribe', name: 'admin_bulk_subscribe', methods: ['GET', 'POST'])]
@@ -214,7 +244,7 @@ final class SubscriberController extends AbstractController
         $show = $request->query->getString('s');
         $show = array_key_exists($show, SubscriberRepository::SHOW) ? $show : '';
         $pagination = Pagination::fromRequest($request, $page, $this->subscribers->reportCount($email, $activeOnly, $show, $listId));
-        return $this->render('admin/subscribers.html.twig', [
+        $parameters = [
             'active' => $activeOnly,
             'rows' => $this->subscribers->reportPage($email, $activeOnly, $show, $listId, $pagination->offset(), $pagination->perPage),
             'pagination' => $pagination,
@@ -222,7 +252,8 @@ final class SubscriberController extends AbstractController
             'show_choices' => SubscriberRepository::SHOW,
             'filters' => ['e' => $email, 'l' => $listId, 's' => $show],
             'query' => '?' . http_build_query(['e' => $email, 'r' => $pagination->perPage, 's' => $show, 'l' => $listId]),
-        ]);
+        ];
+        return $this->renderPage($request, 'admin/subscribers.html.twig', ['subscriber-results' => 'admin/_subscriber_results.html.twig'], $parameters);
     }
 
     /**
@@ -249,18 +280,44 @@ final class SubscriberController extends AbstractController
         ], (int) ($this->subscribers->findRecipientByUuid($identity['s_uuid'])['s_priority'] ?? 0));
         return $this->createForm(SubscriberType::class, $data, [
             'administrator' => $this->isGranted('subscribers.manage'),
-            'lists' => $this->lists->all(),
             'action' => $this->generateUrl('admin_subscriber_save', ['token' => $identity['s_uuid'], 'muid' => $muid]),
         ]);
     }
 
     /** @param array{s_id: int, s_uuid: string, s_email: string} $identity */
-    private function subscriberPage(array $identity, string $muid, FormInterface $form, int $status = Response::HTTP_OK): Response
+    private function invitationForm(array $identity): FormInterface
     {
-        return $this->render('admin/subscriber_form.html.twig', [
+        return $this->createForm(ListInvitationType::class, ['listId' => null], [
+            'lists' => $this->lists->all(),
+            'action' => $this->generateUrl('admin_subscriber_invite', ['token' => $identity['s_uuid']]),
+        ]);
+    }
+
+    /**
+     * The subscriber page, or one of its cards for htmx: list memberships (with the invitation),
+     * roles (to holders of roles.manage) and delivery.
+     *
+     * @param array{s_id: int, s_uuid: string, s_email: string} $identity
+     */
+    private function subscriberPage(Request $request, array $identity, string $muid, FormInterface $form, int $status = Response::HTTP_OK, ?FormInterface $invitation = null): Response
+    {
+        $roles = null;
+        if ($this->isGranted('roles.manage')) {
+            $held = $this->roles->rolesForSubscribers([$identity['s_id']])[$identity['s_id']] ?? [];
+            $keys = array_column($held, 'r_key');
+            $roles = ['subscriber_id' => $identity['s_id'], 'held' => $held, 'assignable' => array_values(array_filter($this->roles->all(), static fn(array $role): bool => !in_array($role['r_key'], $keys, true)))];
+        }
+        return $this->renderPage($request, 'admin/subscriber_form.html.twig', [
+            'subscriber-lists' => 'admin/_subscriber_lists.html.twig',
+            'subscriber-roles' => 'admin/_subscriber_roles.html.twig',
+            'subscriber-delivery' => 'admin/_subscriber_delivery.html.twig',
+        ], [
+            'token' => $identity['s_uuid'],
             'email' => $identity['s_email'],
             'form' => $form,
+            'invitation' => $this->isGranted('subscribers.manage') ? ($invitation ?? $this->invitationForm($identity)) : null,
             'memberships' => $this->memberships->forSubscriber($identity['s_id']),
+            'roles' => $roles,
             'delivery' => $this->subscribers->deliveryState($identity['s_id']),
             'validation' => $this->validations->latestForSubscriber($identity['s_uuid']),
         ], new Response(status: $status));

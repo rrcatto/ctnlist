@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Controller\Admin;
 
+use App\Controller\RendersRegions;
 use App\Form\FormErrors;
 use App\Form\Model\RoleDetails;
 use App\Form\Type\RolePermissionsType;
 use App\Form\Type\RoleType;
 use App\Form\Type\SubscriberSearchType;
+use App\Http\Htmx;
 use App\Http\Pagination;
 use App\Repository\RoleRepository;
 use App\Repository\SubscriberRepository;
@@ -34,6 +36,8 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  */
 final class RoleController extends AbstractController
 {
+    use RendersRegions;
+
     /** Subscribers shown for one assignment search. */
     private const SEARCH_LIMIT = 20;
 
@@ -153,7 +157,7 @@ final class RoleController extends AbstractController
             $request->request->getInt('subscriber_id'),
             $request->request->getString('role_key'),
             $user
-        ) ? 'Role assigned.' : 'The subscriber already holds that role.'), null, $this->back($request));
+        ) ? 'Role assigned.' : 'The subscriber already holds that role.'), null, $this->afterAssignment($request));
     }
 
     #[Route('/roles/unassign', name: 'admin_roles_unassign', methods: ['POST'])]
@@ -164,7 +168,7 @@ final class RoleController extends AbstractController
         return $this->attempt(fn() => $this->manager->unassign(
             $request->request->getInt('subscriber_id'),
             $request->request->getInt('role_id')
-        ), 'Role removed from the subscriber.', $this->back($request));
+        ), 'Role removed from the subscriber.', $this->afterAssignment($request));
     }
 
     /** Run a RoleManager action, flash the outcome and redirect. */
@@ -183,11 +187,19 @@ final class RoleController extends AbstractController
         return $this->redirect($redirect);
     }
 
-    /** The page a role form came from (`back`), limited to the roles pages. */
+    /** The page a role form came from (`back`), limited to the roles pages and a subscriber's page. */
     private function back(Request $request): string
     {
         $back = $request->request->getString('back');
-        return preg_match('#^/roles(?:/\d+(?:/\d+)?)?(?:\?[^\s]*)?$#', $back) === 1 ? $back : $this->generateUrl('admin_roles');
+        return preg_match('#^/roles(?:/\d+(?:/\d+)?)?(?:\?[^\s]*)?$#', $back) === 1
+            || preg_match('#^/subscribers/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$#', $back) === 1
+            ? $back : $this->generateUrl('admin_roles');
+    }
+
+    /** After assigning or removing a role: the page htmx sent it from (its search and page kept), or `back`. */
+    private function afterAssignment(Request $request): string
+    {
+        return Htmx::currentPage($request) ?? $this->back($request);
     }
 
     /** @return array{r_id: int, r_key: string, r_name: string, r_description: string, r_system: bool} */
@@ -204,7 +216,7 @@ final class RoleController extends AbstractController
         $results = $query === '' ? [] : $this->subscribers->search($query, self::SEARCH_LIMIT + 1);
         $more = count($results) > self::SEARCH_LIMIT;
         $results = array_slice($results, 0, self::SEARCH_LIMIT);
-        return $this->render('admin/roles.html.twig', [
+        return $this->renderPage($request, 'admin/roles.html.twig', ['role-search-results' => 'admin/_role_search_results.html.twig'], [
             'roles' => $this->roles->all(),
             'permissions' => $this->roles->permissions(),
             'granted' => $this->roles->grantedPermissionIds(),
@@ -221,12 +233,16 @@ final class RoleController extends AbstractController
     /** @param array{r_id: int, r_key: string, r_name: string, r_description: string, r_system: bool} $role */
     private function rolePage(array $role, int $page, Request $request, ?FormInterface $details = null, ?FormInterface $permissions = null): Response
     {
-        $pagination = Pagination::fromRequest($request, $page, $this->roles->memberCount($role['r_id']));
-        return $this->render('admin/role.html.twig', [
+        $search = $request->isMethod('GET') ? trim($request->query->getString('q')) : '';
+        $search = mb_substr($search, 0, 254);
+        $pagination = Pagination::fromRequest($request, $page, $this->roles->memberCount($role['r_id'], $search));
+        return $this->renderPage($request, 'admin/role.html.twig', ['role-members' => 'admin/_role_members.html.twig'], [
             'role' => $role,
             'permissions' => $this->roles->permissions(),
             'granted' => $this->roles->grantedPermissionIds()[$role['r_id']] ?? [],
-            'members' => $this->roles->members($role['r_id'], $pagination->offset(), $pagination->perPage),
+            'members' => $this->roles->members($role['r_id'], $pagination->offset(), $pagination->perPage, $search),
+            'member_total' => $search === '' ? $pagination->total : $this->roles->memberCount($role['r_id']),
+            'search' => $search,
             'pagination' => $pagination,
             'details_form' => $role['r_system'] ? null : ($details ?? $this->detailsForm($role))->createView(),
             'permissions_form' => ($permissions ?? $this->permissionsForm($role))->createView(),

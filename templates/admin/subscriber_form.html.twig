@@ -1,11 +1,11 @@
 {% extends 'base.html.twig' %}
-{% import 'admin/_macros.html.twig' as ui %}
 
 {#
-  The subscriber form (SubscriberType) for administrators or the subscriber
-  themselves. The address is the identity and is not edited; memberships are
-  shown read-only (only the subscriber confirms); administrators may set the
-  priority and invite the subscriber to a list.
+  The subscriber page (Admin\SubscriberController::subscriberPage()) for administrators or the
+  subscriber themselves. The address is the identity and is not edited. The profile form (SubscriberType)
+  is the left column; each card on the right has forms of its own and is an htmx region, drawn again
+  by its buttons: list memberships (only the subscriber confirms; administrators invite to a list),
+  roles (holders of roles.manage) and delivery.
 #}
 {% block title %}Subscriber{% endblock %}
 
@@ -16,13 +16,13 @@
   {% endblock %}
 {% endembed %}
 
-{{ form_start(form) }}
-  {% if not form.vars.valid %}
-    <div class="alert theme-danger" role="alert"><div>{% if form.vars.errors|length %}{{ form_errors(form) }}{% else %}Please correct the fields marked below; nothing was saved.{% endif %}</div></div>
-  {% endif %}
-  <div class="row g-7">
-    <div class="lg:col-7">
-      <div class="card h-100">
+<div class="row g-7">
+  <div class="lg:col-7">
+    {{ form_start(form) }}
+      {% if not form.vars.valid %}
+        <div class="alert theme-danger" role="alert"><div>{% if form.vars.errors|length %}{{ form_errors(form) }}{% else %}Please correct the fields marked below; nothing was saved.{% endif %}</div></div>
+      {% endif %}
+      <div class="card">
         <div class="card-header fw-semibold">Profile</div>
         <div class="card-body">
           <div class="row g-5">
@@ -36,72 +36,22 @@
             <div class="md:col-4">{{ form_row(form.gender, {row_attr: {class: 'mb-0'}}) }}</div>
             <div class="md:col-4">{{ form_row(form.province, {row_attr: {class: 'mb-0'}}) }}</div>
             <div class="md:col-4">{{ form_row(form.country, {row_attr: {class: 'mb-0'}}) }}</div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="lg:col-5">
-      <div class="card mb-7">
-        <div class="card-header fw-semibold">List memberships</div>
-        <ul class="list-group list-group-flush">
-          {% for membership in memberships %}
-            <li class="list-group-item d-flex justify-content-between align-items-center gap-3">
-              <span>{{ membership.l_name }} <code class="small">{{ membership.l_shortcode }}</code></span>
-              {{ ui.membership_badge(ui.membership_state(membership)) }}
-            </li>
-          {% else %}
-            <li class="list-group-item fg-2">There are no active lists.</li>
-          {% endfor %}
-        </ul>
-        <div class="card-footer small fg-2">Only the subscriber can confirm a membership; adding a list sends an invitation.</div>
-      </div>
-
-      <div class="card mb-7">
-        <div class="card-header fw-semibold">Delivery (catto-mail)</div>
-        <div class="card-body small">
-          {% if delivery.state == 'ok' %}
-            <p class="mb-3"><i class="bi bi-check-circle fg-success me-1" aria-hidden="true"></i>No hard bounce or complaint recorded.</p>
-          {% else %}
-            <p class="mb-1"><span class="badge theme-danger">{{ delivery.state == 'complained' ? 'Spam complaint' : 'Hard bounce' }}</span>{% if delivery.at %} <span class="fg-2">since {{ delivery.at|slice(0, 16) }}</span>{% endif %}</p>
-            <p class="mb-3">
-              {% if delivery.state == 'complained' %}
-                catto-mail reported that this subscriber marked a campaign as spam. They were unsubscribed from every list and are left out of campaigns.
-              {% else %}
-                catto-mail reported that the receiving server permanently refused a campaign to this address. They are left out of campaigns; their list memberships are unchanged.
-              {% endif %}
-            </p>
-            {% if is_granted('subscribers.manage') %}
-              <form method="post" action="{{ path('admin_subscriber_delivery_ok', {token: app.request.attributes.get('token')}) }}"
-                    data-confirm="Clear the {{ delivery.state == 'complained' ? 'complaint' : 'hard bounce' }} block? This only lets the subscriber be selected for campaigns again; it does not restore list memberships or consent." class="mb-3">
-                <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-                <button class="btn-sm btn-outline theme-secondary" type="submit"><i class="bi bi-unlock me-1" aria-hidden="true"></i>Clear the sending block</button>
-              </form>
-              <p class="form-text mb-3">Clearing affects the sending block only. It does not re-subscribe anyone{{ delivery.state == 'complained' ? ' (lists left because of the complaint stay left)' }}, and catto-mail may still suppress the address on its side.</p>
+            {% if form.priority is defined %}
+              <div class="md:col-6">{{ form_row(form.priority, {row_attr: {class: 'mb-0'}}) }}</div>
             {% endif %}
-          {% endif %}
-          {% if validation %}
-            {% import 'admin/_cattomail_macros.html.twig' as cm %}
-            <p class="mb-0">Last validation: {{ cm.classification(validation.cva_classification) }} <span class="fg-2">{{ validation.cva_checked_at|slice(0, 10) }}</span>
-              {% if validation.cva_suggested_address %}<br>Suggested address (not applied): <span class="text-break">{{ validation.cva_suggested_address }}</span>{% endif %}</p>
-          {% endif %}
-        </div>
-      </div>
-
-      {% if form.listId is defined %}
-        <div class="card">
-          <div class="card-header fw-semibold">Administration</div>
-          <div class="card-body">
-            {{ form_row(form.listId) }}
-            {{ form_row(form.priority, {row_attr: {class: 'mb-0'}}) }}
           </div>
         </div>
-      {% endif %}
-    </div>
+        <div class="card-footer">
+          <button class="btn-solid theme-primary" type="submit"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>Save subscriber</button>
+        </div>
+      </div>
+    {{ form_end(form) }}
   </div>
 
-  <div class="d-flex flex-wrap gap-3 border-top pt-5 mt-7">
-    <button class="btn-solid theme-primary" type="submit"><i class="bi bi-check-lg me-1" aria-hidden="true"></i>Save subscriber</button>
+  <div class="lg:col-5 d-flex flex-column gap-7">
+    {% include 'admin/_subscriber_lists.html.twig' %}
+    {% if roles is not null %}{% include 'admin/_subscriber_roles.html.twig' %}{% endif %}
+    {% include 'admin/_subscriber_delivery.html.twig' %}
   </div>
-{{ form_end(form) }}
+</div>
 {% endblock %}

@@ -1,0 +1,28 @@
+{#
+  The Send Log's rows (Admin\ReportController::sendLog()): the page includes it, and it is the htmx
+  region sendlog-results that the search form and the pager draw again.
+#}
+<div id="sendlog-results" class="app-region">
+{% if rows is empty %}
+  {% include 'layout/_empty_state.html.twig' with {icon: 'envelope', message: 'No emails match that search.'} %}
+{% else %}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead class=""><tr><th scope="col">Sent</th><th scope="col">Type</th><th scope="col">Email</th><th scope="col">List</th><th scope="col">Subject</th><th scope="col">Subscriber UUID</th></tr></thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <td class="text-nowrap">{{ row.sl_datesent }}</td>
+          <td>{{ row.sl_type }}</td>
+          <td>{{ row.sl_email }}</td>
+          <td>{% if row.sl_list_shortcode %}<code>{{ row.sl_list_shortcode }}</code>{% endif %}</td>
+          <td>{{ row.sl_subject }}</td>
+          <td><code class="small">{{ row.sl_s_uuid }}</code></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include '_pagination.html.twig' with {base: path('report_sendlog'), query: query, region: 'sendlog-results'} %}
+{% endif %}
+</div>

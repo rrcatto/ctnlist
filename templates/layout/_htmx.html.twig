@@ -1,0 +1,32 @@
+{#
+  htmx attributes for the pages it updates in part (templates/CLAUDE.md, "htmx"). Each macro prints
+  attributes for the element it is called in; `region` is the id of the element that is drawn
+  again, which the controller answers with its own template (App\Controller\RendersRegions).
+#}
+
+{# A GET filter form that searches as you type: 300 ms after the last change it asks the form's
+   address for the results region, and the address bar follows. Enter (and, without JavaScript,
+   its Search button) still submits it. #}
+{% macro search(action, region) -%}
+  hx-get="{{ action }}" hx-trigger="input delay:300ms, submit" hx-target="#{{ region }}" hx-swap="outerHTML" hx-replace-url="true" hx-sync="this:replace"
+{%- endmacro %}
+
+{# A region's pager: its links fetch that page of the region, and Back returns to the one before. #}
+{% macro pager(region) -%}
+  hx-boost:inherited="true" hx-target:inherited="#{{ region }}" hx-swap:inherited="outerHTML"
+{%- endmacro %}
+
+{# A POST form (an action button) whose outcome is drawn in a region, its flash message in the
+   page's message area. The action redirects to the page as usual; htmx follows the redirect and
+   the page answers with the region. #}
+{% macro post(action, region) -%}
+  hx-post="{{ action }}" hx-target="#{{ region }}" hx-swap="outerHTML" hx-disable="find button"
+{%- endmacro %}
+
+{# A region that draws itself again every `every` (e.g. 15s) from `url`, for as long as it is
+   drawn with these attributes: the region leaves them out once there is nothing left to wait for.
+   It is merged into the page (outerMorph), so focus, scrolling and anything typed into a field
+   in it are kept. #}
+{% macro refresh(url, region, every) -%}
+  hx-get="{{ url }}" hx-trigger="every {{ every }}" hx-target="#{{ region }}" hx-swap="outerMorph"
+{%- endmacro %}

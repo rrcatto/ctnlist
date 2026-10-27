@@ -10,7 +10,7 @@
   <div class="{{ form ? 'lg:col-8' : 'col-12' }}">
     {# The archived message HTML, rendered when the message was first queued. #}
     {# The message's own HTML sits in a plain block: a card body is a flex column, which would restyle its top-level elements. #}
-    <div class="card"><div class="card-body overflow-x-auto"><div>{{ archive.a_html|sanitize_html('app.message_html') }}</div></div></div>
+    <div class="card"><div class="card-body overflow-x-auto"><div hx-ignore>{{ archive.a_html|sanitize_html('app.message_html') }}</div></div></div>
   </div>
   {% if form %}
     <div class="lg:col-4">

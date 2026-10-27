@@ -44,7 +44,13 @@ final class AdminQueueTest extends SmokeTestCase
 
         // The development stack has no catto-mail configured: nothing is sent and nothing is lost
         // (catto-mail delivery itself is covered by the integration tests with a fake catto-mail).
-        $sent = self::submit($client, '/processqueue/' . $muid, '/processqueue', ['muid' => $muid, 'limit' => '1000']);
+        // Start sending answers at once with the Sending page; the run happens after that answer.
+        $form = self::request($client, 'GET', '/processqueue/' . $muid)['body'];
+        $started = self::request($client, 'POST', '/processqueue', ['muid' => $muid, 'limit' => '1000', 'csrf' => self::csrfToken($form)]);
+        self::assertSame(302, $started['status']);
+        self::assertStringEndsWith('/sending', $started['location']);
+        $sent = self::finishedRun($client);
+        self::assertStringContainsString('Queue fixture', $sent, 'the message being sent');
         self::assertStringContainsString('Handed 0 message(s) to catto-mail.', $sent);
         self::assertStringContainsString('catto-mail is not configured', $sent);
         self::assertSame($rows, (int) self::value("SELECT COUNT(*) FROM queue WHERE q_muid = '{$muid}'"), 'still queued');
@@ -61,7 +67,9 @@ final class AdminQueueTest extends SmokeTestCase
         self::assertSame($rows, (int) self::value("SELECT COUNT(*) FROM queue WHERE q_muid = '{$muid}'"), 'a proof leaves the queue alone');
         self::$db->prepare('DELETE FROM queue WHERE q_muid = ?')->execute([$muid]);
 
-        self::assertStringContainsString('The stop request has been recorded.', self::submit($client, '/stop-send', '/stop-send', []));
+        $stop = self::request($client, 'POST', '/stop-send', ['csrf' => self::csrfToken(self::request($client, 'GET', '/stop-send')['body'])]);
+        self::assertSame(302, $stop['status']);
+        self::assertStringContainsString('The stop request has been recorded', self::request($client, 'GET', '/sending')['body'], 'shown on the Sending page');
         self::assertSame('N', self::value("SELECT o_value FROM options WHERE o_key = 'SendQueue'"));
     }
 
@@ -78,6 +86,22 @@ final class AdminQueueTest extends SmokeTestCase
         self::assertStringContainsString('Choose one of the listed messages.', $forged['body'], 'only listed messages');
         self::assertStringContainsString('Queue between 1 and 10000000 emails.', $forged['body']);
         self::assertSame(403, self::request(self::client(), 'POST', '/queue/clear', [])['status']);
+    }
+
+    /** The Sending page once its run has finished (a few seconds at most: there is no mail service here). */
+    private static function finishedRun(\CurlHandle $client): string
+    {
+        for ($i = 0; $i < 40; $i++) {
+            $page = self::request($client, 'GET', '/sending');
+            self::assertSame(200, $page['status']);
+            self::assertCleanPage('/sending', $page['body']);
+            if (str_contains($page['body'], '>Finished</span>')) {
+                self::assertStringNotContainsString('hx-trigger="every', $page['body'], 'a finished run stops refreshing');
+                return $page['body'];
+            }
+            usleep(250000);
+        }
+        self::fail('The queue run did not finish: ' . strip_tags(self::match('#<div id="queue-run".*#s', $page['body'])[0]));
     }
 
     /** @param array<string, string> $fields */

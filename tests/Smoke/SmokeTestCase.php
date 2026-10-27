@@ -178,6 +178,47 @@ abstract class SmokeTestCase extends TestCase
     }
 
     /**
+     * Ask $path for one htmx region (App\Http\Htmx) the way htmx does: HX-Request, HX-Request-Type
+     * partial, HX-Target naming the region and HX-Current-URL, the page the browser shows ($page,
+     * else $path). A POST follows its redirect as the browser's fetch does, keeping the headers.
+     * $source names the element that sent it (HX-Source), the region itself for a timed refresh.
+     *
+     * @param array<string, string> $fields
+     * @return array{status: int, body: string, location: string, cookies: list<string>, headers: array<string, string>}
+     */
+    protected static function region(\CurlHandle $client, string $path, string $region, string $method = 'GET', array $fields = [], ?string $page = null, ?string $source = null): array
+    {
+        $headers = ['HX-Request: true', 'HX-Request-Type: partial', 'HX-Target: div#' . $region, 'HX-Current-URL: ' . self::$baseUrl . ($page ?? $path)];
+        if ($source !== null) {
+            $headers[] = 'HX-Source: ' . $source;
+        }
+        curl_setopt($client, CURLOPT_HTTPHEADER, $headers);
+        try {
+            $response = self::request($client, $method, $path, $fields);
+            if ($method === 'POST' && in_array($response['status'], [302, 303], true)) {
+                $location = (string) preg_replace('#^https?://[^/]+#', '', $response['location']);
+                $response = self::request($client, 'GET', $location);
+            }
+            return $response;
+        } finally {
+            curl_setopt($client, CURLOPT_HTTPHEADER, []);
+        }
+    }
+
+    /**
+     * An answer that is the region $region alone (with the flash messages' partial), not a page.
+     *
+     * @param array{status: int, body: string, headers: array<string, string>} $response
+     */
+    protected static function assertRegion(string $region, array $response, int $status = 200): void
+    {
+        self::assertSame($status, $response['status'], "region {$region}: status");
+        self::assertMatchesRegularExpression('/^\s*<(div|section|tr|tbody)\b[^>]*\bid="' . preg_quote($region, '/') . '"/', $response['body'], "region {$region}: the answer starts with the region");
+        self::assertStringNotContainsStringIgnoringCase('<html', $response['body'], "region {$region}: not a whole page");
+        self::assertStringContainsString('<hx-partial hx-target="#app-flash"', $response['body'], "region {$region}: the flash messages come along");
+    }
+
+    /**
      * The fields a browser submits for the form named $form in $html: enabled
      * inputs (checkboxes and radios only when checked), selected options and
      * textareas. $overrides sets fields by their full name; null removes one
@@ -373,7 +414,7 @@ abstract class SmokeTestCase extends TestCase
         return html_entity_decode(self::match('/name="(?:\w+\[)?csrf\]?"[^>]*value="([^"]+)"/', $html, "CSRF token on {$page}")[1]);
     }
 
-    /** No PHP error output in the page. */
+    /** No PHP error output in the page, and no form inside another form (browsers drop the inner one, so its button submits the outer form). */
     protected static function assertCleanPage(string $route, string $body): void
     {
         self::assertDoesNotMatchRegularExpression(
@@ -381,5 +422,16 @@ abstract class SmokeTestCase extends TestCase
             $body,
             "PHP error output on {$route}"
         );
+        self::assertNoNestedForms($route, $body);
+    }
+
+    protected static function assertNoNestedForms(string $route, string $body): void
+    {
+        preg_match_all('#<(/?)form\b#i', (string) preg_replace('#<!--.*?-->|<script\b.*?</script>#is', '', $body), $tags, PREG_SET_ORDER);
+        $depth = 0;
+        foreach ($tags as $tag) {
+            $depth += $tag[1] === '/' ? -1 : 1;
+            self::assertLessThanOrEqual(1, $depth, "a form inside another form on {$route}");
+        }
     }
 }

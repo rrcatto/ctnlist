@@ -17,6 +17,7 @@ use App\CattoMail\SendJobAdmin;
 use App\CattoMail\SendJobSync;
 use App\CattoMail\WebhookProcessor;
 use App\Config\ConfigFingerprint;
+use App\Controller\RendersRegions;
 use App\Form\Type\MailServiceType;
 use App\Http\Pagination;
 use App\Mail\ProofMailer;
@@ -47,6 +48,8 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  */
 final class DeliveryController extends AbstractController
 {
+    use RendersRegions;
+
     public const STATUSES = ['staged', 'handed_off', 'not_sent', 'created', 'queued', 'submitted', 'deferred', 'outcome_unknown',
         'remote_accepted', 'soft_bounced', 'hard_bounced', 'complained', 'failed', 'suppressed'];
 
@@ -83,7 +86,7 @@ final class DeliveryController extends AbstractController
         $stored = $connection->details();
         // The connection changed after the worker's last run: its fingerprint is of the earlier configuration, not of another one.
         $changedSinceWorkerRun = $connect->changedAt() !== null && ($activityNow['worker_run'] === null || $activityNow['worker_run'] <= $connect->changedAt());
-        return $this->render('admin/delivery.html.twig', [
+        return $this->renderPage($request, 'admin/delivery.html.twig', ['delivery-status' => 'admin/_delivery_status.html.twig'], [
             'problem' => $config->problem(),
             'configured' => $config->isConfigured(),
             'uses_connection' => $config->usesConnection(),
@@ -127,12 +130,12 @@ final class DeliveryController extends AbstractController
     #[Route('/delivery/check', name: 'admin_delivery_check', methods: ['POST'])]
     #[IsGranted('logs.view')]
     #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
-    public function check(CattoMailHealth $health): Response
+    public function check(Request $request, CattoMailHealth $health): Response
     {
         $result = $health->check();
         [, $label, $advice] = CattoMailHealth::STATES[$result['state']];
         $this->addFlash($result['state'] === CattoMailHealth::OK ? 'info' : 'danger', 'catto-mail connection: ' . $label . '. ' . $advice);
-        return $this->redirectToRoute('admin_delivery');
+        return $this->redirectAfterAction($request, 'admin_delivery');
     }
 
     /** One ctnlist send run and the catto-mail send jobs it became (more than one above 10,000 recipients or for several lists). */
@@ -170,7 +173,7 @@ final class DeliveryController extends AbstractController
         $related = strtolower($request->query->getString('j'));
         $related = preg_match('/^[0-9a-f-]{36}$/', $related) === 1 ? $related : null;
         $pagination = Pagination::fromRequest($request, $page, $webhooks->count($filter, $related));
-        return $this->render('admin/delivery_webhooks.html.twig', [
+        return $this->renderPage($request, 'admin/delivery_webhooks.html.twig', ['webhook-events' => 'admin/_delivery_webhooks.html.twig'], [
             'events' => $webhooks->page($filter, $pagination->offset(), $pagination->perPage, $related),
             'filter' => $filter,
             'related' => $related,
@@ -183,7 +186,7 @@ final class DeliveryController extends AbstractController
     #[Route('/delivery/webhooks/{event}/reprocess', name: 'admin_delivery_reprocess', requirements: ['event' => '[0-9a-f-]{36}'], methods: ['POST'])]
     #[IsGranted('queue.process')]
     #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
-    public function reprocess(string $event, CattoMailWebhookRepository $webhooks, WebhookProcessor $processor, #[CurrentUser] SubscriberUser $user): Response
+    public function reprocess(string $event, Request $request, CattoMailWebhookRepository $webhooks, WebhookProcessor $processor, #[CurrentUser] SubscriberUser $user): Response
     {
         $id = $webhooks->reopen($event);
         if ($id === null) {
@@ -193,14 +196,14 @@ final class DeliveryController extends AbstractController
             $processor->processStored($id);
             $this->addFlash('info', 'The event was processed again; see its outcome below.');
         }
-        return $this->redirectToRoute('admin_delivery_webhooks');
+        return $this->redirectAfterAction($request, 'admin_delivery_webhooks');
     }
 
     /** Hand an unsealed job to catto-mail now, with its stored ids and keys (what the worker would do next). */
     #[Route('/delivery/job/{id}/retry', name: 'admin_delivery_retry', requirements: ['id' => '\d+'], methods: ['POST'])]
     #[IsGranted('queue.process')]
     #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
-    public function retry(int $id, SendJobAdmin $admin, #[CurrentUser] SubscriberUser $user): Response
+    public function retry(int $id, Request $request, SendJobAdmin $admin, #[CurrentUser] SubscriberUser $user): Response
     {
         $job = $this->outbox->job($id) ?? throw $this->createNotFoundException('Unknown send job.');
         $this->audit($user, 'retry send job', $job['csj_uuid']);
@@ -209,14 +212,14 @@ final class DeliveryController extends AbstractController
         } catch (\InvalidArgumentException | CattoMailException $e) {
             $this->addFlash('danger', $e->getMessage());
         }
-        return $this->redirectToRoute('admin_delivery_job', ['id' => $id]);
+        return $this->redirectAfterAction($request, 'admin_delivery_job', ['id' => $id]);
     }
 
     /** Report a pending (or refused) global opt-out again; what the subscriber asked for is unchanged. */
     #[Route('/delivery/optout/{uuid}/retry', name: 'admin_delivery_optout_retry', requirements: ['uuid' => '[0-9a-f-]{36}'], methods: ['POST'])]
     #[IsGranted('subscribers.manage')]
     #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
-    public function retryOptOut(string $uuid, GlobalOptOut $optOut, #[CurrentUser] SubscriberUser $user): Response
+    public function retryOptOut(string $uuid, Request $request, GlobalOptOut $optOut, #[CurrentUser] SubscriberUser $user): Response
     {
         $this->audit($user, 'retry global opt-out', $uuid);
         try {
@@ -224,7 +227,7 @@ final class DeliveryController extends AbstractController
         } catch (\InvalidArgumentException $e) {
             throw $this->createNotFoundException($e->getMessage(), $e);
         }
-        return $this->redirectToRoute('admin_delivery');
+        return $this->redirectAfterAction($request, 'admin_delivery');
     }
 
     /** Shown on the page: never user:password@ in a URL, however it was configured. */
@@ -261,7 +264,7 @@ final class DeliveryController extends AbstractController
         $status = $request->query->getString('s');
         $status = in_array($status, self::STATUSES, true) ? $status : '';
         $pagination = Pagination::fromRequest($request, $page, $this->outbox->recipientCountForJob($id, $status));
-        return $this->render('admin/delivery_job.html.twig', [
+        return $this->renderPage($request, 'admin/delivery_job.html.twig', ['send-job' => 'admin/_delivery_job.html.twig'], [
             'job' => $job,
             'category' => $stuck->jobCategory($job),
             'run' => ['uuid' => $this->outbox->runUuid($job['csj_cr_id']), 'kind' => $this->outbox->runKind($job['csj_cr_id'])],
@@ -299,7 +302,7 @@ final class DeliveryController extends AbstractController
     #[Route('/delivery/job/{id}/refresh', name: 'admin_delivery_refresh', requirements: ['id' => '\d+'], methods: ['POST'])]
     #[IsGranted('logs.view')]
     #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
-    public function refresh(int $id, SendJobSync $sync, #[CurrentUser] SubscriberUser $user): Response
+    public function refresh(int $id, Request $request, SendJobSync $sync, #[CurrentUser] SubscriberUser $user): Response
     {
         $job = $this->outbox->job($id) ?? throw $this->createNotFoundException('Unknown send job.');
         $this->audit($user, 'reconcile send job', $job['csj_uuid']);
@@ -308,13 +311,13 @@ final class DeliveryController extends AbstractController
         } catch (CattoMailException $e) {
             $this->addFlash('danger', $e->getMessage());
         }
-        return $this->redirectToRoute('admin_delivery_job', ['id' => $id]);
+        return $this->redirectAfterAction($request, 'admin_delivery_job', ['id' => $id]);
     }
 
     #[Route('/delivery/job/{id}/requeue', name: 'admin_delivery_requeue', requirements: ['id' => '\d+'], methods: ['POST'])]
     #[IsGranted('queue.process')]
     #[IsCsrfTokenValid(Csrf::TOKEN_ID, tokenKey: Csrf::FIELD)]
-    public function requeue(int $id, SendJobAdmin $admin, #[CurrentUser] SubscriberUser $user): Response
+    public function requeue(int $id, Request $request, SendJobAdmin $admin, #[CurrentUser] SubscriberUser $user): Response
     {
         $this->audit($user, 'return refused send job to the queue', (string) $id);
         try {
@@ -322,6 +325,6 @@ final class DeliveryController extends AbstractController
         } catch (\InvalidArgumentException $e) {
             $this->addFlash('danger', $e->getMessage());
         }
-        return $this->redirectToRoute('admin_delivery_job', ['id' => $id]);
+        return $this->redirectAfterAction($request, 'admin_delivery_job', ['id' => $id]);
     }
 }

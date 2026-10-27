@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Controller\Admin;
 
+use App\Controller\RendersRegions;
 use App\Http\Pagination;
 use App\Log\FlaggedActivity;
 use App\Log\MessageLog;
@@ -19,13 +20,15 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('logs.view')]
 final class ReportController extends AbstractController
 {
+    use RendersRegions;
+
     #[Route('/sendlog/{page}', name: 'report_sendlog', defaults: ['page' => 1], requirements: ['page' => '\d+'], methods: ['GET'])]
     public function sendLog(int $page, Request $request, SendLogRepository $sendLog): Response
     {
         $email = trim($request->query->getString('e'));
         $type = trim($request->query->getString('t'));
         $pagination = Pagination::fromRequest($request, $page, $sendLog->count($email, $type));
-        return $this->render('report/sendlog.html.twig', [
+        return $this->renderPage($request, 'report/sendlog.html.twig', ['sendlog-results' => 'report/_sendlog_results.html.twig'], [
             'by_type' => $sendLog->totalsByType(),
             'by_month' => $sendLog->totalsByMonth(),
             'types' => $sendLog->types(),
@@ -44,7 +47,7 @@ final class ReportController extends AbstractController
             $filters[$key] = trim($request->query->getString($key));
         }
         $pagination = Pagination::fromRequest($request, $page, $siteLog->count($filters));
-        return $this->render('report/sitelog.html.twig', [
+        return $this->renderPage($request, 'report/sitelog.html.twig', ['sitelog-results' => 'report/_sitelog_results.html.twig'], [
             'filters' => $filters,
             'rows' => $pagination->total === 0 ? [] : $siteLog->page($filters, $pagination->offset(), $pagination->perPage),
             'pagination' => $pagination,
@@ -75,7 +78,7 @@ final class ReportController extends AbstractController
     {
         $email = trim($request->query->getString('e'));
         $pagination = Pagination::fromRequest($request, $page, $messageLog->readersCount($muid, $email));
-        return $this->render('report/message_views.html.twig', [
+        return $this->renderPage($request, 'report/message_views.html.twig', ['message-views-results' => 'report/_message_views_results.html.twig'], [
             'muid' => $muid,
             'email' => $email,
             'rows' => $pagination->total === 0 ? [] : $messageLog->readersPage($muid, $email, $pagination->offset(), $pagination->perPage),

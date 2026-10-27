@@ -7,6 +7,7 @@ namespace App\Controller\Admin;
 use App\Form\Model\TemplateDraft;
 use App\Form\Type\TemplateType;
 use App\Http\ContentSecurityPolicy;
+use App\Controller\RendersRegions;
 use App\Http\Pagination;
 use App\Repository\TemplateRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -20,6 +21,8 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('templates.manage')]
 final class TemplateController extends AbstractController
 {
+    use RendersRegions;
+
     public function __construct(private readonly TemplateRepository $templates)
     {
     }
@@ -27,10 +30,13 @@ final class TemplateController extends AbstractController
     #[Route('/templates/{page}', name: 'admin_templates', defaults: ['page' => 1], requirements: ['page' => '\d+'], methods: ['GET'])]
     public function list(int $page, Request $request): Response
     {
-        $pagination = Pagination::fromRequest($request, $page, $this->templates->count());
-        return $this->render('admin/templates.html.twig', [
-            'templates' => $this->templates->page($pagination->offset(), $pagination->perPage),
+        $search = mb_substr(trim($request->query->getString('q')), 0, 200);
+        $pagination = Pagination::fromRequest($request, $page, $this->templates->count($search));
+        return $this->renderPage($request, 'admin/templates.html.twig', ['template-results' => 'admin/_template_results.html.twig'], [
+            'templates' => $this->templates->page($pagination->offset(), $pagination->perPage, $search),
             'pagination' => $pagination,
+            'search' => $search,
+            'query' => $search === '' ? '' : '?' . http_build_query(['q' => $search]),
         ]);
     }
 

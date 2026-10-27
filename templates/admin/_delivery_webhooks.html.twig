@@ -1,0 +1,49 @@
+{#
+  The webhook events (Admin\DeliveryController::webhooks()): the page includes it, and it is the htmx
+  region webhook-events, drawn again by the filter, the pager and Process again.
+#}
+{% import 'layout/_htmx.html.twig' as hx %}
+<div id="webhook-events" class="app-region">
+{% if related %}<p class="small">Only the events about catto-mail job <code>{{ related }}</code>. <a href="{{ path('admin_delivery_webhooks') }}">All events</a></p>{% endif %}
+{% if events is empty %}
+  {% include 'layout/_empty_state.html.twig' with {icon: 'broadcast', message: 'No webhook events.', hint: filter ? 'Try showing all events.' : 'Events appear once catto-mail can reach this site\'s webhook endpoint.'} %}
+{% else %}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead class=""><tr><th scope="col">Type</th><th scope="col">Event id</th><th scope="col">Received</th><th scope="col">Processed</th><th scope="col">Outcome</th><th scope="col">Related</th></tr></thead>
+      <tbody>
+      {% for event in events %}
+        <tr>
+          <td><code>{{ event.cwe_type }}</code></td>
+          <td class="small text-break">{{ event.cwe_event_id }}</td>
+          <td class="small text-nowrap">{{ event.cwe_received_at|slice(0, 16) }}</td>
+          <td class="small text-nowrap">{{ event.cwe_processed_at ? event.cwe_processed_at|slice(0, 16) : '—' }}{% if event.pruned %}<div class="fg-2">body pruned</div>{% endif %}</td>
+          <td class="small text-break">
+            {% if event.cwe_processed_at %}
+              {% if event.cwe_outcome starts with 'failed:' %}<span class="badge theme-danger">failed</span> {{ event.cwe_outcome|slice(7, 150) }}
+              {% elseif event.cwe_outcome starts with 'ignored' %}<span class="badge theme-secondary">ignored</span> {{ event.cwe_outcome|slice(0, 150) }}
+              {% else %}{{ event.cwe_outcome }}{% endif %}
+            {% else %}
+              <span class="badge theme-warning">pending</span>{% if event.cwe_attempts %} {{ event.cwe_attempts }} attempt{{ event.cwe_attempts == 1 ? '' : 's' }}{% endif %}{% if event.cwe_error %}: {{ event.cwe_error|slice(0, 150) }}{% endif %}
+            {% endif %}
+          </td>
+          <td class="small text-nowrap">
+            {% if event.reprocessable and is_granted('queue.process') %}
+              <form method="post" action="{{ path('admin_delivery_reprocess', {event: event.cwe_event_id}) }}" class="mb-1" data-confirm="Process this event again? Its effects are applied at most once." {{ hx.post(path('admin_delivery_reprocess', {event: event.cwe_event_id}), 'webhook-events') }}>
+                <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
+                <button class="btn-sm btn-outline theme-secondary" type="submit"><i class="bi bi-arrow-repeat me-1" aria-hidden="true"></i>Process again</button>
+              </form>
+            {% endif %}
+            {% if event.send_job_id %}<a href="{{ path('admin_delivery_job', {id: event.send_job_id}) }}">Send job {{ event.send_job_id }}</a>
+            {% elseif event.validation_job_id and is_granted('subscribers.manage') %}<a href="{{ path('admin_validation_job', {id: event.validation_job_id}) }}">Validation job {{ event.validation_job_id }}</a>
+            {% else %}—{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% set params = {f: filter, j: related}|filter(v => v) %}
+  {% include '_pagination.html.twig' with {base: path('admin_delivery_webhooks'), query: params ? '?' ~ params|url_encode : '', region: 'webhook-events'} %}
+{% endif %}
+</div>

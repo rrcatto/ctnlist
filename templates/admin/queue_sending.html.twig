@@ -1,0 +1,22 @@
+{% extends 'base.html.twig' %}
+
+{#
+  The Sending page (Admin\QueueController::sending()): the current or last queue run (App\Queue\QueueRun),
+  which runs after Start sending has answered. Its region queue-run draws itself again every 3 seconds
+  while the run is starting or sending; without JavaScript the page reloads itself instead.
+#}
+{% block title %}Sending{% endblock %}
+
+{% block head %}
+  {% if live %}<noscript><meta http-equiv="refresh" content="10"></noscript>{% endif %}
+{% endblock %}
+
+{% block content %}
+{% embed 'layout/_page_header.html.twig' with {title: 'Sending', description: 'Queued campaign mail goes to the mail service one message at a time. You can leave this page: sending carries on, and you can come back to it from the Sending menu.'} %}
+  {% block actions %}
+    <a class="btn-outline theme-secondary" href="{{ path('admin_queue') }}"><i class="bi bi-list-ol me-1" aria-hidden="true"></i>Queue</a>
+  {% endblock %}
+{% endembed %}
+
+{% include 'admin/_queue_run.html.twig' %}
+{% endblock %}

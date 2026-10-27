@@ -1,0 +1,29 @@
+{#
+  The Site Log's rows (Admin\ReportController::siteLog()): the page includes it, and it is the htmx
+  region sitelog-results that the search form and the pager draw again.
+#}
+<div id="sitelog-results" class="app-region">
+{% if rows is empty %}
+  {% include 'layout/_empty_state.html.twig' with {icon: 'globe', message: 'No site accesses match that search.'} %}
+{% else %}
+  <div class="table-responsive">
+    <table class="table table-hover align-middle">
+      <thead class=""><tr><th scope="col">Accessed</th><th scope="col">Email</th><th scope="col">Request</th><th scope="col" class="text-end">Answer</th><th scope="col">Network</th><th scope="col">Login</th><th scope="col">User agent</th></tr></thead>
+      <tbody>
+      {% for row in rows %}
+        <tr>
+          <td class="text-nowrap">{{ row.stl_logged_at }}</td>
+          <td>{{ row.stl_email }}</td>
+          <td><code>{{ row.stl_method }} {{ row.stl_url }}</code>{% if row.stl_flag %}<br><span class="badge theme-warning">Refused as automated: {{ row.stl_flag }}</span>{% if row.stl_flag_email %}<br><small class="fg-2">Address typed in: {{ row.stl_flag_email }}</small>{% endif %}{% endif %}</td>
+          <td class="text-end">{{ row.stl_status }}</td>
+          <td class="text-nowrap">{{ row.stl_ip }}{% if row.stl_xfwdfor %}<br><small class="fg-2">Forwarded: {{ row.stl_xfwdfor }}</small>{% endif %}{% if row.stl_host %}<br><small class="fg-2">Host: {{ row.stl_host }}</small>{% endif %}</td>
+          <td>{{ row.stl_logged_in ? 'Yes' : 'No' }}</td>
+          <td class="small fg-2">{{ row.stl_agent }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% include '_pagination.html.twig' with {base: path('report_sitelog'), query: query, region: 'sitelog-results'} %}
+{% endif %}
+</div>

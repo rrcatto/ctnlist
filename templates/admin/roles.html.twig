@@ -32,53 +32,18 @@
 <div class="card mb-7" id="assign">
   <div class="card-header fw-semibold">Assign a role to a subscriber</div>
   <div class="card-body">
-    {{ form_start(search_form, {attr: {class: 'row g-3 align-items-start mb-5', role: 'search', 'aria-label': 'Find a subscriber'}}) }}
+    {# Searches as you type (layout/_htmx.html.twig, search): the attributes are given here because Symfony renders the form tag. #}
+    {{ form_start(search_form, {attr: {class: 'row g-3 align-items-start mb-5', role: 'search', 'aria-label': 'Find a subscriber',
+        'hx-get': path('admin_roles'), 'hx-trigger': 'input delay:300ms, submit', 'hx-target': '#role-search-results', 'hx-swap': 'outerHTML', 'hx-replace-url': 'true', 'hx-sync': 'this:replace'}}) }}
       <div class="md:col-8">{{ form_row(search_form.q, {row_attr: {class: 'mb-0'}}) }}</div>
-      <div class="md:col-4 d-flex gap-3 md:pt-7 md:mt-3">
-        <button class="btn-solid theme-primary" type="submit"><i class="bi bi-search me-1" aria-hidden="true"></i>Search</button>
+      <div class="md:col-4 d-flex align-items-center gap-3 md:pt-7 md:mt-3">
+        <noscript><button class="btn-solid theme-primary" type="submit"><i class="bi bi-search me-1" aria-hidden="true"></i>Search</button></noscript>
         {% if search %}<a class="btn-outline theme-secondary" href="{{ path('admin_roles') }}#assign">Clear</a>{% endif %}
+        <span class="small fg-2 htmx-indicator" role="status">Searching…</span>
       </div>
     {{ form_end(search_form) }}
 
-    {% if search %}
-      {% if results is empty %}
-        {% include 'layout/_empty_state.html.twig' with {icon: 'person', message: 'No subscriber matches “' ~ search ~ '”.'} %}
-      {% else %}
-        {% set back = path('admin_roles', {q: search}) %}
-        <ul class="list-group">
-          {% for subscriber in results %}
-            {% set current = held[subscriber.s_id] ?? [] %}
-            {% set current_keys = current|map(role => role.r_key) %}
-            {% set assignable = roles|filter(role => role.r_key not in current_keys) %}
-            <li class="list-group-item d-flex flex-column md:flex-row justify-content-between md:align-items-center gap-3 py-5">
-              <div class="md:me-5 text-break">
-                <div class="fw-semibold">{{ subscriber.s_email }}</div>
-                {% if (subscriber.s_fname ~ subscriber.s_lname)|trim %}<div class="small fg-2">{{ (subscriber.s_fname ~ ' ' ~ subscriber.s_lname)|trim }}</div>{% endif %}
-                <div class="mt-1"><span class="visually-hidden">Current roles:</span>{% for role in current %}<span class="badge {{ role.r_system ? 'theme-inverse' : 'theme-info' }} me-1">{{ role.r_name }}</span>{% else %}<span class="small fg-2">No roles</span>{% endfor %}</div>
-              </div>
-              {% if assignable is empty %}
-                <span class="small fg-2">Holds every role</span>
-              {% else %}
-                <form method="post" action="{{ path('admin_roles_assign') }}" class="d-flex gap-3 flex-shrink-0">
-                  <input type="hidden" name="csrf" value="{{ csrf_token('ctnlist') }}">
-                  <input type="hidden" name="subscriber_id" value="{{ subscriber.s_id }}">
-                  <input type="hidden" name="back" value="{{ back }}">
-                  <label class="visually-hidden" for="assign-role-{{ subscriber.s_id }}">Role for {{ subscriber.s_email }}</label>
-                  <select class="form-control form-control-sm" id="assign-role-{{ subscriber.s_id }}" name="role_key" required>
-                    <option value="" selected disabled>Choose a role…</option>
-                    {% for role in assignable|sort((a, b) => a.r_system <=> b.r_system) %}<option value="{{ role.r_key }}">{{ role.r_name }}{{ role.r_system ? ' (system)' }}</option>{% endfor %}
-                  </select>
-                  <button class="btn-sm btn-solid theme-primary" type="submit">Assign</button>
-                </form>
-              {% endif %}
-            </li>
-          {% endfor %}
-        </ul>
-        {% if more_results %}<p class="small fg-2 mt-3 mb-0">More subscribers match; refine the search to see them.</p>{% endif %}
-      {% endif %}
-    {% else %}
-      <p class="small fg-2 mb-0">Search for a subscriber to see the roles they hold and assign another. To remove a custom role from someone, open the role.</p>
-    {% endif %}
+    {% include 'admin/_role_search_results.html.twig' %}
   </div>
 </div>
 

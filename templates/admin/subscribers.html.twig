@@ -1,5 +1,5 @@
 {% extends 'base.html.twig' %}
-{% import 'admin/_macros.html.twig' as ui %}
+{% import 'layout/_htmx.html.twig' as hx %}
 
 {% block title %}{{ active ? 'Active subscribers' : 'Subscribers' }}{% endblock %}
 
@@ -18,7 +18,7 @@
   {% endblock %}
 {% endembed %}
 
-<form method="get" action="{{ base }}" class="card card-body bg-1 mb-7" role="search" aria-label="Filter subscribers">
+<form method="get" action="{{ base }}" class="card card-body bg-1 mb-7" role="search" aria-label="Filter subscribers" {{ hx.search(base, 'subscriber-results') }}>
   <div class="row g-5 align-items-end">
     <div class="md:col-4"><label class="form-label" for="f-e">Email address contains</label><input class="form-control" id="f-e" type="search" name="e" value="{{ filters.e }}"></div>
     <div class="md:col-3"><label class="form-label" for="l">List</label>{% include 'admin/_list_select.html.twig' with {name: 'l', selected: filters.l, blank: 'All lists'} %}</div>
@@ -28,55 +28,13 @@
         {% for value, label in show_choices %}<option value="{{ value }}"{{ filters.s == value ? ' selected' }}>{{ label }}</option>{% endfor %}
       </select>
     </div>
-    <div class="col-12 d-flex gap-3">
-      <button class="btn-solid theme-primary" type="submit"><i class="bi bi-search me-1" aria-hidden="true"></i>Search</button>
+    <div class="col-12 d-flex align-items-center gap-3">
+      <noscript><button class="btn-solid theme-primary" type="submit"><i class="bi bi-search me-1" aria-hidden="true"></i>Search</button></noscript>
       <a class="btn-outline theme-secondary" href="{{ base }}">Clear</a>
+      <span class="small fg-2 htmx-indicator" role="status">Searching…</span>
     </div>
   </div>
 </form>
 
-{% if rows is empty %}
-  {% include 'layout/_empty_state.html.twig' with {icon: 'people', message: 'There are no matching subscribers.', hint: 'Try a different search, or show everyone.'} %}
-{% else %}
-  {% set can_edit = is_granted('subscribers.manage') %}
-  <div class="table-responsive">
-    <table class="table table-hover align-middle">
-      <thead class="">
-        <tr>
-          <th scope="col">Email</th>
-          <th scope="col">Name</th>
-          <th scope="col">Lists</th>
-          <th scope="col" class="text-end">Priority</th>
-          <th scope="col" class="text-end">Bounces</th>
-          <th scope="col" class="text-end">Emails left</th>
-          <th scope="col">Last interaction</th>
-          <th scope="col">Created</th>
-          <th scope="col">Last signed in</th>
-        </tr>
-      </thead>
-      <tbody>
-      {% for row in rows %}
-        <tr>
-          <td>{% if can_edit %}<a href="{{ path('admin_subscriber', {token: row.s_uuid}) }}">{{ row.s_email }}</a>{% else %}{{ row.s_email }}{% endif %}</td>
-          <td>{{ (row.s_fname ~ ' ' ~ row.s_lname)|trim }}</td>
-          <td>
-            {% for membership in row.memberships %}
-              <span class="text-nowrap me-3">{{ membership.name }} {{ ui.membership_badge(membership.state) }}</span>
-            {% else %}
-              <span class="fg-2">–</span>
-            {% endfor %}
-          </td>
-          <td class="text-end">{{ row.s_priority }}</td>
-          <td class="text-end">{{ row.s_bounces }}</td>
-          <td class="text-end">{{ row.s_emailsleft }}</td>
-          <td class="text-nowrap">{{ row.s_last_interacted ?: '–' }}</td>
-          <td class="text-nowrap">{{ row.s_created_at }}</td>
-          <td class="text-nowrap">{{ row.s_last_login_at ?: 'Never' }}</td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
-  {% include '_pagination.html.twig' with {base: base, query: query} %}
-{% endif %}
+{% include 'admin/_subscriber_results.html.twig' %}
 {% endblock %}
